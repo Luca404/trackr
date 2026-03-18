@@ -1,2 +1,435 @@
-// Fully offline mode: all data stored locally via IndexedDB
-export { localStorageService as apiService } from './localStorage';
+import { supabase } from './supabase';
+import type {
+  Transaction,
+  TransactionFormData,
+  TransactionStats,
+  Account,
+  AccountFormData,
+  Category,
+  CategoryFormData,
+  CategoryWithStats,
+  Subcategory,
+  SubcategoryFormData,
+  Portfolio,
+  PortfolioFormData,
+  User,
+} from '../types';
+
+async function getCurrentUserId(): Promise<string> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Non autenticato');
+  return user.id;
+}
+
+// ==================== MAPPERS ====================
+
+function mapAccount(row: any): Account {
+  return {
+    id: row.id,
+    user_id: row.user_id,
+    name: row.name,
+    icon: row.icon,
+    initial_balance: row.initial_balance ?? 0,
+    current_balance: row.current_balance,
+    is_favorite: row.is_favorite ?? false,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+}
+
+function mapSubcategory(row: any): Subcategory {
+  return {
+    id: row.id,
+    category_id: row.category_id,
+    name: row.name,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+}
+
+function mapCategory(row: any): CategoryWithStats {
+  return {
+    id: row.id,
+    user_id: row.user_id,
+    name: row.name,
+    icon: row.icon,
+    category_type: row.category_type,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+    subcategories: (row.subcategories || []).map(mapSubcategory),
+    total_amount: 0,
+    transaction_count: 0,
+  };
+}
+
+function mapTransaction(row: any): Transaction {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    account_id: row.account_id,
+    type: row.type,
+    category: row.category,
+    subcategory: row.subcategory,
+    amount: row.amount,
+    description: row.description,
+    date: row.date,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+    ticker: row.ticker,
+    quantity: row.quantity,
+    price: row.price,
+  };
+}
+
+function mapPortfolio(row: any): Portfolio {
+  return {
+    id: row.id,
+    user_id: row.user_id,
+    name: row.name,
+    description: row.description,
+    initial_capital: row.initial_capital ?? 0,
+    reference_currency: row.reference_currency ?? 'EUR',
+    risk_free_source: row.risk_free_source ?? '',
+    market_benchmark: row.market_benchmark ?? '',
+    created_at: row.created_at,
+    total_value: row.total_value,
+    total_cost: row.total_cost,
+    total_gain_loss: row.total_gain_loss,
+    total_gain_loss_pct: row.total_gain_loss_pct,
+  };
+}
+
+// ==================== DEFAULT DATA ====================
+
+const DEFAULT_CATEGORIES = [
+  { name: 'Alimentari', icon: '🍔', category_type: 'expense' },
+  { name: 'Trasporti', icon: '🚗', category_type: 'expense' },
+  { name: 'Utenze', icon: '⚡', category_type: 'expense' },
+  { name: 'Svago', icon: '🎮', category_type: 'expense' },
+  { name: 'Salute', icon: '🏥', category_type: 'expense' },
+  { name: 'Shopping', icon: '🛍️', category_type: 'expense' },
+  { name: 'Investimento', icon: '💰', category_type: 'investment' },
+  { name: 'Stipendio', icon: '💵', category_type: 'income' },
+  { name: 'Bonus', icon: '🎁', category_type: 'income' },
+  { name: 'Trasferimento', icon: '🔄', category_type: 'transfer' },
+  { name: 'Altro', icon: '📌', category_type: null },
+];
+
+// ==================== API SERVICE ====================
+
+class ApiService {
+
+  // AUTH
+
+  getCurrentUser(): User | null {
+    const userStr = localStorage.getItem('user');
+    if (!userStr) return null;
+    try { return JSON.parse(userStr); } catch { return null; }
+  }
+
+  // ==================== ACCOUNTS ====================
+
+  async getAccounts(): Promise<Account[]> {
+    const { data, error } = await supabase
+      .from('accounts')
+      .select('*')
+      .order('id');
+    if (error) throw error;
+
+    const accounts = (data || []).map(mapAccount);
+
+    // Crea account di default se vuoti
+    if (accounts.length === 0) {
+      return this._createDefaultAccounts();
+    }
+    return accounts;
+  }
+
+  private async _createDefaultAccounts(): Promise<Account[]> {
+    const userId = await getCurrentUserId();
+    const defaults = [
+      { user_id: userId, name: 'Conto Corrente', icon: '🏦', initial_balance: 0, is_favorite: true },
+      { user_id: userId, name: 'Contanti', icon: '💵', initial_balance: 0, is_favorite: false },
+    ];
+    const { data, error } = await supabase.from('accounts').insert(defaults).select();
+    if (error) throw error;
+    return (data || []).map(mapAccount);
+  }
+
+  async createAccount(formData: AccountFormData): Promise<Account> {
+    const userId = await getCurrentUserId();
+    const { current_balance: _, ...dbData } = formData as any;
+    const { data, error } = await supabase
+      .from('accounts')
+      .insert({ ...dbData, user_id: userId })
+      .select()
+      .single();
+    if (error) throw error;
+    return mapAccount(data);
+  }
+
+  async updateAccount(id: number, formData: Partial<AccountFormData>): Promise<Account> {
+    const { current_balance: _, ...dbData } = formData as any;
+    const { data, error } = await supabase
+      .from('accounts')
+      .update(dbData)
+      .eq('id', id)
+      .select()
+      .single();
+    if (error) throw error;
+    return mapAccount(data);
+  }
+
+  async deleteAccount(id: number): Promise<void> {
+    const { error } = await supabase.from('accounts').delete().eq('id', id);
+    if (error) throw error;
+  }
+
+  // ==================== CATEGORIES ====================
+
+  async getCategories(): Promise<CategoryWithStats[]> {
+    const { data, error } = await supabase
+      .from('categories')
+      .select('*, subcategories(*)')
+      .order('id');
+    if (error) throw error;
+
+    const categories = (data || []).map(mapCategory);
+
+    // Crea categorie di default se vuoti per gruppo
+    const hasExpense = categories.some(c => c.category_type === 'expense' || c.category_type == null);
+    const hasIncome = categories.some(c => c.category_type === 'income');
+    const hasInvestment = categories.some(c => c.category_type === 'investment');
+
+    if (!hasExpense || !hasIncome || !hasInvestment) {
+      return this._createDefaultCategories(categories, hasExpense, hasIncome, hasInvestment);
+    }
+    return categories;
+  }
+
+  private async _createDefaultCategories(
+    existing: CategoryWithStats[],
+    hasExpense: boolean,
+    hasIncome: boolean,
+    hasInvestment: boolean,
+  ): Promise<CategoryWithStats[]> {
+    const userId = await getCurrentUserId();
+    const toCreate = DEFAULT_CATEGORIES.filter(cat => {
+      const isExpense = cat.category_type === 'expense' || cat.category_type === null;
+      const isIncome = cat.category_type === 'income';
+      const isInvestment = cat.category_type === 'investment';
+      return (isExpense && !hasExpense) || (isIncome && !hasIncome) || (isInvestment && !hasInvestment);
+    }).map(cat => ({ ...cat, user_id: userId }));
+
+    if (toCreate.length === 0) return existing;
+
+    const { data, error } = await supabase.from('categories').insert(toCreate).select('*, subcategories(*)');
+    if (error) throw error;
+    return [...existing, ...(data || []).map(mapCategory)];
+  }
+
+  async createCategory(formData: CategoryFormData): Promise<Category> {
+    const userId = await getCurrentUserId();
+    const { data, error } = await supabase
+      .from('categories')
+      .insert({ ...formData, user_id: userId })
+      .select('*, subcategories(*)')
+      .single();
+    if (error) throw error;
+    return mapCategory(data);
+  }
+
+  async updateCategory(id: number, formData: Partial<CategoryFormData>): Promise<Category> {
+    const { data, error } = await supabase
+      .from('categories')
+      .update(formData)
+      .eq('id', id)
+      .select('*, subcategories(*)')
+      .single();
+    if (error) throw error;
+    return mapCategory(data);
+  }
+
+  async deleteCategory(id: number): Promise<void> {
+    const { error } = await supabase.from('categories').delete().eq('id', id);
+    if (error) throw error;
+  }
+
+  // ==================== SUBCATEGORIES ====================
+
+  async createSubcategory(categoryId: number, formData: SubcategoryFormData): Promise<Subcategory> {
+    const { data, error } = await supabase
+      .from('subcategories')
+      .insert({ ...formData, category_id: categoryId })
+      .select()
+      .single();
+    if (error) throw error;
+    return mapSubcategory(data);
+  }
+
+  async deleteSubcategory(_categoryId: number, subcategoryId: number): Promise<void> {
+    const { error } = await supabase.from('subcategories').delete().eq('id', subcategoryId);
+    if (error) throw error;
+  }
+
+  // ==================== TRANSACTIONS ====================
+
+  async getTransactions(params?: {
+    startDate?: string;
+    endDate?: string;
+    category?: string;
+    type?: string;
+  }): Promise<Transaction[]> {
+    let query = supabase
+      .from('transactions')
+      .select('*')
+      .order('date', { ascending: false })
+      .order('id', { ascending: false });
+
+    if (params?.startDate) query = query.gte('date', params.startDate);
+    if (params?.endDate) query = query.lte('date', params.endDate);
+    if (params?.category) query = query.eq('category', params.category);
+    if (params?.type) query = query.eq('type', params.type);
+
+    const { data, error } = await query;
+    if (error) throw error;
+    return (data || []).map(mapTransaction);
+  }
+
+  async createTransaction(formData: TransactionFormData): Promise<Transaction> {
+    const userId = await getCurrentUserId();
+    const { data, error } = await supabase
+      .from('transactions')
+      .insert({ ...formData, user_id: userId })
+      .select()
+      .single();
+    if (error) throw error;
+    return mapTransaction(data);
+  }
+
+  async updateTransaction(id: number, formData: Partial<TransactionFormData>): Promise<Transaction> {
+    const { data, error } = await supabase
+      .from('transactions')
+      .update(formData)
+      .eq('id', id)
+      .select()
+      .single();
+    if (error) throw error;
+    return mapTransaction(data);
+  }
+
+  async deleteTransaction(id: number): Promise<void> {
+    const { error } = await supabase.from('transactions').delete().eq('id', id);
+    if (error) throw error;
+  }
+
+  async getTransactionStats(params?: {
+    startDate?: string;
+    endDate?: string;
+  }): Promise<TransactionStats> {
+    const transactions = await this.getTransactions(params);
+
+    const stats: TransactionStats = {
+      totalExpenses: 0,
+      totalIncome: 0,
+      totalInvestments: 0,
+      balance: 0,
+      expensesByCategory: {},
+      monthlyTrend: [],
+    };
+
+    transactions.forEach((tx) => {
+      if (tx.type === 'expense') {
+        stats.totalExpenses += tx.amount;
+        stats.expensesByCategory[tx.category] = (stats.expensesByCategory[tx.category] || 0) + tx.amount;
+      } else if (tx.type === 'income') {
+        stats.totalIncome += tx.amount;
+      } else if (tx.type === 'investment') {
+        stats.totalInvestments += tx.amount;
+      }
+    });
+
+    stats.balance = stats.totalIncome - stats.totalExpenses - stats.totalInvestments;
+
+    const monthlyData: Record<string, { expenses: number; income: number }> = {};
+    transactions.forEach((tx) => {
+      const month = tx.date.substring(0, 7);
+      if (!monthlyData[month]) monthlyData[month] = { expenses: 0, income: 0 };
+      if (tx.type === 'expense') monthlyData[month].expenses += tx.amount;
+      else if (tx.type === 'income') monthlyData[month].income += tx.amount;
+    });
+
+    stats.monthlyTrend = Object.entries(monthlyData)
+      .map(([month, data]) => ({ month, ...data }))
+      .sort((a, b) => a.month.localeCompare(b.month));
+
+    return stats;
+  }
+
+  // ==================== PORTFOLIOS ====================
+
+  async getPortfolios(): Promise<Portfolio[]> {
+    const { data, error } = await supabase.from('portfolios').select('*').order('id');
+    if (error) throw error;
+    return (data || []).map(mapPortfolio);
+  }
+
+  async createPortfolio(formData: PortfolioFormData): Promise<Portfolio> {
+    const userId = await getCurrentUserId();
+    const { data, error } = await supabase
+      .from('portfolios')
+      .insert({
+        ...formData,
+        user_id: userId,
+        initial_capital: formData.initial_capital ?? 0,
+        reference_currency: formData.reference_currency ?? 'EUR',
+        risk_free_source: formData.risk_free_source ?? '',
+        market_benchmark: formData.market_benchmark ?? '',
+      })
+      .select()
+      .single();
+    if (error) throw error;
+    return mapPortfolio(data);
+  }
+
+  async updatePortfolio(id: number, formData: Partial<PortfolioFormData>): Promise<Portfolio> {
+    const { data, error } = await supabase
+      .from('portfolios')
+      .update(formData)
+      .eq('id', id)
+      .select()
+      .single();
+    if (error) throw error;
+    return mapPortfolio(data);
+  }
+
+  async deletePortfolio(id: number): Promise<void> {
+    const { error } = await supabase.from('portfolios').delete().eq('id', id);
+    if (error) throw error;
+  }
+
+  // ==================== EXPORT ====================
+
+  async exportData(): Promise<void> {
+    const [transactions, categories, accounts, portfolios] = await Promise.all([
+      this.getTransactions(),
+      this.getCategories(),
+      this.getAccounts(),
+      this.getPortfolios(),
+    ]);
+    const exportObj = {
+      version: 1,
+      exportDate: new Date().toISOString(),
+      data: { transactions, categories, accounts, portfolios },
+    };
+    const blob = new Blob([JSON.stringify(exportObj, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `trackr-backup-${new Date().toISOString().split('T')[0]}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+}
+
+export const apiService = new ApiService();

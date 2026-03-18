@@ -278,6 +278,7 @@ export default function CategoriesPage() {
       if (isEditMode && selectedCategory) {
         const updated = await apiService.updateCategory(selectedCategory.id, categoryFormData);
         updateCategoryCache(updated);
+        setSelectedCategory(prev => prev ? { ...prev, name: updated.name, icon: updated.icon, category_type: updated.category_type } : prev);
       } else {
         const newCategory = await apiService.createCategory(categoryFormData);
         addCategory(newCategory);
@@ -308,9 +309,14 @@ export default function CategoriesPage() {
 
       setSubcategoryFormData({ name: '' });
       setShowSubcategoryForm(false);
-      // Aggiorna la categoria selezionata con le nuove statistiche
-      const updated = categories.find(c => c.id === selectedCategory.id);
-      if (updated) setSelectedCategory(updated);
+      // Aggiorna selectedCategory direttamente (non aspettare il ricalcolo useMemo)
+      setSelectedCategory(prev => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          subcategories: [...(prev.subcategories || []), { ...newSubcategory, total_amount: 0, transaction_count: 0 }],
+        };
+      });
     } catch (error) {
       console.error('Errore creazione sottocategoria:', error);
     }
@@ -336,9 +342,14 @@ export default function CategoriesPage() {
         updateCategoryCache(updatedCategory);
       }
 
-      // Aggiorna la categoria selezionata con le nuove statistiche
-      const updated = categories.find(c => c.id === selectedCategory.id);
-      if (updated) setSelectedCategory(updated);
+      // Aggiorna selectedCategory direttamente
+      setSelectedCategory(prev => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          subcategories: (prev.subcategories || []).filter(s => s.id !== subcategoryToDelete),
+        };
+      });
     } catch (error) {
       console.error('Errore eliminazione sottocategoria:', error);
     } finally {

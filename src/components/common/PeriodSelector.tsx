@@ -22,7 +22,6 @@ function PeriodSelector({
 
   // Detect period type from dates when component mounts or dates change
   useEffect(() => {
-    const now = new Date();
     const diffDays = Math.floor((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
 
     // Check if it's a single day

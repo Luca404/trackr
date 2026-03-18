@@ -10,21 +10,13 @@ export interface AuthResponse {
   user: User;
 }
 
-export interface LoginCredentials {
-  username: string;
-  password: string;
-}
-
-export interface RegisterCredentials extends LoginCredentials {
-  confirmPassword?: string;
-}
 
 export type TransactionCategory = string;
 
 export type TransactionType = 'expense' | 'income' | 'investment' | 'transfer';
 
 export interface Transaction {
-  id: string;
+  id: number;
   userId?: string;
   account_id: number;
   type: TransactionType;
@@ -33,8 +25,8 @@ export interface Transaction {
   amount: number;
   description?: string;
   date: string;
-  createdAt?: string;
-  updatedAt?: string;
+  created_at?: string;
+  updated_at?: string;
 
   // Campi specifici per investimenti
   ticker?: string;

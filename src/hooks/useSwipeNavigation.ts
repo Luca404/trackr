@@ -81,21 +81,27 @@ export function useSwipeNavigation({
 
       // Controlla se lo swipe è abbastanza lungo o veloce
       if (Math.abs(deltaX) > threshold || velocity > velocityThreshold) {
-        const currentIndex = routes.indexOf(location.pathname);
-
-        if (currentIndex !== -1) {
-          let nextIndex = -1;
-
-          if (deltaX > 0 && currentIndex > 0) {
-            // Swipe verso destra -> pagina precedente
-            nextIndex = currentIndex - 1;
-          } else if (deltaX < 0 && currentIndex < routes.length - 1) {
-            // Swipe verso sinistra -> pagina successiva
-            nextIndex = currentIndex + 1;
+        // Se c'è un modal aperto, swipe destra lo chiude invece di navigare
+        const modalOpen = document.querySelector('[data-no-swipe]');
+        if (modalOpen) {
+          if (deltaX > 0) {
+            window.dispatchEvent(new CustomEvent('trackr:swipe-back'));
           }
+        } else {
+          const currentIndex = routes.indexOf(location.pathname);
 
-          if (nextIndex !== -1) {
-            navigate(routes[nextIndex]);
+          if (currentIndex !== -1) {
+            let nextIndex = -1;
+
+            if (deltaX > 0 && currentIndex > 0) {
+              nextIndex = currentIndex - 1;
+            } else if (deltaX < 0 && currentIndex < routes.length - 1) {
+              nextIndex = currentIndex + 1;
+            }
+
+            if (nextIndex !== -1) {
+              navigate(routes[nextIndex]);
+            }
           }
         }
       }

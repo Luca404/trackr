@@ -5,7 +5,6 @@ import LoadingSpinner from '../components/common/LoadingSpinner';
 import PeriodSelector from '../components/common/PeriodSelector';
 import DateRangePicker from '../components/common/DateRangePicker';
 import { usePeriod } from '../hooks/usePeriod';
-import type { Transaction } from '../types';
 
 type StatsFilter = 'expense' | 'income' | 'investment';
 type PeriodType = 'day' | 'week' | 'month' | 'year' | 'all' | 'custom';

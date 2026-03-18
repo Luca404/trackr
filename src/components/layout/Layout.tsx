@@ -1,7 +1,6 @@
 import { type ReactNode } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import { useData } from '../../contexts/DataContext';
 import { useSwipeNavigation } from '../../hooks/useSwipeNavigation';
 
 interface LayoutProps {
@@ -11,8 +10,7 @@ interface LayoutProps {
 export default function Layout({ children }: LayoutProps) {
   const navigate = useNavigate();
   const location = useLocation();
-  const { logout, user } = useAuth();
-  const { clearCache } = useData();
+  const { user } = useAuth();
 
   const navItems = [
     { path: '/accounts', label: 'Conti', icon: '🏦' },
@@ -28,11 +26,6 @@ export default function Layout({ children }: LayoutProps) {
     velocityThreshold: 0.3,
     routes
   });
-
-  const handleLogout = () => {
-    clearCache();
-    logout();
-  };
 
   return (
     <div

@@ -5,10 +5,11 @@ import { useData } from '../contexts/DataContext';
 
 export default function LoginPage() {
   const [isLogin, setIsLogin] = useState(true);
-  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
+  const [info, setInfo] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
   const { login, register } = useAuth();
@@ -18,8 +19,8 @@ export default function LoginPage() {
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError('');
+    setInfo('');
 
-    // Validazione registrazione
     if (!isLogin) {
       if (password !== confirmPassword) {
         setError('Le password non corrispondono');
@@ -35,15 +36,16 @@ export default function LoginPage() {
 
     try {
       if (isLogin) {
-        await login({ username, password });
+        await login(email, password);
+        await refreshAll();
+        navigate('/accounts');
       } else {
-        await register({ username, password });
+        await register(email, password);
+        setInfo('Registrazione completata! Controlla la tua email per confermare l\'account, poi accedi.');
+        setIsLogin(true);
       }
-      // Ricarica i dati dopo il login
-      await refreshAll();
-      navigate('/accounts');
     } catch (err: any) {
-      setError(err.response?.data?.detail || err.response?.data?.message || 'Errore durante l\'autenticazione');
+      setError(err.message ?? 'Errore durante l\'autenticazione');
     } finally {
       setIsLoading(false);
     }
@@ -64,10 +66,7 @@ export default function LoginPage() {
           <div className="flex mb-6 bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
             <button
               type="button"
-              onClick={() => {
-                setIsLogin(true);
-                setError('');
-              }}
+              onClick={() => { setIsLogin(true); setError(''); setInfo(''); }}
               className={`flex-1 py-2 px-4 rounded-md font-medium transition-colors ${
                 isLogin
                   ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm'
@@ -78,10 +77,7 @@ export default function LoginPage() {
             </button>
             <button
               type="button"
-              onClick={() => {
-                setIsLogin(false);
-                setError('');
-              }}
+              onClick={() => { setIsLogin(false); setError(''); setInfo(''); }}
               className={`flex-1 py-2 px-4 rounded-md font-medium transition-colors ${
                 !isLogin
                   ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm'
@@ -96,19 +92,20 @@ export default function LoginPage() {
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label
-                htmlFor="username"
+                htmlFor="email"
                 className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
               >
-                Nome utente
+                Email
               </label>
               <input
-                id="username"
-                type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
+                id="email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 className="input-field"
                 required
-                placeholder="Il tuo nome utente"
+                placeholder="la@tua.email"
+                autoComplete="email"
               />
             </div>
 
@@ -155,6 +152,12 @@ export default function LoginPage() {
             {error && (
               <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 px-4 py-3 rounded-lg text-sm">
                 {error}
+              </div>
+            )}
+
+            {info && (
+              <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-300 px-4 py-3 rounded-lg text-sm">
+                {info}
               </div>
             )}
 

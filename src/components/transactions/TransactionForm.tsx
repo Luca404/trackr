@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, type FormEvent } from 'react';
 import type { TransactionFormData, TransactionType, Category, Subcategory, Account } from '../../types';
 import { useData } from '../../contexts/DataContext';
 import ConfirmDialog from '../common/ConfirmDialog';
+import Modal, { registerBackHandler } from '../common/Modal';
 
 interface TransactionFormProps {
   onSubmit: (data: TransactionFormData) => Promise<void>;
@@ -39,6 +40,12 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+
+  // Back gesture quando la categoria è selezionata → torna alla griglia categorie
+  useEffect(() => {
+    if (!selectedCategory) return;
+    return registerBackHandler(() => setSelectedCategory(null));
+  }, [selectedCategory]);
 
   // Inizializza l'account selezionato al primo caricamento
   useEffect(() => {
@@ -280,7 +287,6 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
                   : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
               }`}
             >
-              <span>{sub.icon}</span>
               <span>{sub.name}</span>
             </button>
           ))}
@@ -367,175 +373,147 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
       )}
 
       {/* Modal cambio categoria */}
-      {showCategoryPicker && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50" onClick={() => setShowCategoryPicker(false)}>
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 max-w-md w-full mx-4 max-h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Cambia Categoria</h3>
-            <div className="grid grid-cols-3 gap-3">
-              {categories.map((category) => (
-                <button
-                  key={category.id}
-                  type="button"
-                  onClick={() => {
-                    setSelectedCategory(category);
-                    setSelectedSubcategory(null);
-                    setShowCategoryPicker(false);
-                  }}
-                  className="flex flex-col items-center p-3 rounded-lg border-2 border-gray-200 dark:border-gray-700 hover:border-primary-500 transition-colors"
-                >
-                  <span className="text-3xl mb-1">{category.icon}</span>
-                  <span className="text-xs text-center">{category.name}</span>
-                </button>
-              ))}
-            </div>
-          </div>
+      <Modal isOpen={showCategoryPicker} onClose={() => setShowCategoryPicker(false)} title="Cambia Categoria">
+        <div className="grid grid-cols-3 gap-3">
+          {categories.map((category) => (
+            <button
+              key={category.id}
+              type="button"
+              onClick={() => {
+                setSelectedCategory(category);
+                setSelectedSubcategory(null);
+                setShowCategoryPicker(false);
+              }}
+              className="flex flex-col items-center p-3 rounded-lg border-2 border-gray-200 dark:border-gray-700 hover:border-primary-500 transition-colors"
+            >
+              <span className="text-3xl mb-1">{category.icon}</span>
+              <span className="text-xs text-center">{category.name}</span>
+            </button>
+          ))}
         </div>
-      )}
+      </Modal>
 
       {/* Modal cambio conto */}
-      {showAccountPicker && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50" onClick={() => setShowAccountPicker(false)}>
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 max-w-md w-full mx-4" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Seleziona Conto</h3>
-            <div className="space-y-2">
-              {allAccounts.map((account) => (
-                <button
-                  key={account.id}
-                  type="button"
-                  onClick={() => {
-                    setSelectedAccount(account);
-                    setShowAccountPicker(false);
-                  }}
-                  className={`w-full flex items-center gap-3 p-3 rounded-lg border-2 transition-colors ${
-                    selectedAccount?.id === account.id
-                      ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20'
-                      : 'border-gray-200 dark:border-gray-700 hover:border-primary-500'
-                  }`}
-                >
-                  <span className="text-2xl">{account.icon}</span>
-                  <span className="font-medium">{account.name}</span>
-                </button>
-              ))}
-            </div>
-          </div>
+      <Modal isOpen={showAccountPicker} onClose={() => setShowAccountPicker(false)} title="Seleziona Conto">
+        <div className="space-y-2">
+          {allAccounts.map((account) => (
+            <button
+              key={account.id}
+              type="button"
+              onClick={() => {
+                setSelectedAccount(account);
+                setShowAccountPicker(false);
+              }}
+              className={`w-full flex items-center gap-3 p-3 rounded-lg border-2 transition-colors ${
+                selectedAccount?.id === account.id
+                  ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20'
+                  : 'border-gray-200 dark:border-gray-700 hover:border-primary-500'
+              }`}
+            >
+              <span className="text-2xl">{account.icon}</span>
+              <span className="font-medium">{account.name}</span>
+            </button>
+          ))}
         </div>
-      )}
+      </Modal>
 
       {/* Modal selettore valuta */}
-      {showCurrencyPicker && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50" onClick={() => setShowCurrencyPicker(false)}>
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 max-w-sm w-full mx-4" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Seleziona Valuta</h3>
-            <div className="space-y-2">
-              {[
-                { code: 'EUR', name: 'Euro', symbol: '€' },
-                { code: 'USD', name: 'Dollaro USA', symbol: '$' },
-                { code: 'GBP', name: 'Sterlina Britannica', symbol: '£' },
-                { code: 'JPY', name: 'Yen Giapponese', symbol: '¥' },
-                { code: 'CHF', name: 'Franco Svizzero', symbol: 'Fr' },
-              ].map((curr) => (
-                <button
-                  key={curr.code}
-                  type="button"
-                  onClick={() => {
-                    setCurrency(curr.code);
-                    setShowCurrencyPicker(false);
-                  }}
-                  className={`w-full flex items-center gap-3 p-3 rounded-lg border-2 transition-colors ${
-                    currency === curr.code
-                      ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20'
-                      : 'border-gray-200 dark:border-gray-700 hover:border-primary-500'
-                  }`}
-                >
-                  <span className="text-2xl font-bold w-12">{curr.symbol}</span>
-                  <div className="flex-1 text-left">
-                    <div className="font-medium text-gray-900 dark:text-gray-100">{curr.name}</div>
-                    <div className="text-sm text-gray-500 dark:text-gray-400">{curr.code}</div>
-                  </div>
-                </button>
-              ))}
-            </div>
-          </div>
+      <Modal isOpen={showCurrencyPicker} onClose={() => setShowCurrencyPicker(false)} title="Seleziona Valuta">
+        <div className="space-y-2">
+          {[
+            { code: 'EUR', name: 'Euro', symbol: '€' },
+            { code: 'USD', name: 'Dollaro USA', symbol: '$' },
+            { code: 'GBP', name: 'Sterlina Britannica', symbol: '£' },
+            { code: 'JPY', name: 'Yen Giapponese', symbol: '¥' },
+            { code: 'CHF', name: 'Franco Svizzero', symbol: 'Fr' },
+          ].map((curr) => (
+            <button
+              key={curr.code}
+              type="button"
+              onClick={() => {
+                setCurrency(curr.code);
+                setShowCurrencyPicker(false);
+              }}
+              className={`w-full flex items-center gap-3 p-3 rounded-lg border-2 transition-colors ${
+                currency === curr.code
+                  ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20'
+                  : 'border-gray-200 dark:border-gray-700 hover:border-primary-500'
+              }`}
+            >
+              <span className="text-2xl font-bold w-12">{curr.symbol}</span>
+              <div className="flex-1 text-left">
+                <div className="font-medium text-gray-900 dark:text-gray-100">{curr.name}</div>
+                <div className="text-sm text-gray-500 dark:text-gray-400">{curr.code}</div>
+              </div>
+            </button>
+          ))}
         </div>
-      )}
+      </Modal>
 
       {/* Modal selettore data */}
-      {showDateSelector && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50" onClick={() => {
-          setShowDateSelector(false);
-          setShowDatePicker(false);
-        }}>
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 max-w-sm w-full mx-4" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Seleziona Data</h3>
-
-            <div className="space-y-2">
-              {/* Oggi */}
-              <button
-                type="button"
-                onClick={() => handleDateQuickSelect('today')}
-                className="w-full flex items-center gap-3 p-4 rounded-lg border-2 border-gray-200 dark:border-gray-700 hover:border-primary-500 transition-colors"
-              >
-                <span className="text-2xl">📅</span>
-                <div className="flex-1 text-left">
-                  <div className="font-medium text-gray-900 dark:text-gray-100">Oggi</div>
-                  <div className="text-sm text-gray-500 dark:text-gray-400">
-                    {new Date().toLocaleDateString('it-IT', { day: 'numeric', month: 'short', year: 'numeric' })}
-                  </div>
-                </div>
-              </button>
-
-              {/* Ieri */}
-              <button
-                type="button"
-                onClick={() => handleDateQuickSelect('yesterday')}
-                className="w-full flex items-center gap-3 p-4 rounded-lg border-2 border-gray-200 dark:border-gray-700 hover:border-primary-500 transition-colors"
-              >
-                <span className="text-2xl">⏮️</span>
-                <div className="flex-1 text-left">
-                  <div className="font-medium text-gray-900 dark:text-gray-100">Ieri</div>
-                  <div className="text-sm text-gray-500 dark:text-gray-400">
-                    {(() => {
-                      const yesterday = new Date();
-                      yesterday.setDate(yesterday.getDate() - 1);
-                      return yesterday.toLocaleDateString('it-IT', { day: 'numeric', month: 'short', year: 'numeric' });
-                    })()}
-                  </div>
-                </div>
-              </button>
-
-              {/* Seleziona giorno */}
-              <button
-                type="button"
-                onClick={() => setShowDatePicker(true)}
-                className="w-full flex items-center gap-3 p-4 rounded-lg border-2 border-gray-200 dark:border-gray-700 hover:border-primary-500 transition-colors"
-              >
-                <span className="text-2xl">🗓️</span>
-                <div className="flex-1 text-left">
-                  <div className="font-medium text-gray-900 dark:text-gray-100">Seleziona giorno</div>
-                  <div className="text-sm text-gray-500 dark:text-gray-400">Scegli una data specifica</div>
-                </div>
-              </button>
-
-              {/* Calendario (appare solo se "Seleziona giorno" è cliccato) */}
-              {showDatePicker && (
-                <div className="pt-3 border-t border-gray-200 dark:border-gray-700">
-                  <input
-                    type="date"
-                    value={date}
-                    onChange={(e) => {
-                      setDate(e.target.value);
-                      setShowDatePicker(false);
-                      setShowDateSelector(false);
-                    }}
-                    className="w-full px-4 py-3 rounded-lg border-2 border-primary-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 text-lg"
-                    autoFocus
-                  />
-                </div>
-              )}
+      <Modal isOpen={showDateSelector} onClose={() => { setShowDateSelector(false); setShowDatePicker(false); }} title="Seleziona Data">
+        <div className="space-y-2">
+          <button
+            type="button"
+            onClick={() => handleDateQuickSelect('today')}
+            className="w-full flex items-center gap-3 p-4 rounded-lg border-2 border-gray-200 dark:border-gray-700 hover:border-primary-500 transition-colors"
+          >
+            <span className="text-2xl">📅</span>
+            <div className="flex-1 text-left">
+              <div className="font-medium text-gray-900 dark:text-gray-100">Oggi</div>
+              <div className="text-sm text-gray-500 dark:text-gray-400">
+                {new Date().toLocaleDateString('it-IT', { day: 'numeric', month: 'short', year: 'numeric' })}
+              </div>
             </div>
-          </div>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => handleDateQuickSelect('yesterday')}
+            className="w-full flex items-center gap-3 p-4 rounded-lg border-2 border-gray-200 dark:border-gray-700 hover:border-primary-500 transition-colors"
+          >
+            <span className="text-2xl">⏮️</span>
+            <div className="flex-1 text-left">
+              <div className="font-medium text-gray-900 dark:text-gray-100">Ieri</div>
+              <div className="text-sm text-gray-500 dark:text-gray-400">
+                {(() => {
+                  const yesterday = new Date();
+                  yesterday.setDate(yesterday.getDate() - 1);
+                  return yesterday.toLocaleDateString('it-IT', { day: 'numeric', month: 'short', year: 'numeric' });
+                })()}
+              </div>
+            </div>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setShowDatePicker(true)}
+            className="w-full flex items-center gap-3 p-4 rounded-lg border-2 border-gray-200 dark:border-gray-700 hover:border-primary-500 transition-colors"
+          >
+            <span className="text-2xl">🗓️</span>
+            <div className="flex-1 text-left">
+              <div className="font-medium text-gray-900 dark:text-gray-100">Seleziona giorno</div>
+              <div className="text-sm text-gray-500 dark:text-gray-400">Scegli una data specifica</div>
+            </div>
+          </button>
+
+          {showDatePicker && (
+            <div className="pt-3 border-t border-gray-200 dark:border-gray-700">
+              <input
+                type="date"
+                value={date}
+                onChange={(e) => {
+                  setDate(e.target.value);
+                  setShowDatePicker(false);
+                  setShowDateSelector(false);
+                }}
+                className="w-full px-4 py-3 rounded-lg border-2 border-primary-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 text-lg"
+                autoFocus
+              />
+            </div>
+          )}
         </div>
-      )}
+      </Modal>
 
       {/* Confirm Dialog */}
       <ConfirmDialog

@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
 import { apiService } from '../services/api';
+import { supabase } from '../services/supabase';
 import type { Account, Category, Transaction } from '../types';
 
 interface DataContextType {
@@ -37,13 +38,6 @@ interface DataContextType {
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
-const CACHE_KEYS = {
-  ACCOUNTS: 'trackr_accounts',
-  CATEGORIES: 'trackr_categories',
-  TRANSACTIONS: 'trackr_transactions',
-  LAST_SYNC: 'trackr_last_sync',
-};
-
 interface DataProviderProps {
   children: ReactNode;
 }
@@ -55,33 +49,27 @@ export function DataProvider({ children }: DataProviderProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [isInitialized, setIsInitialized] = useState(false);
 
-  // Check if user is authenticated before fetching
   useEffect(() => {
-    const token = localStorage.getItem('access_token');
-    if (token) {
-      loadFromCache();
-      fetchAllData();
-    } else {
-      setIsLoading(false);
-      setIsInitialized(false);
-    }
-
-    // Listen for storage changes (login from another tab)
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'access_token') {
-        if (e.newValue) {
-          // User logged in
-          loadFromCache();
-          fetchAllData();
-        } else {
-          // User logged out
-          clearCache();
-        }
+    // Carica i dati se c'è una sessione attiva
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        fetchAllData();
+      } else {
+        setIsLoading(false);
+        setIsInitialized(false);
       }
-    };
+    });
 
-    window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
+    // Ascolta cambio sessione
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        fetchAllData();
+      } else {
+        clearCache();
+      }
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
   // Ricalcola i current_balance degli account quando cambiano le transazioni
@@ -90,7 +78,6 @@ export function DataProvider({ children }: DataProviderProps) {
 
     setAccounts(prevAccounts => {
       return prevAccounts.map(account => {
-        // Calcola il saldo corrente dalle transazioni
         const accountTransactions = transactions.filter(t => t.account_id === account.id);
         let currentBalance = account.initial_balance;
 
@@ -102,7 +89,6 @@ export function DataProvider({ children }: DataProviderProps) {
           }
         });
 
-        // Solo aggiorna se il saldo è cambiato
         if (currentBalance !== account.current_balance) {
           return { ...account, current_balance: currentBalance };
         }
@@ -110,38 +96,6 @@ export function DataProvider({ children }: DataProviderProps) {
       });
     });
   }, [transactions, isInitialized]);
-
-  // Save to localStorage whenever data changes
-  useEffect(() => {
-    if (isInitialized) {
-      saveToCache();
-    }
-  }, [accounts, categories, transactions, isInitialized]);
-
-  const loadFromCache = () => {
-    try {
-      const cachedAccounts = localStorage.getItem(CACHE_KEYS.ACCOUNTS);
-      const cachedCategories = localStorage.getItem(CACHE_KEYS.CATEGORIES);
-      const cachedTransactions = localStorage.getItem(CACHE_KEYS.TRANSACTIONS);
-
-      if (cachedAccounts) setAccounts(JSON.parse(cachedAccounts));
-      if (cachedCategories) setCategories(JSON.parse(cachedCategories));
-      if (cachedTransactions) setTransactions(JSON.parse(cachedTransactions));
-    } catch (error) {
-      console.error('Error loading from cache:', error);
-    }
-  };
-
-  const saveToCache = () => {
-    try {
-      localStorage.setItem(CACHE_KEYS.ACCOUNTS, JSON.stringify(accounts));
-      localStorage.setItem(CACHE_KEYS.CATEGORIES, JSON.stringify(categories));
-      localStorage.setItem(CACHE_KEYS.TRANSACTIONS, JSON.stringify(transactions));
-      localStorage.setItem(CACHE_KEYS.LAST_SYNC, new Date().toISOString());
-    } catch (error) {
-      console.error('Error saving to cache:', error);
-    }
-  };
 
   const fetchAllData = async () => {
     setIsLoading(true);
@@ -200,10 +154,6 @@ export function DataProvider({ children }: DataProviderProps) {
     setCategories([]);
     setTransactions([]);
     setIsInitialized(false);
-    localStorage.removeItem(CACHE_KEYS.ACCOUNTS);
-    localStorage.removeItem(CACHE_KEYS.CATEGORIES);
-    localStorage.removeItem(CACHE_KEYS.TRANSACTIONS);
-    localStorage.removeItem(CACHE_KEYS.LAST_SYNC);
   };
 
   // Account operations
@@ -217,10 +167,6 @@ export function DataProvider({ children }: DataProviderProps) {
 
   const deleteAccount = (id: number) => {
     setAccounts(prev => prev.filter(a => a.id !== id));
-    // Se era l'ultimo account, ricrea i default al prossimo fetch
-    if (accounts.filter(a => a.id !== id).length === 0) {
-      refreshAccounts();
-    }
   };
 
   // Category operations
@@ -234,9 +180,6 @@ export function DataProvider({ children }: DataProviderProps) {
 
   const deleteCategory = (id: number) => {
     setCategories(prev => prev.filter(c => c.id !== id));
-    // Dopo ogni eliminazione, ricarica dal DB: se è vuoto ricrea i default
-    // (non si può usare il conteggio state perché alcune categorie, es. "Trasferimento",
-    // non sono visibili nell'UI e non possono essere eliminate dall'utente)
     refreshCategories().catch(() => {});
   };
 
@@ -244,11 +187,10 @@ export function DataProvider({ children }: DataProviderProps) {
   const addTransaction = (transaction: Transaction) => {
     setTransactions(prev => {
       const newTransactions = [...prev, transaction];
-      // Sort by date descending, then by created_at descending
       return newTransactions.sort((a, b) => {
         const dateCompare = new Date(b.date).getTime() - new Date(a.date).getTime();
         if (dateCompare !== 0) return dateCompare;
-        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+        return new Date(b.created_at ?? 0).getTime() - new Date(a.created_at ?? 0).getTime();
       });
     });
   };
@@ -256,11 +198,10 @@ export function DataProvider({ children }: DataProviderProps) {
   const updateTransaction = (transaction: Transaction) => {
     setTransactions(prev => {
       const updated = prev.map(t => t.id === transaction.id ? transaction : t);
-      // Re-sort after update
       return updated.sort((a, b) => {
         const dateCompare = new Date(b.date).getTime() - new Date(a.date).getTime();
         if (dateCompare !== 0) return dateCompare;
-        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+        return new Date(b.created_at ?? 0).getTime() - new Date(a.created_at ?? 0).getTime();
       });
     });
   };
