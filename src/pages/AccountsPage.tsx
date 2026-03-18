@@ -161,27 +161,24 @@ export default function AccountsPage() {
   const handleToggleFavorite = async (account: Account, e: React.MouseEvent) => {
     e.stopPropagation(); // Previene l'apertura del modal
 
-    const newFavoriteState = !account.is_favorite;
+    // Se è già preferito, non fare nulla (almeno un preferito deve esserci sempre)
+    if (account.is_favorite) return;
 
-    // Se stiamo impostando questo come preferito, rimuovi il preferito dagli altri
-    if (newFavoriteState) {
-      accounts.forEach(acc => {
-        if (acc.id !== account.id && acc.is_favorite) {
-          updateAccountCache({ ...acc, is_favorite: false });
-        }
-      });
-    }
+    // Trova i conti che erano preferiti (da aggiornare nel DB)
+    const prevFavorites = accounts.filter(acc => acc.id !== account.id && acc.is_favorite);
 
-    // Aggiorna questo account
-    updateAccountCache({ ...account, is_favorite: newFavoriteState });
+    // Aggiorna la cache: rimuovi preferito dagli altri e imposta questo
+    prevFavorites.forEach(acc => updateAccountCache({ ...acc, is_favorite: false }));
+    updateAccountCache({ ...account, is_favorite: true });
 
     try {
-      await apiService.updateAccount(account.id, {
-        is_favorite: newFavoriteState,
-      });
+      // Persisti nel DB: sia la rimozione dai vecchi preferiti che il nuovo
+      await Promise.all([
+        ...prevFavorites.map(acc => apiService.updateAccount(acc.id, { is_favorite: false })),
+        apiService.updateAccount(account.id, { is_favorite: true }),
+      ]);
     } catch (error) {
       console.error('Errore aggiornamento preferito:', error);
-      // In caso di errore, ricarica per ripristinare lo stato corretto
       await refreshAccounts();
     }
   };
@@ -240,9 +237,9 @@ export default function AccountsPage() {
                     </div>
                     <button
                       onClick={(e) => handleToggleFavorite(account, e)}
-                      className="text-2xl transition-transform hover:scale-125"
+                      className="text-2xl transition-colors"
                     >
-                      {account.is_favorite ? '⭐' : '☆'}
+                      <span className={account.is_favorite ? 'text-yellow-400 text-3xl' : 'text-gray-300 dark:text-gray-600 text-2xl'}>★</span>
                     </button>
                   </div>
                 </div>
