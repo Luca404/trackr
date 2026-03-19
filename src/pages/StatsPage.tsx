@@ -445,7 +445,7 @@ export default function StatsPage() {
 
         {/* Grafico temporale */}
         {filteredTransactions.length > 0 && (
-          <div className="card">
+          <div className="card" data-tab-swipe>
             <div className="flex items-end justify-between gap-1 h-48">
               {timelineData.map((period, index) => {
                 const barHeight = period.totalAmount > 0

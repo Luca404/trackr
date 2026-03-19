@@ -226,6 +226,7 @@ export default function AccountsPage() {
       <div className="space-y-6">
         {/* Totale liquidità */}
         {accounts.length > 0 && (
+          <div className="sticky top-0 z-10 -mx-4 px-4 pt-1 pb-3 bg-gray-50 dark:bg-gray-900">
           <div className="card text-center py-6">
             <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">Liquidità totale</div>
             <div className="flex items-center justify-center gap-4">
@@ -240,6 +241,7 @@ export default function AccountsPage() {
                 {hideBalances ? '🙈' : '👁️'}
               </button>
             </div>
+          </div>
           </div>
         )}
 

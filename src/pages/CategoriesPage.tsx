@@ -421,7 +421,7 @@ export default function CategoriesPage() {
         </div>
 
         {/* Grid categorie compatto */}
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-3 gap-3" data-tab-swipe>
           {filteredCategories.map((category) => (
               <button
                 key={category.id}

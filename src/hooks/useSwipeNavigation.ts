@@ -50,6 +50,7 @@ export function useSwipeNavigation({
   const touchStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
   const swipeOffsetRef = useRef(0);
   const isSwipingRef = useRef(false);
+  const isTabZoneRef = useRef(false);
   const [swipeOffset, setSwipeOffset] = useState(0);
   const [isSwipingHorizontally, setIsSwipingHorizontally] = useState(false);
 
@@ -74,6 +75,7 @@ export function useSwipeNavigation({
       };
       swipeOffsetRef.current = 0;
       isSwipingRef.current = false;
+      isTabZoneRef.current = !!target.closest('[data-tab-swipe]');
       setIsSwipingHorizontally(false);
       setSwipeOffset(0);
     };
@@ -89,14 +91,19 @@ export function useSwipeNavigation({
       if (!isSwipingRef.current && Math.abs(deltaX) > 15) {
         if (Math.abs(deltaX) > Math.abs(deltaY) * 1.5) {
           isSwipingRef.current = true;
-          setIsSwipingHorizontally(true);
+          // Animazione visiva solo per swipe di navigazione pagina
+          if (!isTabZoneRef.current) {
+            setIsSwipingHorizontally(true);
+          }
         }
       }
 
       // Se è uno swipe orizzontale, aggiorna l'offset e previeni lo scroll
       if (isSwipingRef.current) {
         swipeOffsetRef.current = deltaX;
-        setSwipeOffset(deltaX);
+        if (!isTabZoneRef.current) {
+          setSwipeOffset(deltaX);
+        }
         e.preventDefault();
       }
     };
@@ -122,7 +129,8 @@ export function useSwipeNavigation({
           }
         } else {
           const dir = deltaX > 0 ? 'right' : 'left';
-          const consumed = _tabInterceptor?.(dir) ?? false;
+          // Il tab interceptor si attiva solo se lo swipe parte dalla zona tab
+          const consumed = isTabZoneRef.current ? (_tabInterceptor?.(dir) ?? false) : false;
 
           if (!consumed) {
             const currentIndex = routes.indexOf(location.pathname);
