@@ -9,6 +9,7 @@ import LoadingSpinner from '../components/common/LoadingSpinner';
 import PeriodSelector from '../components/common/PeriodSelector';
 import DateRangePicker from '../components/common/DateRangePicker';
 import { usePeriod } from '../hooks/usePeriod';
+import { useTabSwipe } from '../hooks/useSwipeNavigation';
 import type { CategoryWithStats, CategoryFormData, SubcategoryFormData } from '../types';
 
 type CategoryFilter = 'income' | 'expense' | 'investment';
@@ -143,6 +144,8 @@ const getSuggestedIcons = (name: string): string[] => {
 export default function CategoriesPage() {
   const { categories: baseCategories, transactions: allTransactions, isLoading, addCategory, updateCategory: updateCategoryCache, deleteCategory: deleteCategoryCache } = useData();
   const [filter, setFilter] = useState<CategoryFilter>('expense');
+  const TABS: CategoryFilter[] = ['expense', 'income', 'investment'];
+  useTabSwipe(TABS, filter, (t) => setFilter(t as CategoryFilter));
   const [selectedCategory, setSelectedCategory] = useState<CategoryWithStats | null>(null);
   const [isSubcategoryModalOpen, setIsSubcategoryModalOpen] = useState(false);
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
@@ -358,10 +361,11 @@ export default function CategoriesPage() {
   };
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('it-IT', {
-      style: 'currency',
-      currency: 'EUR',
-    }).format(amount);
+    const abs = Math.abs(amount);
+    const sign = amount < 0 ? '-' : '';
+    const [intStr, decStr] = abs.toFixed(2).split('.');
+    const intFormatted = intStr.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+    return `${sign}€ ${intFormatted},${decStr}`;
   };
 
   const filteredCategories = categories.filter(category => {

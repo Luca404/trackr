@@ -5,6 +5,7 @@ import LoadingSpinner from '../components/common/LoadingSpinner';
 import PeriodSelector from '../components/common/PeriodSelector';
 import DateRangePicker from '../components/common/DateRangePicker';
 import { usePeriod } from '../hooks/usePeriod';
+import { useTabSwipe } from '../hooks/useSwipeNavigation';
 
 type StatsFilter = 'expense' | 'income' | 'investment';
 type PeriodType = 'day' | 'week' | 'month' | 'year' | 'all' | 'custom';
@@ -20,6 +21,8 @@ interface CategoryStat {
 export default function StatsPage() {
   const { transactions: allTransactions, categories, isLoading } = useData();
   const [filter, setFilter] = useState<StatsFilter>('expense');
+  const TABS: StatsFilter[] = ['expense', 'income', 'investment'];
+  useTabSwipe(TABS, filter, (t) => setFilter(t as StatsFilter));
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
 
@@ -43,10 +46,11 @@ export default function StatsPage() {
   };
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('it-IT', {
-      style: 'currency',
-      currency: 'EUR',
-    }).format(amount);
+    const abs = Math.abs(amount);
+    const sign = amount < 0 ? '-' : '';
+    const [intStr, decStr] = abs.toFixed(2).split('.');
+    const intFormatted = intStr.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+    return `${sign}€ ${intFormatted},${decStr}`;
   };
 
   // Calcola totali del periodo

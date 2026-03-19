@@ -112,10 +112,11 @@ export default function TransactionsPage() {
   };
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('it-IT', {
-      style: 'currency',
-      currency: 'EUR',
-    }).format(amount);
+    const abs = Math.abs(amount);
+    const sign = amount < 0 ? '-' : '';
+    const [intStr, decStr] = abs.toFixed(2).split('.');
+    const intFormatted = intStr.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+    return `${sign}€ ${intFormatted},${decStr}`;
   };
 
   const formatDate = (dateStr: string) => {

@@ -98,12 +98,13 @@ export default function PortfoliosPage() {
   };
 
   const formatCurrency = (value: number, currency: string = 'EUR') => {
-    return new Intl.NumberFormat('it-IT', {
-      style: 'currency',
-      currency: currency,
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(value);
+    const abs = Math.abs(value);
+    const sign = value < 0 ? '-' : '';
+    const [intStr, decStr] = abs.toFixed(2).split('.');
+    const intFormatted = intStr.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+    const symbols: Record<string, string> = { EUR: '€', USD: '$', GBP: '£', JPY: '¥', CHF: 'Fr' };
+    const symbol = symbols[currency] || currency;
+    return `${sign}${symbol} ${intFormatted},${decStr}`;
   };
 
   if (isLoading) {
