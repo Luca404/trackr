@@ -2,7 +2,6 @@ import { useState, useMemo } from 'react';
 import { apiService } from '../services/api';
 import { useData } from '../contexts/DataContext';
 import Layout from '../components/layout/Layout';
-import FAB from '../components/common/FAB';
 import Modal from '../components/common/Modal';
 import ConfirmDialog from '../components/common/ConfirmDialog';
 import LoadingSpinner from '../components/common/LoadingSpinner';
@@ -422,15 +421,8 @@ export default function CategoriesPage() {
         </div>
 
         {/* Grid categorie compatto */}
-        {filteredCategories.length === 0 ? (
-          <div className="card text-center py-12">
-            <div className="text-gray-500 dark:text-gray-400">
-              Nessuna categoria in questo filtro.
-            </div>
-          </div>
-        ) : (
-          <div className="grid grid-cols-3 gap-3">
-            {filteredCategories.map((category) => (
+        <div className="grid grid-cols-3 gap-3">
+          {filteredCategories.map((category) => (
               <button
                 key={category.id}
                 onClick={() => handleCategoryClick(category)}
@@ -453,16 +445,19 @@ export default function CategoriesPage() {
                   {category.transaction_count} trans.
                 </div>
               </button>
-            ))}
-          </div>
-        )}
-
-        {/* FAB */}
-        <FAB onClick={() => {
-          setIsEditMode(false);
-          setCategoryFormData({ name: '', icon: '📌', category_type: filter });
-          setIsCategoryModalOpen(true);
-        }} />
+          ))}
+          {/* Aggiungi nuova categoria */}
+          <button
+            onClick={() => {
+              setIsEditMode(false);
+              setCategoryFormData({ name: '', icon: '📌', category_type: filter });
+              setIsCategoryModalOpen(true);
+            }}
+            className="flex flex-col items-center justify-center p-3 rounded-lg border-2 border-dashed border-gray-200 dark:border-gray-700 hover:border-primary-500 dark:hover:border-primary-500 hover:bg-primary-50 dark:hover:bg-primary-900/10 transition-colors min-h-[100px]"
+          >
+            <div className="text-3xl text-gray-300 dark:text-gray-600">+</div>
+          </button>
+        </div>
 
         {/* Modal sottocategorie */}
         <Modal

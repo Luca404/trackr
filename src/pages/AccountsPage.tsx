@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { apiService } from '../services/api';
 import { useData } from '../contexts/DataContext';
 import Layout from '../components/layout/Layout';
-import FAB from '../components/common/FAB';
 import Modal from '../components/common/Modal';
 import ConfirmDialog from '../components/common/ConfirmDialog';
 import LoadingSpinner from '../components/common/LoadingSpinner';
@@ -222,19 +221,8 @@ export default function AccountsPage() {
         )}
 
         {/* Lista conti */}
-        {accounts.length === 0 ? (
-          <div className="card text-center py-12">
-            <div className="text-6xl mb-4">🏦</div>
-            <div className="text-gray-500 dark:text-gray-400 mb-2">
-              Nessun conto trovato
-            </div>
-            <div className="text-sm text-gray-400 dark:text-gray-500">
-              Aggiungi il tuo primo conto per iniziare
-            </div>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {accounts.map((account) => (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {accounts.map((account) => (
               <div
                 key={account.id}
                 className="card hover:shadow-lg transition-shadow cursor-pointer"
@@ -268,12 +256,16 @@ export default function AccountsPage() {
                   </div>
                 </div>
               </div>
-            ))}
+          ))}
+          {/* Aggiungi nuovo conto */}
+          <div
+            className="card flex items-center gap-3 cursor-pointer border-2 border-dashed border-gray-200 dark:border-gray-700 hover:border-primary-400 dark:hover:border-primary-500 hover:bg-primary-50 dark:hover:bg-primary-900/10 transition-colors md:col-span-2"
+            onClick={() => handleOpenModal()}
+          >
+            <div className="w-8 h-8 rounded-full border-2 border-gray-300 dark:border-gray-600 flex items-center justify-center text-gray-400 dark:text-gray-500 font-bold text-xl flex-shrink-0">+</div>
+            <span className="font-medium text-gray-400 dark:text-gray-500">Nuovo conto</span>
           </div>
-        )}
-
-        {/* FAB per aggiungere conto */}
-        <FAB onClick={() => handleOpenModal()} />
+        </div>
 
         {/* Modal per creare/modificare conto */}
         <Modal

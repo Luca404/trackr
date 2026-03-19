@@ -2,7 +2,6 @@ import { useState, useMemo } from 'react';
 import { apiService } from '../services/api';
 import { useData } from '../contexts/DataContext';
 import Layout from '../components/layout/Layout';
-import FAB from '../components/common/FAB';
 import Modal from '../components/common/Modal';
 import TransactionForm from '../components/transactions/TransactionForm';
 import LoadingSpinner from '../components/common/LoadingSpinner';
@@ -142,17 +141,8 @@ export default function TransactionsPage() {
         />
 
         {/* Lista transazioni */}
-        <div>
-          {transactions.length === 0 ? (
-            <div className="card text-center py-12">
-              <div className="text-6xl mb-4">📋</div>
-              <div className="text-gray-500 dark:text-gray-400">
-                Nessuna transazione in questo periodo
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {transactions.map((transaction) => (
+        <div className="space-y-2">
+          {transactions.map((transaction) => (
                 <div
                   key={transaction.id}
                   className="card flex items-center justify-between hover:shadow-md transition-shadow cursor-pointer"
@@ -202,13 +192,16 @@ export default function TransactionsPage() {
                     </div>
                   </div>
                 </div>
-              ))}
-            </div>
-          )}
+          ))}
+          {/* Aggiungi nuova transazione */}
+          <div
+            className="card flex items-center gap-3 cursor-pointer border-2 border-dashed border-gray-200 dark:border-gray-700 hover:border-primary-400 dark:hover:border-primary-500 hover:bg-primary-50 dark:hover:bg-primary-900/10 transition-colors"
+            onClick={handleNewTransaction}
+          >
+            <div className="w-8 h-8 rounded-full border-2 border-gray-300 dark:border-gray-600 flex items-center justify-center text-gray-400 dark:text-gray-500 font-bold text-xl flex-shrink-0">+</div>
+            <span className="font-medium text-gray-400 dark:text-gray-500">Nuova transazione</span>
+          </div>
         </div>
-
-        {/* FAB */}
-        <FAB onClick={handleNewTransaction} />
 
         {/* Modal transazione */}
         <Modal

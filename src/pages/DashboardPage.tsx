@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { apiService } from '../services/api';
 import Layout from '../components/layout/Layout';
-import FAB from '../components/common/FAB';
 import Modal from '../components/common/Modal';
 import TransactionForm from '../components/transactions/TransactionForm';
 import LoadingSpinner from '../components/common/LoadingSpinner';
@@ -249,13 +248,8 @@ export default function DashboardPage() {
             </a>
           </div>
 
-          {transactions.length === 0 ? (
-            <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-              Nessuna transazione questo mese
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {transactions.map((transaction) => (
+          <div className="space-y-3">
+            {transactions.map((transaction) => (
                 <div
                   key={transaction.id}
                   className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg"
@@ -285,14 +279,18 @@ export default function DashboardPage() {
                     {formatCurrency(transaction.amount)}
                   </div>
                 </div>
-              ))}
+            ))}
+            {/* Aggiungi nuova transazione */}
+            <div
+              className="flex items-center gap-3 p-3 rounded-lg border-2 border-dashed border-gray-200 dark:border-gray-700 hover:border-primary-400 dark:hover:border-primary-500 hover:bg-primary-50 dark:hover:bg-primary-900/10 transition-colors cursor-pointer"
+              onClick={() => setIsModalOpen(true)}
+            >
+              <div className="w-7 h-7 rounded-full border-2 border-gray-300 dark:border-gray-600 flex items-center justify-center text-gray-400 dark:text-gray-500 font-bold text-lg flex-shrink-0">+</div>
+              <span className="text-sm font-medium text-gray-400 dark:text-gray-500">Nuova transazione</span>
             </div>
-          )}
+          </div>
         </div>
       </div>
-
-      {/* FAB per aggiungere transazione */}
-      <FAB onClick={() => setIsModalOpen(true)} />
 
       {/* Modal form transazione */}
       <Modal

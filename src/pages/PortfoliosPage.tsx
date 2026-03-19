@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { apiService } from '../services/api';
 import Layout from '../components/layout/Layout';
-import FAB from '../components/common/FAB';
 import Modal from '../components/common/Modal';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import type { Portfolio, PortfolioFormData } from '../types';
@@ -115,19 +114,8 @@ export default function PortfoliosPage() {
     <Layout>
       <div className="space-y-6">
         {/* Lista portafogli */}
-        {portfolios.length === 0 ? (
-          <div className="card text-center py-12">
-            <div className="text-6xl mb-4">📊</div>
-            <div className="text-gray-500 dark:text-gray-400 mb-2">
-              Nessun portafoglio trovato
-            </div>
-            <div className="text-sm text-gray-400 dark:text-gray-500">
-              Crea il tuo primo portafoglio di investimenti
-            </div>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {portfolios.map((portfolio) => (
+        <div className="space-y-3">
+          {portfolios.map((portfolio) => (
               <div
                 key={portfolio.id}
                 className="card cursor-pointer hover:shadow-lg transition-shadow"
@@ -188,12 +176,16 @@ export default function PortfoliosPage() {
                   </div>
                 )}
               </div>
-            ))}
+          ))}
+          {/* Aggiungi nuovo portafoglio */}
+          <div
+            className="card flex items-center gap-3 cursor-pointer border-2 border-dashed border-gray-200 dark:border-gray-700 hover:border-primary-400 dark:hover:border-primary-500 hover:bg-primary-50 dark:hover:bg-primary-900/10 transition-colors"
+            onClick={handleCreatePortfolio}
+          >
+            <div className="w-8 h-8 rounded-full border-2 border-gray-300 dark:border-gray-600 flex items-center justify-center text-gray-400 dark:text-gray-500 font-bold text-xl flex-shrink-0">+</div>
+            <span className="font-medium text-gray-400 dark:text-gray-500">Nuovo portafoglio</span>
           </div>
-        )}
-
-        {/* FAB per creare nuovo portafoglio */}
-        <FAB onClick={handleCreatePortfolio} />
+        </div>
 
         {/* Modal per creare/modificare portafoglio */}
         <Modal
