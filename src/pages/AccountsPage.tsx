@@ -12,7 +12,20 @@ const ACCOUNT_ICONS = ['💳', '🏦', '💰', '💵', '💶', '💷', '💴', '
 export default function AccountsPage() {
   const { accounts, isLoading, addAccount, updateAccount: updateAccountCache, deleteAccount: deleteAccountCache, refreshAccounts } = useData();
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [hideBalances, setHideBalances] = useState(false);
+  const [hideBalances, setHideBalances] = useState(() => localStorage.getItem('hideBalances') === 'true');
+
+  const toggleHideBalances = () => {
+    setHideBalances(h => {
+      const next = !h;
+      localStorage.setItem('hideBalances', String(next));
+      return next;
+    });
+  };
+
+  const maskAmount = (formatted: string, positive: boolean) => {
+    const masked = '•'.repeat(formatted.length);
+    return <span className={positive ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>{masked}</span>;
+  };
   const [isEditMode, setIsEditMode] = useState(false);
   const [selectedAccount, setSelectedAccount] = useState<Account | null>(null);
   const [formData, setFormData] = useState<AccountFormData>({
@@ -215,12 +228,12 @@ export default function AccountsPage() {
         {accounts.length > 0 && (
           <div className="card text-center py-6">
             <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">Liquidità totale</div>
-            <div className="flex items-center justify-center gap-2">
-              <div className={`text-4xl font-bold ${totalLiquidity >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
-                {hideBalances ? '••••••' : formatCurrency(totalLiquidity)}
+            <div className="flex items-center justify-center gap-4">
+              <div className="text-4xl font-bold">
+                {hideBalances ? maskAmount(formatCurrency(totalLiquidity), totalLiquidity >= 0) : <span className={totalLiquidity >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>{formatCurrency(totalLiquidity)}</span>}
               </div>
               <button
-                onClick={() => setHideBalances(h => !h)}
+                onClick={toggleHideBalances}
                 className="text-gray-400 dark:text-gray-500 text-xl outline-none focus:outline-none select-none"
                 style={{ WebkitTapHighlightColor: 'transparent' }}
               >
@@ -254,7 +267,9 @@ export default function AccountsPage() {
                           ? 'text-green-600 dark:text-green-400'
                           : 'text-red-600 dark:text-red-400'
                       }`}>
-                        {hideBalances ? '••••' : formatCurrency(account.current_balance ?? account.initial_balance)}
+                        {hideBalances
+                          ? maskAmount(formatCurrency(account.current_balance ?? account.initial_balance), (account.current_balance ?? account.initial_balance) >= 0)
+                          : formatCurrency(account.current_balance ?? account.initial_balance)}
                       </div>
                     </div>
                     <button
