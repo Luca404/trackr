@@ -76,14 +76,16 @@ export default function AccountsPage() {
     const balanceValue = parseFloat(balanceInput) || 0;
 
     // Prepara i dati da inviare
-    const finalFormData = isEditMode
+    const finalFormData = isEditMode && selectedAccount
       ? {
           ...formData,
-          current_balance: balanceValue, // In modifica, invia current_balance
+          // current_balance non è una colonna DB: è initial_balance + Σtransazioni.
+          // Per ottenere il saldo corrente desiderato, ricalcola initial_balance di conseguenza.
+          initial_balance: balanceValue - ((selectedAccount.current_balance ?? selectedAccount.initial_balance) - selectedAccount.initial_balance),
         }
       : {
           ...formData,
-          initial_balance: balanceValue, // In creazione, invia initial_balance
+          initial_balance: balanceValue,
         };
 
     try {
@@ -181,6 +183,15 @@ export default function AccountsPage() {
       console.error('Errore aggiornamento preferito:', error);
       await refreshAccounts();
     }
+  };
+
+  const formatAmountDisplay = (value: string): string => {
+    const negative = value.startsWith('-');
+    const abs = negative ? value.slice(1) : value;
+    const [intStr, decStr] = abs.split('.');
+    const intFormatted = new Intl.NumberFormat('it-IT').format(parseInt(intStr) || 0);
+    const result = decStr !== undefined ? `${intFormatted},${decStr}` : intFormatted;
+    return negative ? `-${result}` : result;
   };
 
   const formatCurrency = (amount: number) => {
@@ -313,7 +324,7 @@ export default function AccountsPage() {
               {/* Display dell'importo */}
               <div className="text-center mb-4">
                 <div className="text-3xl font-bold text-gray-900 dark:text-gray-100">
-                  € {(parseFloat(balanceInput) || 0).toFixed(2)}
+                  € {formatAmountDisplay(balanceInput)}
                 </div>
               </div>
 
@@ -348,7 +359,7 @@ export default function AccountsPage() {
                   >
                     0
                   </button>
-                  {/* Punto */}
+                  {/* Virgola */}
                   <button
                     type="button"
                     onClick={() => {
@@ -359,7 +370,7 @@ export default function AccountsPage() {
                     }}
                     className="h-14 text-2xl font-semibold rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
                   >
-                    .
+                    ,
                   </button>
                 </div>
 

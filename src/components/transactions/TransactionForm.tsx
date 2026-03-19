@@ -105,6 +105,15 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
     setAmount(prev => prev.length > 1 ? prev.slice(0, -1) : '0');
   };
 
+  const formatAmountDisplay = (value: string): string => {
+    const negative = value.startsWith('-');
+    const abs = negative ? value.slice(1) : value;
+    const [intStr, decStr] = abs.split('.');
+    const intFormatted = new Intl.NumberFormat('it-IT').format(parseInt(intStr) || 0);
+    const result = decStr !== undefined ? `${intFormatted},${decStr}` : intFormatted;
+    return negative ? `-${result}` : result;
+  };
+
   const getCurrencySymbol = (curr: string) => {
     const symbols: Record<string, string> = {
       'EUR': '€',
@@ -332,7 +341,7 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
       {/* Display importo */}
       <div className="text-center py-4">
         <div className="text-5xl font-bold text-gray-900 dark:text-gray-100">
-          {getCurrencySymbol(currency)} {amount || '0'}
+          {getCurrencySymbol(currency)} {formatAmountDisplay(amount || '0')}
         </div>
       </div>
 
@@ -358,7 +367,7 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
           {/* Riga 4: € 0 . */}
           <button type="button" onClick={() => setShowCurrencyPicker(true)} className="h-14 text-lg font-semibold rounded-lg bg-primary-100 dark:bg-primary-900/30 hover:bg-primary-200 dark:hover:bg-primary-900/50 text-primary-600 dark:text-primary-400 transition-colors">{getCurrencySymbol(currency)}</button>
           <button type="button" onClick={() => handleNumberClick('0')} className="h-14 text-2xl font-semibold rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-900 dark:text-gray-100 transition-colors">0</button>
-          <button type="button" onClick={() => handleNumberClick('.')} className="h-14 text-2xl font-semibold rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-900 dark:text-gray-100 transition-colors">.</button>
+          <button type="button" onClick={() => handleNumberClick('.')} className="h-14 text-2xl font-semibold rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-900 dark:text-gray-100 transition-colors">,</button>
         </div>
 
         {/* Colonna comandi (destra) */}
