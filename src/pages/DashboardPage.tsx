@@ -282,11 +282,11 @@ export default function DashboardPage() {
             ))}
             {/* Aggiungi nuova transazione */}
             <div
-              className="flex items-center gap-3 p-3 rounded-lg border-2 border-dashed border-gray-200 dark:border-gray-700 hover:border-primary-400 dark:hover:border-primary-500 hover:bg-primary-50 dark:hover:bg-primary-900/10 transition-colors cursor-pointer"
+              className="flex items-center justify-center p-3 rounded-lg border-2 border-dashed border-gray-200 dark:border-gray-700 cursor-pointer outline-none select-none"
+              style={{ WebkitTapHighlightColor: 'transparent' }}
               onClick={() => setIsModalOpen(true)}
             >
-              <div className="w-7 h-7 rounded-full border-2 border-gray-300 dark:border-gray-600 flex items-center justify-center text-gray-400 dark:text-gray-500 font-bold text-lg flex-shrink-0">+</div>
-              <span className="text-sm font-medium text-gray-400 dark:text-gray-500">Nuova transazione</span>
+              <div className="w-8 h-8 rounded-full border-2 border-gray-300 dark:border-gray-600 flex items-center justify-center text-gray-400 dark:text-gray-500 font-bold text-xl">+</div>
             </div>
           </div>
         </div>

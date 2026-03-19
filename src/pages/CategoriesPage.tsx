@@ -453,9 +453,10 @@ export default function CategoriesPage() {
               setCategoryFormData({ name: '', icon: '📌', category_type: filter });
               setIsCategoryModalOpen(true);
             }}
-            className="flex flex-col items-center justify-center p-3 rounded-lg border-2 border-dashed border-gray-200 dark:border-gray-700 hover:border-primary-500 dark:hover:border-primary-500 hover:bg-primary-50 dark:hover:bg-primary-900/10 transition-colors min-h-[100px]"
+            className="flex flex-col items-center justify-center p-3 rounded-lg border-2 border-dashed border-gray-200 dark:border-gray-700 outline-none focus:outline-none select-none"
+            style={{ WebkitTapHighlightColor: 'transparent' }}
           >
-            <div className="text-3xl text-gray-300 dark:text-gray-600">+</div>
+            <div className="w-10 h-10 rounded-full border-2 border-gray-300 dark:border-gray-600 flex items-center justify-center text-gray-400 dark:text-gray-500 font-bold text-2xl">+</div>
           </button>
         </div>
 
