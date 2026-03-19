@@ -4,7 +4,7 @@ import { useData } from '../contexts/DataContext';
 import Layout from '../components/layout/Layout';
 import Modal from '../components/common/Modal';
 import ConfirmDialog from '../components/common/ConfirmDialog';
-import SkeletonLoader from '../components/common/SkeletonLoader';
+import { AccountsSkeleton } from '../components/common/SkeletonLoader';
 import type { Account, AccountFormData } from '../types';
 
 const ACCOUNT_ICONS = ['💳', '🏦', '💰', '💵', '💶', '💷', '💴', '🪙', '💸', '🏧', '📱', '💎'];
@@ -216,7 +216,7 @@ export default function AccountsPage() {
   };
 
   if (isLoading) {
-    return <Layout><SkeletonLoader /></Layout>;
+    return <Layout><AccountsSkeleton /></Layout>;
   }
 
   const totalLiquidity = accounts.reduce((sum, acc) => sum + (acc.current_balance ?? acc.initial_balance), 0);

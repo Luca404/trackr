@@ -3,7 +3,7 @@ import { apiService } from '../services/api';
 import Layout from '../components/layout/Layout';
 import Modal from '../components/common/Modal';
 import TransactionForm from '../components/transactions/TransactionForm';
-import SkeletonLoader from '../components/common/SkeletonLoader';
+import { DashboardSkeleton } from '../components/common/SkeletonLoader';
 import type { Transaction, TransactionStats, TransactionFormData } from '../types';
 
 export default function DashboardPage() {
@@ -69,7 +69,7 @@ export default function DashboardPage() {
   };
 
   if (isLoading) {
-    return <Layout><SkeletonLoader /></Layout>;
+    return <Layout><DashboardSkeleton /></Layout>;
   }
 
   return (

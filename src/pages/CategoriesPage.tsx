@@ -4,7 +4,7 @@ import { useData } from '../contexts/DataContext';
 import Layout from '../components/layout/Layout';
 import Modal from '../components/common/Modal';
 import ConfirmDialog from '../components/common/ConfirmDialog';
-import SkeletonLoader from '../components/common/SkeletonLoader';
+import { CategoriesSkeleton } from '../components/common/SkeletonLoader';
 import PeriodSelector from '../components/common/PeriodSelector';
 import DateRangePicker from '../components/common/DateRangePicker';
 import { usePeriod } from '../hooks/usePeriod';
@@ -372,7 +372,7 @@ export default function CategoriesPage() {
     .sort((a, b) => b.total_amount - a.total_amount);
 
   if (isLoading) {
-    return <Layout><SkeletonLoader /></Layout>;
+    return <Layout><CategoriesSkeleton /></Layout>;
   }
 
   return (

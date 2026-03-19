@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { apiService } from '../services/api';
 import Layout from '../components/layout/Layout';
 import Modal from '../components/common/Modal';
-import SkeletonLoader from '../components/common/SkeletonLoader';
+import { PortfoliosSkeleton } from '../components/common/SkeletonLoader';
 import type { Portfolio, PortfolioFormData } from '../types';
 
 const CACHE_KEY = 'portfolios_cache';
@@ -107,7 +107,7 @@ export default function PortfoliosPage() {
   };
 
   if (isLoading) {
-    return <Layout><SkeletonLoader /></Layout>;
+    return <Layout><PortfoliosSkeleton /></Layout>;
   }
 
   return (
