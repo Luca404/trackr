@@ -1,5 +1,7 @@
-function Bone({ className }: { className?: string }) {
-  return <div className={`bg-gray-200 dark:bg-gray-700 rounded ${className}`} />;
+import React from 'react';
+
+function Bone({ className, style }: { className?: string; style?: React.CSSProperties }) {
+  return <div className={`bg-gray-200 dark:bg-gray-700 rounded ${className}`} style={style} />;
 }
 
 export function TransactionsSkeleton() {
