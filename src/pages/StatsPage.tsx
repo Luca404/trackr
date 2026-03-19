@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useData } from '../contexts/DataContext';
 import Layout from '../components/layout/Layout';
-import { StatsSkeleton } from '../components/common/SkeletonLoader';
+import { SkeletonValue } from '../components/common/SkeletonLoader';
 import PeriodSelector from '../components/common/PeriodSelector';
 import DateRangePicker from '../components/common/DateRangePicker';
 import { usePeriod } from '../hooks/usePeriod';
@@ -350,10 +350,6 @@ export default function StatsPage() {
       : null
   });
 
-  if (isLoading) {
-    return <Layout><StatsSkeleton /></Layout>;
-  }
-
   return (
     <Layout>
       <div className="space-y-4">
@@ -370,32 +366,28 @@ export default function StatsPage() {
           <div className="card bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20 border-green-200 dark:border-green-800">
             <div className="text-sm text-green-700 dark:text-green-300 mb-1">Entrate</div>
             <div className="text-2xl font-bold text-green-600 dark:text-green-400">
-              {formatCurrency(totalIncome)}
+              {isLoading ? <SkeletonValue /> : formatCurrency(totalIncome)}
             </div>
           </div>
 
           <div className="card bg-gradient-to-br from-red-50 to-red-100 dark:from-red-900/20 dark:to-red-800/20 border-red-200 dark:border-red-800">
             <div className="text-sm text-red-700 dark:text-red-300 mb-1">Uscite</div>
             <div className="text-2xl font-bold text-red-600 dark:text-red-400">
-              {formatCurrency(totalExpense)}
+              {isLoading ? <SkeletonValue /> : formatCurrency(totalExpense)}
             </div>
           </div>
 
           <div className="card bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 border-blue-200 dark:border-blue-800">
             <div className="text-sm text-blue-700 dark:text-blue-300 mb-1">Investimenti</div>
             <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-              {formatCurrency(totalInvestment)}
+              {isLoading ? <SkeletonValue /> : formatCurrency(totalInvestment)}
             </div>
           </div>
 
           <div className="card bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-800/20 border-purple-200 dark:border-purple-800">
             <div className="text-sm text-purple-700 dark:text-purple-300 mb-1">Saldo Periodo</div>
-            <div className={`text-2xl font-bold ${
-              periodBalance >= 0
-                ? 'text-green-600 dark:text-green-400'
-                : 'text-red-600 dark:text-red-400'
-            }`}>
-              {formatCurrency(periodBalance)}
+            <div className={`text-2xl font-bold ${periodBalance >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+              {isLoading ? <SkeletonValue /> : formatCurrency(periodBalance)}
             </div>
           </div>
         </div>

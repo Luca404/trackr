@@ -4,7 +4,7 @@ import { useData } from '../contexts/DataContext';
 import Layout from '../components/layout/Layout';
 import Modal from '../components/common/Modal';
 import ConfirmDialog from '../components/common/ConfirmDialog';
-import { AccountsSkeleton } from '../components/common/SkeletonLoader';
+import { SkeletonAccountCard, SkeletonValue } from '../components/common/SkeletonLoader';
 import type { Account, AccountFormData } from '../types';
 
 const ACCOUNT_ICONS = ['💳', '🏦', '💰', '💵', '💶', '💷', '💴', '🪙', '💸', '🏧', '📱', '💎'];
@@ -215,23 +215,23 @@ export default function AccountsPage() {
     return `${sign}€ ${intFormatted},${decStr}`;
   };
 
-  if (isLoading) {
-    return <Layout><AccountsSkeleton /></Layout>;
-  }
-
   const totalLiquidity = accounts.reduce((sum, acc) => sum + (acc.current_balance ?? acc.initial_balance), 0);
 
   return (
     <Layout>
       <div className="space-y-6">
         {/* Totale liquidità */}
-        {accounts.length > 0 && (
+        {(isLoading || accounts.length > 0) && (
           <div className="sticky top-0 z-10 -mx-4 px-4 pt-1 pb-3 bg-gray-50 dark:bg-gray-900 relative">
           <div className="card text-center py-6">
             <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">Liquidità totale</div>
             <div className="flex items-center justify-center gap-4">
               <div className="text-4xl font-bold">
-                {hideBalances ? maskAmount(formatCurrency(totalLiquidity), totalLiquidity >= 0) : <span className={totalLiquidity >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>{formatCurrency(totalLiquidity)}</span>}
+                {isLoading
+                  ? <SkeletonValue className="h-10 w-40 animate-pulse" />
+                  : hideBalances
+                    ? maskAmount(formatCurrency(totalLiquidity), totalLiquidity >= 0)
+                    : <span className={totalLiquidity >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>{formatCurrency(totalLiquidity)}</span>}
               </div>
               <button
                 onClick={toggleHideBalances}
@@ -249,7 +249,9 @@ export default function AccountsPage() {
 
         {/* Lista conti */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {[...accounts].sort((a, b) => (b.current_balance ?? b.initial_balance) - (a.current_balance ?? a.initial_balance)).map((account) => (
+          {isLoading
+            ? Array.from({ length: 3 }).map((_, i) => <SkeletonAccountCard key={i} />)
+            : [...accounts].sort((a, b) => (b.current_balance ?? b.initial_balance) - (a.current_balance ?? a.initial_balance)).map((account) => (
               <div
                 key={account.id}
                 className="card hover:shadow-lg transition-shadow cursor-pointer"

@@ -3,7 +3,7 @@ import { apiService } from '../services/api';
 import Layout from '../components/layout/Layout';
 import Modal from '../components/common/Modal';
 import TransactionForm from '../components/transactions/TransactionForm';
-import { DashboardSkeleton } from '../components/common/SkeletonLoader';
+import { SkeletonValue, SkeletonRecentTransaction } from '../components/common/SkeletonLoader';
 import type { Transaction, TransactionStats, TransactionFormData } from '../types';
 
 export default function DashboardPage() {
@@ -68,10 +68,6 @@ export default function DashboardPage() {
     });
   };
 
-  if (isLoading) {
-    return <Layout><DashboardSkeleton /></Layout>;
-  }
-
   return (
     <Layout>
       <div className="space-y-6">
@@ -111,7 +107,7 @@ export default function DashboardPage() {
               Uscite
             </div>
             <div className="text-2xl font-bold text-red-700 dark:text-red-300">
-              {formatCurrency(stats?.totalExpenses || 0)}
+              {isLoading ? <SkeletonValue /> : formatCurrency(stats?.totalExpenses || 0)}
             </div>
           </div>
 
@@ -120,7 +116,7 @@ export default function DashboardPage() {
               Entrate
             </div>
             <div className="text-2xl font-bold text-green-700 dark:text-green-300">
-              {formatCurrency(stats?.totalIncome || 0)}
+              {isLoading ? <SkeletonValue /> : formatCurrency(stats?.totalIncome || 0)}
             </div>
           </div>
 
@@ -129,7 +125,7 @@ export default function DashboardPage() {
               Investimenti
             </div>
             <div className="text-2xl font-bold text-blue-700 dark:text-blue-300">
-              {formatCurrency(stats?.totalInvestments || 0)}
+              {isLoading ? <SkeletonValue /> : formatCurrency(stats?.totalInvestments || 0)}
             </div>
           </div>
 
@@ -137,12 +133,8 @@ export default function DashboardPage() {
             <div className="text-sm text-purple-600 dark:text-purple-400 font-medium mb-1">
               Bilancio
             </div>
-            <div className={`text-2xl font-bold ${
-              (stats?.balance || 0) >= 0
-                ? 'text-purple-700 dark:text-purple-300'
-                : 'text-red-700 dark:text-red-300'
-            }`}>
-              {formatCurrency(stats?.balance || 0)}
+            <div className={`text-2xl font-bold ${(stats?.balance || 0) >= 0 ? 'text-purple-700 dark:text-purple-300' : 'text-red-700 dark:text-red-300'}`}>
+              {isLoading ? <SkeletonValue /> : formatCurrency(stats?.balance || 0)}
             </div>
           </div>
         </div>
@@ -249,7 +241,9 @@ export default function DashboardPage() {
           </div>
 
           <div className="space-y-3">
-            {transactions.map((transaction) => (
+            {isLoading
+              ? Array.from({ length: 4 }).map((_, i) => <SkeletonRecentTransaction key={i} />)
+              : transactions.map((transaction) => (
                 <div
                   key={transaction.id}
                   className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg"

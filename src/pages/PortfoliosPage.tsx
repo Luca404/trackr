@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { apiService } from '../services/api';
 import Layout from '../components/layout/Layout';
 import Modal from '../components/common/Modal';
-import { PortfoliosSkeleton } from '../components/common/SkeletonLoader';
+import { SkeletonPortfolioCard } from '../components/common/SkeletonLoader';
 import type { Portfolio, PortfolioFormData } from '../types';
 
 const CACHE_KEY = 'portfolios_cache';
@@ -106,16 +106,14 @@ export default function PortfoliosPage() {
     return `${sign}${symbol} ${intFormatted},${decStr}`;
   };
 
-  if (isLoading) {
-    return <Layout><PortfoliosSkeleton /></Layout>;
-  }
-
   return (
     <Layout>
       <div className="space-y-6">
         {/* Lista portafogli */}
         <div className="space-y-3">
-          {portfolios.map((portfolio) => (
+          {isLoading
+            ? Array.from({ length: 3 }).map((_, i) => <SkeletonPortfolioCard key={i} />)
+            : portfolios.map((portfolio) => (
               <div
                 key={portfolio.id}
                 className="card cursor-pointer hover:shadow-lg transition-shadow"

@@ -4,7 +4,7 @@ import { useData } from '../contexts/DataContext';
 import Layout from '../components/layout/Layout';
 import Modal from '../components/common/Modal';
 import TransactionForm from '../components/transactions/TransactionForm';
-import { TransactionsSkeleton } from '../components/common/SkeletonLoader';
+import { SkeletonTransactionRow } from '../components/common/SkeletonLoader';
 import PeriodSelector from '../components/common/PeriodSelector';
 import DateRangePicker from '../components/common/DateRangePicker';
 import { usePeriod } from '../hooks/usePeriod';
@@ -125,10 +125,6 @@ export default function TransactionsPage() {
     });
   };
 
-  if (dataLoading) {
-    return <Layout><TransactionsSkeleton /></Layout>;
-  }
-
   return (
     <Layout>
       <div className="space-y-4">
@@ -142,7 +138,9 @@ export default function TransactionsPage() {
 
         {/* Lista transazioni */}
         <div className="space-y-2">
-          {transactions.map((transaction) => (
+          {dataLoading
+            ? Array.from({ length: 5 }).map((_, i) => <SkeletonTransactionRow key={i} />)
+            : transactions.map((transaction) => (
                 <div
                   key={transaction.id}
                   className="card flex items-center justify-between hover:shadow-md transition-shadow cursor-pointer"

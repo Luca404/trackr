@@ -4,7 +4,7 @@ import { useData } from '../contexts/DataContext';
 import Layout from '../components/layout/Layout';
 import Modal from '../components/common/Modal';
 import ConfirmDialog from '../components/common/ConfirmDialog';
-import { CategoriesSkeleton } from '../components/common/SkeletonLoader';
+import { SkeletonCategoryTile } from '../components/common/SkeletonLoader';
 import PeriodSelector from '../components/common/PeriodSelector';
 import DateRangePicker from '../components/common/DateRangePicker';
 import { usePeriod } from '../hooks/usePeriod';
@@ -371,10 +371,6 @@ export default function CategoriesPage() {
     .filter(category => category.category_type === filter || (!category.category_type && filter === 'expense'))
     .sort((a, b) => b.total_amount - a.total_amount);
 
-  if (isLoading) {
-    return <Layout><CategoriesSkeleton /></Layout>;
-  }
-
   return (
     <Layout>
       <div className="space-y-4">
@@ -422,7 +418,9 @@ export default function CategoriesPage() {
 
         {/* Grid categorie compatto */}
         <div className="grid grid-cols-3 gap-3" data-tab-swipe>
-          {filteredCategories.map((category) => (
+          {isLoading
+            ? Array.from({ length: 9 }).map((_, i) => <SkeletonCategoryTile key={i} />)
+            : filteredCategories.map((category) => (
               <button
                 key={category.id}
                 onClick={() => handleCategoryClick(category)}
@@ -447,7 +445,7 @@ export default function CategoriesPage() {
               </button>
           ))}
           {/* Aggiungi nuova categoria */}
-          <button
+          {!isLoading && <button
             onClick={() => {
               setIsEditMode(false);
               setCategoryFormData({ name: '', icon: '📌', category_type: filter });
@@ -457,7 +455,7 @@ export default function CategoriesPage() {
             style={{ WebkitTapHighlightColor: 'transparent' }}
           >
             <div className="w-10 h-10 rounded-full border-2 border-gray-300 dark:border-gray-600 flex items-center justify-center text-gray-400 dark:text-gray-500 font-bold text-2xl">+</div>
-          </button>
+          </button>}
         </div>
 
         {/* Modal sottocategorie */}
