@@ -12,6 +12,7 @@ const ACCOUNT_ICONS = ['💳', '🏦', '💰', '💵', '💶', '💷', '💴', '
 export default function AccountsPage() {
   const { accounts, isLoading, addAccount, updateAccount: updateAccountCache, deleteAccount: deleteAccountCache, refreshAccounts } = useData();
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [hideBalances, setHideBalances] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [selectedAccount, setSelectedAccount] = useState<Account | null>(null);
   const [formData, setFormData] = useState<AccountFormData>({
@@ -212,10 +213,17 @@ export default function AccountsPage() {
       <div className="space-y-6">
         {/* Totale liquidità */}
         {accounts.length > 0 && (
-          <div className="card text-center py-6">
+          <div className="card text-center py-6 relative">
+            <button
+              onClick={() => setHideBalances(h => !h)}
+              className="absolute top-3 right-3 text-gray-400 dark:text-gray-500 text-xl outline-none focus:outline-none select-none"
+              style={{ WebkitTapHighlightColor: 'transparent' }}
+            >
+              {hideBalances ? '🙈' : '👁️'}
+            </button>
             <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">Liquidità totale</div>
             <div className={`text-4xl font-bold ${totalLiquidity >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
-              {formatCurrency(totalLiquidity)}
+              {hideBalances ? '••••••' : formatCurrency(totalLiquidity)}
             </div>
           </div>
         )}
@@ -244,7 +252,7 @@ export default function AccountsPage() {
                           ? 'text-green-600 dark:text-green-400'
                           : 'text-red-600 dark:text-red-400'
                       }`}>
-                        {formatCurrency(account.current_balance ?? account.initial_balance)}
+                        {hideBalances ? '••••' : formatCurrency(account.current_balance ?? account.initial_balance)}
                       </div>
                     </div>
                     <button
