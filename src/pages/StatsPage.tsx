@@ -19,7 +19,7 @@ interface CategoryStat {
 }
 
 export default function StatsPage() {
-  const { transactions: allTransactions, categories, accounts, isLoading } = useData();
+  const { transactions: allTransactions, categories, isLoading } = useData();
   const [filter, setFilter] = useState<StatsFilter>('expense');
   const TABS: StatsFilter[] = ['expense', 'income', 'investment'];
   useTabSwipe(TABS, filter, (t) => setFilter(t as StatsFilter));
@@ -150,26 +150,18 @@ export default function StatsPage() {
     setExpandedCategory(expandedCategory === categoryName ? null : categoryName);
   };
 
-  // Andamento saldo: usa allTransactions + account initial balances per calcolare il saldo di partenza corretto
+  // Andamento saldo del periodo: parte da 0 e accumula entrate/uscite giorno per giorno
   const balanceTrendData = useMemo(() => {
-    const accountsInitialBalance = accounts.reduce((sum, acc) => sum + acc.initial_balance, 0);
-
-    const transactionsBeforeStart = allTransactions.filter(t => new Date(t.date) < startDate);
-    let runningBalance = transactionsBeforeStart.reduce((sum, t) => {
-      if (t.type === 'income') return sum + t.amount;
-      if (t.type === 'expense') return sum - Math.abs(t.amount);
-      return sum;
-    }, accountsInitialBalance);
-
+    let runningBalance = 0;
     return periods.map(period => {
-      const periodTransactions = allTransactions.filter(t => isSamePeriod(new Date(t.date), period.date));
+      const periodTransactions = transactions.filter(t => isSamePeriod(new Date(t.date), period.date));
       periodTransactions.forEach(t => {
         if (t.type === 'income') runningBalance += t.amount;
         else if (t.type === 'expense') runningBalance -= Math.abs(t.amount);
       });
       return { label: period.label, balance: runningBalance, hasTransactions: periodTransactions.length > 0 };
     });
-  }, [allTransactions, accounts, startDate, periods.length, periodType]);
+  }, [transactions, periods.length, periodType]);
 
   const dataMaxBalance = Math.max(...balanceTrendData.map(d => d.balance), 0);
   const dataMinBalance = Math.min(...balanceTrendData.map(d => d.balance), 0);
@@ -238,7 +230,7 @@ export default function StatsPage() {
         {transactions.length > 0 && (
           <div className="card">
             <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
-              Andamento liquidità
+              Andamento saldo
             </h3>
             <div className="relative h-52">
               {/* Asse Y */}
