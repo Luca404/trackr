@@ -247,7 +247,7 @@ export default function AccountsPage() {
 
         {/* Lista conti */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {accounts.map((account) => (
+          {[...accounts].sort((a, b) => (b.current_balance ?? b.initial_balance) - (a.current_balance ?? a.initial_balance)).map((account) => (
               <div
                 key={account.id}
                 className="card hover:shadow-lg transition-shadow cursor-pointer"

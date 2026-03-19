@@ -367,9 +367,9 @@ export default function CategoriesPage() {
     return `${sign}€ ${intFormatted},${decStr}`;
   };
 
-  const filteredCategories = categories.filter(category => {
-    return category.category_type === filter || (!category.category_type && filter === 'expense');
-  });
+  const filteredCategories = categories
+    .filter(category => category.category_type === filter || (!category.category_type && filter === 'expense'))
+    .sort((a, b) => b.total_amount - a.total_amount);
 
   if (isLoading) {
     return <Layout><SkeletonLoader /></Layout>;
