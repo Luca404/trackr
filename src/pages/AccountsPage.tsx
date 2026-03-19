@@ -226,7 +226,7 @@ export default function AccountsPage() {
       <div className="space-y-6">
         {/* Totale liquidità */}
         {accounts.length > 0 && (
-          <div className="sticky top-0 z-10 -mx-4 px-4 pt-1 pb-3 bg-gray-50 dark:bg-gray-900">
+          <div className="sticky top-0 z-10 -mx-4 px-4 pt-1 pb-3 bg-gray-50 dark:bg-gray-900 relative">
           <div className="card text-center py-6">
             <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">Liquidità totale</div>
             <div className="flex items-center justify-center gap-4">
@@ -242,6 +242,8 @@ export default function AccountsPage() {
               </button>
             </div>
           </div>
+          {/* Gradient fade */}
+          <div className="absolute left-0 right-0 h-6 bg-gradient-to-b from-gray-50 dark:from-gray-900 to-transparent pointer-events-none" style={{ top: '100%' }} />
           </div>
         )}
 
