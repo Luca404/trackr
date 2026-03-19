@@ -206,9 +206,21 @@ export default function AccountsPage() {
     return <LoadingSpinner />;
   }
 
+  const totalLiquidity = accounts.reduce((sum, acc) => sum + (acc.current_balance ?? acc.initial_balance), 0);
+
   return (
     <Layout>
       <div className="space-y-6">
+        {/* Totale liquidità */}
+        {accounts.length > 0 && (
+          <div className="card text-center py-6">
+            <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">Liquidità totale</div>
+            <div className={`text-4xl font-bold ${totalLiquidity >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+              {formatCurrency(totalLiquidity)}
+            </div>
+          </div>
+        )}
+
         {/* Lista conti */}
         {accounts.length === 0 ? (
           <div className="card text-center py-12">
