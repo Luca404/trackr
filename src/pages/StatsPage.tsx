@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useData } from '../contexts/DataContext';
 import Layout from '../components/layout/Layout';
-import LoadingSpinner from '../components/common/LoadingSpinner';
+import SkeletonLoader from '../components/common/SkeletonLoader';
 import PeriodSelector from '../components/common/PeriodSelector';
 import DateRangePicker from '../components/common/DateRangePicker';
 import { usePeriod } from '../hooks/usePeriod';
@@ -351,7 +351,7 @@ export default function StatsPage() {
   });
 
   if (isLoading) {
-    return <LoadingSpinner />;
+    return <Layout><SkeletonLoader /></Layout>;
   }
 
   return (

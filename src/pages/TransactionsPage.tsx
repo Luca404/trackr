@@ -4,7 +4,7 @@ import { useData } from '../contexts/DataContext';
 import Layout from '../components/layout/Layout';
 import Modal from '../components/common/Modal';
 import TransactionForm from '../components/transactions/TransactionForm';
-import LoadingSpinner from '../components/common/LoadingSpinner';
+import SkeletonLoader from '../components/common/SkeletonLoader';
 import PeriodSelector from '../components/common/PeriodSelector';
 import DateRangePicker from '../components/common/DateRangePicker';
 import { usePeriod } from '../hooks/usePeriod';
@@ -126,7 +126,7 @@ export default function TransactionsPage() {
   };
 
   if (dataLoading) {
-    return <LoadingSpinner />;
+    return <Layout><SkeletonLoader /></Layout>;
   }
 
   return (

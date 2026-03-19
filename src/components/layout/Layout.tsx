@@ -29,9 +29,9 @@ export default function Layout({ children }: LayoutProps) {
 
   return (
     <div
-      className="flex flex-col bg-gray-50 dark:bg-gray-900"
+      className="flex flex-col bg-gray-50 dark:bg-gray-900 overflow-hidden"
       style={{
-        minHeight: '100dvh'
+        height: '100dvh'
       }}
     >
       {/* Header */}
@@ -63,7 +63,7 @@ export default function Layout({ children }: LayoutProps) {
 
       {/* Main Content */}
       <main
-        className="flex-1 max-w-7xl w-full mx-auto px-4 py-3"
+        className="flex-1 max-w-7xl w-full mx-auto px-4 py-3 overflow-y-auto"
         style={{
           paddingBottom: '6rem', // Spazio per navbar (64px) + margine extra
           transition: isSwipingHorizontally ? 'none' : 'transform 0.3s ease-out, opacity 0.3s ease-out',
