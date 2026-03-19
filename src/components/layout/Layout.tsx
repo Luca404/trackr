@@ -63,7 +63,7 @@ export default function Layout({ children }: LayoutProps) {
 
       {/* Main Content */}
       <main
-        className="flex-1 max-w-7xl w-full mx-auto px-4 py-3 overflow-y-auto"
+        className="flex-1 max-w-7xl w-full mx-auto px-4 py-3 overflow-y-auto overscroll-y-contain"
         style={{
           paddingBottom: '6rem', // Spazio per navbar (64px) + margine extra
           transition: isSwipingHorizontally ? 'none' : 'transform 0.3s ease-out, opacity 0.3s ease-out',
