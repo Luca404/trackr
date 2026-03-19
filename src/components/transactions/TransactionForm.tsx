@@ -109,7 +109,7 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
     const negative = value.startsWith('-');
     const abs = negative ? value.slice(1) : value;
     const [intStr, decStr] = abs.split('.');
-    const intFormatted = new Intl.NumberFormat('it-IT').format(parseInt(intStr) || 0);
+    const intFormatted = (parseInt(intStr) || 0).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
     const result = decStr !== undefined ? `${intFormatted},${decStr}` : intFormatted;
     return negative ? `-${result}` : result;
   };
