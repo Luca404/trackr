@@ -51,8 +51,32 @@ export default function TransactionsPage() {
   };
 
   const handleCreateTransaction = async (data: TransactionFormData) => {
-    const newTransaction = await apiService.createTransaction(data);
-    addTransaction(newTransaction);
+    if (data.recurrence) {
+      const rule = await apiService.createRecurringTransaction({
+        account_id: data.account_id!,
+        type: data.type,
+        category: data.category,
+        subcategory: data.subcategory,
+        amount: data.amount,
+        description: data.description,
+        frequency: data.recurrence,
+        start_date: data.date,
+      });
+      const newTransaction = await apiService.createTransaction({ ...data, recurring_id: rule.id });
+      addTransaction(newTransaction);
+    } else {
+      const newTransaction = await apiService.createTransaction(data);
+      addTransaction(newTransaction);
+    }
+  };
+
+  const handleDeleteRecurringRule = async () => {
+    if (selectedTransaction?.recurring_id) {
+      await apiService.deleteRecurringTransaction(selectedTransaction.recurring_id);
+    }
+    setIsModalOpen(false);
+    setSelectedTransaction(null);
+    setIsEditMode(false);
   };
 
   const handleUpdateTransaction = async (data: TransactionFormData) => {
@@ -136,10 +160,13 @@ export default function TransactionsPage() {
                   <div className="flex items-center gap-3 flex-1">
                     <span className="text-2xl">{getCategoryIcon(transaction.category)}</span>
                     <div className="flex-1">
-                      <div className="font-medium text-gray-900 dark:text-gray-100">
+                      <div className="font-medium text-gray-900 dark:text-gray-100 flex items-center gap-1">
                         {transaction.category}
                         {transaction.subcategory && (
                           <span className="text-sm text-gray-500 dark:text-gray-400"> ({transaction.subcategory})</span>
+                        )}
+                        {transaction.recurring_id && (
+                          <span className="text-xs text-primary-500 dark:text-primary-400">🔄</span>
                         )}
                       </div>
                       {transaction.description && (
@@ -213,6 +240,8 @@ export default function TransactionsPage() {
             } : undefined}
             isEditMode={isEditMode}
             onDelete={isEditMode ? handleDeleteTransaction : undefined}
+            isRecurring={isEditMode && !!selectedTransaction?.recurring_id}
+            onDeleteRecurringRule={isEditMode && selectedTransaction?.recurring_id ? handleDeleteRecurringRule : undefined}
           />
         </Modal>
 

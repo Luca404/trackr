@@ -13,6 +13,8 @@ import type {
   Portfolio,
   PortfolioFormData,
   User,
+  RecurringTransaction,
+  RecurringFrequency,
 } from '../types';
 
 async function getCurrentUserId(): Promise<string> {
@@ -78,7 +80,37 @@ function mapTransaction(row: any): Transaction {
     ticker: row.ticker,
     quantity: row.quantity,
     price: row.price,
+    recurring_id: row.recurring_id ?? undefined,
   };
+}
+
+function mapRecurringTransaction(row: any): RecurringTransaction {
+  return {
+    id: row.id,
+    user_id: row.user_id,
+    account_id: row.account_id,
+    type: row.type,
+    category: row.category,
+    subcategory: row.subcategory,
+    amount: row.amount,
+    description: row.description,
+    frequency: row.frequency,
+    start_date: row.start_date,
+    next_due_date: row.next_due_date,
+    ticker: row.ticker,
+    quantity: row.quantity,
+    price: row.price,
+    created_at: row.created_at,
+  };
+}
+
+// Calcola la prossima data in base alla frequenza
+function getNextDueDate(dateStr: string, frequency: RecurringFrequency): string {
+  const d = new Date(dateStr + 'T00:00:00');
+  if (frequency === 'weekly')  d.setDate(d.getDate() + 7);
+  if (frequency === 'monthly') d.setMonth(d.getMonth() + 1);
+  if (frequency === 'yearly')  d.setFullYear(d.getFullYear() + 1);
+  return d.toISOString().split('T')[0];
 }
 
 function mapPortfolio(row: any): Portfolio {
@@ -298,9 +330,10 @@ class ApiService {
 
   async createTransaction(formData: TransactionFormData): Promise<Transaction> {
     const userId = await getCurrentUserId();
+    const { recurrence: _, ...dbData } = formData;
     const { data, error } = await supabase
       .from('transactions')
-      .insert({ ...formData, user_id: userId })
+      .insert({ ...dbData, user_id: userId })
       .select()
       .single();
     if (error) throw error;
@@ -364,6 +397,83 @@ class ApiService {
       .sort((a, b) => a.month.localeCompare(b.month));
 
     return stats;
+  }
+
+  // ==================== RECURRING TRANSACTIONS ====================
+
+  async createRecurringTransaction(
+    formData: Omit<RecurringTransaction, 'id' | 'user_id' | 'created_at' | 'next_due_date'>
+  ): Promise<RecurringTransaction> {
+    const userId = await getCurrentUserId();
+    const { data, error } = await supabase
+      .from('recurring_transactions')
+      .insert({
+        ...formData,
+        user_id: userId,
+        next_due_date: getNextDueDate(formData.start_date, formData.frequency),
+      })
+      .select()
+      .single();
+    if (error) throw error;
+    return mapRecurringTransaction(data);
+  }
+
+  async deleteRecurringTransaction(id: number): Promise<void> {
+    const { error } = await supabase.from('recurring_transactions').delete().eq('id', id);
+    if (error) throw error;
+  }
+
+  // Controlla tutte le regole con next_due_date <= oggi e crea le transazioni mancanti.
+  // Chiamato all'avvio dell'app in DataContext.
+  async processRecurringTransactions(): Promise<Transaction[]> {
+    const today = new Date().toISOString().split('T')[0];
+    const userId = await getCurrentUserId();
+
+    const { data: due, error } = await supabase
+      .from('recurring_transactions')
+      .select('*')
+      .eq('user_id', userId)
+      .lte('next_due_date', today);
+
+    if (error) throw error;
+    if (!due || due.length === 0) return [];
+
+    const created: Transaction[] = [];
+
+    for (const rule of due) {
+      let nextDate: string = rule.next_due_date;
+
+      while (nextDate <= today) {
+        const { data: tx, error: txErr } = await supabase
+          .from('transactions')
+          .insert({
+            user_id: userId,
+            account_id: rule.account_id,
+            type: rule.type,
+            category: rule.category,
+            subcategory: rule.subcategory,
+            amount: rule.amount,
+            description: rule.description,
+            date: nextDate,
+            recurring_id: rule.id,
+            ticker: rule.ticker,
+            quantity: rule.quantity,
+            price: rule.price,
+          })
+          .select()
+          .single();
+
+        if (!txErr && tx) created.push(mapTransaction(tx));
+        nextDate = getNextDueDate(nextDate, rule.frequency);
+      }
+
+      await supabase
+        .from('recurring_transactions')
+        .update({ next_due_date: nextDate })
+        .eq('id', rule.id);
+    }
+
+    return created;
   }
 
   // ==================== PORTFOLIOS ====================

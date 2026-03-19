@@ -1,5 +1,5 @@
-import { useState, useEffect, useMemo, type FormEvent } from 'react';
-import type { TransactionFormData, TransactionType, Category, Subcategory, Account } from '../../types';
+import { useState, useEffect, useMemo, useRef, type FormEvent } from 'react';
+import type { TransactionFormData, TransactionType, Category, Subcategory, Account, RecurringFrequency } from '../../types';
 import { useData } from '../../contexts/DataContext';
 import ConfirmDialog from '../common/ConfirmDialog';
 import Modal, { registerBackHandler } from '../common/Modal';
@@ -10,9 +10,11 @@ interface TransactionFormProps {
   initialData?: TransactionFormData;
   isEditMode?: boolean;
   onDelete?: () => Promise<void>;
+  isRecurring?: boolean;
+  onDeleteRecurringRule?: () => Promise<void>;
 }
 
-export default function TransactionForm({ onSubmit, onCancel, initialData, isEditMode, onDelete }: TransactionFormProps) {
+export default function TransactionForm({ onSubmit, onCancel, initialData, isEditMode, onDelete, isRecurring, onDeleteRecurringRule }: TransactionFormProps) {
   const { categories: allCategories, accounts: allAccounts } = useData();
   const [currentType, setCurrentType] = useState<TransactionType>(initialData?.type || 'expense');
 
@@ -37,9 +39,11 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
   const [showCurrencyPicker, setShowCurrencyPicker] = useState(false);
   const [currency, setCurrency] = useState<string>('EUR');
 
+  const [recurrence, setRecurrence] = useState<RecurringFrequency | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [showRecurringDeleteModal, setShowRecurringDeleteModal] = useState(false);
 
   // Back gesture quando la categoria è selezionata → torna alla griglia categorie
   useEffect(() => {
@@ -123,6 +127,17 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
     }
   };
 
+  const handleDeleteRuleConfirm = async () => {
+    if (!onDeleteRecurringRule) return;
+    setIsLoading(true);
+    try {
+      await onDeleteRecurringRule();
+    } catch (err: any) {
+      setError('Errore durante l\'eliminazione della regola');
+      setIsLoading(false);
+    }
+  };
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
 
@@ -154,6 +169,7 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
         description,
         date,
         account_id: selectedAccount.id,
+        recurrence: recurrence ?? undefined,
       });
       onCancel();
     } catch (err: any) {
@@ -180,6 +196,22 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
     { type: 'transfer' as TransactionType, label: 'Trasferimento', icon: '🔄', color: 'purple' },
   ];
 
+  // Swipe orizzontale sulla griglia categorie per cambiare tab
+  const swipeCategoryRef = useRef<{ x: number; y: number } | null>(null);
+  const handleCategorySwipeStart = (e: React.TouchEvent) => {
+    swipeCategoryRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+  };
+  const handleCategorySwipeEnd = (e: React.TouchEvent) => {
+    if (!swipeCategoryRef.current) return;
+    const deltaX = e.changedTouches[0].clientX - swipeCategoryRef.current.x;
+    const deltaY = e.changedTouches[0].clientY - swipeCategoryRef.current.y;
+    swipeCategoryRef.current = null;
+    if (Math.abs(deltaX) < 60 || Math.abs(deltaX) < Math.abs(deltaY) * 1.5) return;
+    const idx = typeButtons.findIndex(b => b.type === currentType);
+    if (deltaX < 0 && idx < typeButtons.length - 1) setCurrentType(typeButtons[idx + 1].type);
+    else if (deltaX > 0 && idx > 0) setCurrentType(typeButtons[idx - 1].type);
+  };
+
   const handleDateQuickSelect = (option: 'today' | 'yesterday') => {
     const today = new Date();
     if (option === 'today') {
@@ -196,7 +228,11 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
   // Se non è stata selezionata una categoria, mostra la griglia
   if (!selectedCategory) {
     return (
-      <div className="space-y-4">
+      <div
+        className="space-y-4"
+        onTouchStart={handleCategorySwipeStart}
+        onTouchEnd={handleCategorySwipeEnd}
+      >
         {/* Tab tipi transazione */}
         <div className="flex gap-2 border-b border-gray-200 dark:border-gray-700">
           {typeButtons.map(({ type, label, icon }) => (
@@ -341,6 +377,14 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
       {/* Data selezionata */}
       <div className="text-center text-sm text-gray-600 dark:text-gray-400">
         {formatDate(date)}
+        {!isEditMode && recurrence && (
+          <span className="ml-2 inline-flex items-center gap-1 text-primary-600 dark:text-primary-400">
+            🔄 {{ weekly: 'Settimanale', monthly: 'Mensile', yearly: 'Annuale' }[recurrence]}
+          </span>
+        )}
+        {isEditMode && isRecurring && (
+          <span className="ml-2 text-primary-600 dark:text-primary-400">🔄</span>
+        )}
       </div>
 
       {/* Descrizione (opzionale) */}
@@ -364,7 +408,7 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
       {isEditMode && onDelete && (
         <button
           type="button"
-          onClick={() => setIsDeleteDialogOpen(true)}
+          onClick={() => isRecurring ? setShowRecurringDeleteModal(true) : setIsDeleteDialogOpen(true)}
           className="w-full px-4 py-3 rounded-lg bg-red-500 text-white hover:bg-red-600 transition-colors font-medium"
           disabled={isLoading}
         >
@@ -512,10 +556,37 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
               />
             </div>
           )}
+
+          {/* Selettore ricorrenza — solo per nuove transazioni */}
+          {!isEditMode && (
+            <div className="pt-3 border-t border-gray-200 dark:border-gray-700">
+              <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">🔄 Ripeti</div>
+              <div className="grid grid-cols-4 gap-2">
+                {([null, 'weekly', 'monthly', 'yearly'] as const).map((freq) => {
+                  const labels = { null: 'Mai', weekly: 'Sett.', monthly: 'Mens.', yearly: 'Ann.' };
+                  const key = freq ?? 'null';
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => setRecurrence(freq)}
+                      className={`py-2 rounded-lg text-sm font-medium transition-colors ${
+                        recurrence === freq
+                          ? 'bg-primary-500 text-white'
+                          : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
+                      }`}
+                    >
+                      {labels[key as keyof typeof labels]}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       </Modal>
 
-      {/* Confirm Dialog */}
+      {/* Confirm Dialog (transazioni normali) */}
       <ConfirmDialog
         isOpen={isDeleteDialogOpen}
         onClose={() => setIsDeleteDialogOpen(false)}
@@ -526,6 +597,43 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
         cancelText="Annulla"
         isDestructive={true}
       />
+
+      {/* Modal eliminazione transazione ricorrente */}
+      <Modal isOpen={showRecurringDeleteModal} onClose={() => setShowRecurringDeleteModal(false)} title="Elimina Transazione Ricorrente">
+        <div className="space-y-3">
+          <p className="text-sm text-gray-600 dark:text-gray-400">Cosa vuoi eliminare?</p>
+          <button
+            type="button"
+            onClick={async () => {
+              setShowRecurringDeleteModal(false);
+              await handleDeleteConfirm();
+            }}
+            className="w-full flex items-center gap-3 p-4 rounded-lg border-2 border-red-200 dark:border-red-800 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors text-left"
+            disabled={isLoading}
+          >
+            <span className="text-2xl">🗑️</span>
+            <div>
+              <div className="font-medium text-gray-900 dark:text-gray-100">Solo questa</div>
+              <div className="text-sm text-gray-500 dark:text-gray-400">Elimina solo questa transazione</div>
+            </div>
+          </button>
+          <button
+            type="button"
+            onClick={async () => {
+              setShowRecurringDeleteModal(false);
+              await handleDeleteRuleConfirm();
+            }}
+            className="w-full flex items-center gap-3 p-4 rounded-lg border-2 border-orange-200 dark:border-orange-800 hover:bg-orange-50 dark:hover:bg-orange-900/20 transition-colors text-left"
+            disabled={isLoading}
+          >
+            <span className="text-2xl">🔄</span>
+            <div>
+              <div className="font-medium text-gray-900 dark:text-gray-100">Elimina regola</div>
+              <div className="text-sm text-gray-500 dark:text-gray-400">Interrompe le transazioni future ricorrenti</div>
+            </div>
+          </button>
+        </div>
+      </Modal>
     </form>
   );
 }
