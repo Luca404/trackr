@@ -5,6 +5,7 @@ A personal finance tracker built as a PWA. Data is synced to the cloud via Supab
 ## Features
 
 - **Transactions**: expenses, income, investments, and transfers between accounts
+- **Recurring transactions**: weekly, monthly, or yearly — auto-generated with catchup on startup
 - **Categories**: with subcategories and per-period statistics
 - **Accounts**: bank accounts and wallets with automatic balance calculation
 - **Portfolio**: investment tracking
@@ -80,11 +81,13 @@ src/
 
 ## Deployment
 
-Static site, deployable anywhere (Vercel, Netlify, GitHub Pages, etc.).
+Deployed on **Vercel** — auto-deploys on every push to `main`.
+
+For self-hosting, build the static site and deploy the `dist/` folder anywhere (Netlify, GitHub Pages, etc.):
 
 ```bash
 npm run build
 # deploy the dist/ folder
 ```
 
-Before deploying, update the **Site URL** in Supabase Dashboard → Authentication → URL Configuration to match the production URL (needed for email confirmation links).
+Remember to set `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` as environment variables in your hosting platform, and update the **Site URL** in Supabase Dashboard → Authentication → URL Configuration to match the production URL.
