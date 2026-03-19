@@ -45,11 +45,11 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [showRecurringDeleteModal, setShowRecurringDeleteModal] = useState(false);
 
-  // Back gesture quando la categoria è selezionata → torna alla griglia categorie
+  // Back gesture quando la categoria è selezionata → torna alla griglia categorie (solo in nuova transazione)
   useEffect(() => {
-    if (!selectedCategory) return;
+    if (!selectedCategory || isEditMode) return;
     return registerBackHandler(() => setSelectedCategory(null));
-  }, [selectedCategory]);
+  }, [selectedCategory, isEditMode]);
 
   // Inizializza l'account selezionato al primo caricamento
   useEffect(() => {

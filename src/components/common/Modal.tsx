@@ -128,7 +128,7 @@ export default function Modal({ isOpen, onClose, onBackdropClick, title, childre
       <div
         className="relative bg-white dark:bg-gray-800 w-full sm:max-w-lg sm:rounded-lg rounded-t-2xl overflow-y-auto animate-slide-up"
         style={{
-          maxHeight: '75vh',
+          maxHeight: '90vh',
           marginBottom: 'calc(4rem + env(safe-area-inset-bottom, 0px))'
         }}
       >
