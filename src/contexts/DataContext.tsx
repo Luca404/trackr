@@ -100,11 +100,10 @@ export function DataProvider({ children }: DataProviderProps) {
   const fetchAllData = async () => {
     setIsLoading(true);
     try {
-      await Promise.all([
-        refreshAccounts(),
-        refreshCategories(),
-        refreshTransactions(),
-      ]);
+      await Promise.all([refreshAccounts(), refreshCategories()]);
+      // Crea transazioni ricorrenti scadute, poi carica tutto fresco
+      await apiService.processRecurringTransactions().catch(console.error);
+      await refreshTransactions();
     } catch (error) {
       console.error('Error fetching all data:', error);
     } finally {

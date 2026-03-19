@@ -1,6 +1,39 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 
+// Interceptor per pagine con tab: se registrato, viene chiamato prima della navigazione.
+// Restituisce true se lo swipe è stato consumato (tab cambiato), false per procedere con la navigazione.
+type TabInterceptor = (dir: 'left' | 'right') => boolean;
+let _tabInterceptor: TabInterceptor | null = null;
+
+// Hook da usare nelle pagine con tab per intercettare lo swipe orizzontale
+export function useTabSwipe(
+  tabs: readonly string[],
+  current: string,
+  onChange: (tab: string) => void
+) {
+  const currentRef = useRef(current);
+  const onChangeRef = useRef(onChange);
+  currentRef.current = current;
+  onChangeRef.current = onChange;
+
+  useEffect(() => {
+    _tabInterceptor = (dir) => {
+      const idx = tabs.indexOf(currentRef.current);
+      if (dir === 'left' && idx < tabs.length - 1) {
+        onChangeRef.current(tabs[idx + 1]);
+        return true;
+      }
+      if (dir === 'right' && idx > 0) {
+        onChangeRef.current(tabs[idx - 1]);
+        return true;
+      }
+      return false;
+    };
+    return () => { _tabInterceptor = null; };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+}
+
 interface SwipeNavigationConfig {
   threshold?: number; // Distanza minima in px per attivare lo swipe
   velocityThreshold?: number; // Velocità minima per lo swipe
@@ -88,19 +121,24 @@ export function useSwipeNavigation({
             window.dispatchEvent(new CustomEvent('trackr:swipe-back'));
           }
         } else {
-          const currentIndex = routes.indexOf(location.pathname);
+          const dir = deltaX > 0 ? 'right' : 'left';
+          const consumed = _tabInterceptor?.(dir) ?? false;
 
-          if (currentIndex !== -1) {
-            let nextIndex = -1;
+          if (!consumed) {
+            const currentIndex = routes.indexOf(location.pathname);
 
-            if (deltaX > 0 && currentIndex > 0) {
-              nextIndex = currentIndex - 1;
-            } else if (deltaX < 0 && currentIndex < routes.length - 1) {
-              nextIndex = currentIndex + 1;
-            }
+            if (currentIndex !== -1) {
+              let nextIndex = -1;
 
-            if (nextIndex !== -1) {
-              navigate(routes[nextIndex]);
+              if (deltaX > 0 && currentIndex > 0) {
+                nextIndex = currentIndex - 1;
+              } else if (deltaX < 0 && currentIndex < routes.length - 1) {
+                nextIndex = currentIndex + 1;
+              }
+
+              if (nextIndex !== -1) {
+                navigate(routes[nextIndex]);
+              }
             }
           }
         }

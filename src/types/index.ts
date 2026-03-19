@@ -15,6 +15,26 @@ export type TransactionCategory = string;
 
 export type TransactionType = 'expense' | 'income' | 'investment' | 'transfer';
 
+export type RecurringFrequency = 'weekly' | 'monthly' | 'yearly';
+
+export interface RecurringTransaction {
+  id: number;
+  user_id: string;
+  account_id: number;
+  type: TransactionType;
+  category: string;
+  subcategory?: string;
+  amount: number;
+  description?: string;
+  frequency: RecurringFrequency;
+  start_date: string;
+  next_due_date: string;
+  ticker?: string;
+  quantity?: number;
+  price?: number;
+  created_at?: string;
+}
+
 export interface Transaction {
   id: number;
   userId?: string;
@@ -32,6 +52,8 @@ export interface Transaction {
   ticker?: string;
   quantity?: number;
   price?: number;
+
+  recurring_id?: number;
 }
 
 export interface TransactionFormData {
@@ -47,6 +69,9 @@ export interface TransactionFormData {
   ticker?: string;
   quantity?: number;
   price?: number;
+
+  recurrence?: RecurringFrequency; // solo per nuove transazioni
+  recurring_id?: number;           // impostato internamente al salvataggio
 }
 
 export interface TransactionStats {
