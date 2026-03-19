@@ -1,6 +1,7 @@
-import { type ReactNode } from 'react';
+import { type ReactNode, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
+import { useData } from '../../contexts/DataContext';
 import { useSwipeNavigation } from '../../hooks/useSwipeNavigation';
 
 interface LayoutProps {
@@ -11,6 +12,14 @@ export default function Layout({ children }: LayoutProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuth();
+  const { refreshAll } = useData();
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await refreshAll();
+    setIsRefreshing(false);
+  };
 
   const navItems = [
     { path: '/accounts', label: 'Conti', icon: '🏦' },
@@ -48,6 +57,15 @@ export default function Layout({ children }: LayoutProps) {
               {user?.name}
             </span>
             <button
+              onClick={handleRefresh}
+              className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 transition-colors"
+              title="Aggiorna"
+            >
+              <svg className={`w-6 h-6 ${isRefreshing ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+            </button>
+            <button
               onClick={() => navigate('/settings')}
               className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 transition-colors"
               title="Impostazioni"
@@ -63,7 +81,7 @@ export default function Layout({ children }: LayoutProps) {
 
       {/* Main Content */}
       <main
-        className="flex-1 max-w-7xl w-full mx-auto px-4 py-3 overflow-y-auto overscroll-y-contain"
+        className="flex-1 max-w-7xl w-full mx-auto px-4 py-3 overflow-y-auto overscroll-y-none"
         style={{
           paddingBottom: '6rem', // Spazio per navbar (64px) + margine extra
           transition: isSwipingHorizontally ? 'none' : 'transform 0.3s ease-out, opacity 0.3s ease-out',
