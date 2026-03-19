@@ -213,17 +213,19 @@ export default function AccountsPage() {
       <div className="space-y-6">
         {/* Totale liquidità */}
         {accounts.length > 0 && (
-          <div className="card text-center py-6 relative">
-            <button
-              onClick={() => setHideBalances(h => !h)}
-              className="absolute top-3 right-3 text-gray-400 dark:text-gray-500 text-xl outline-none focus:outline-none select-none"
-              style={{ WebkitTapHighlightColor: 'transparent' }}
-            >
-              {hideBalances ? '🙈' : '👁️'}
-            </button>
+          <div className="card text-center py-6">
             <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">Liquidità totale</div>
-            <div className={`text-4xl font-bold ${totalLiquidity >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
-              {hideBalances ? '••••••' : formatCurrency(totalLiquidity)}
+            <div className="flex items-center justify-center gap-2">
+              <div className={`text-4xl font-bold ${totalLiquidity >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                {hideBalances ? '••••••' : formatCurrency(totalLiquidity)}
+              </div>
+              <button
+                onClick={() => setHideBalances(h => !h)}
+                className="text-gray-400 dark:text-gray-500 text-xl outline-none focus:outline-none select-none"
+                style={{ WebkitTapHighlightColor: 'transparent' }}
+              >
+                {hideBalances ? '🙈' : '👁️'}
+              </button>
             </div>
           </div>
         )}
