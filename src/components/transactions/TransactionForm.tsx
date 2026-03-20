@@ -74,13 +74,6 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
     setSelectedSubcategory(null);
   }, [currentType]);
 
-  // Auto-selezione prima categoria investment
-  useEffect(() => {
-    if (currentType === 'investment' && categories.length > 0 && !selectedCategory) {
-      setSelectedCategory(categories[0]);
-    }
-  }, [currentType, categories, selectedCategory]);
-
   // Pre-fill categoria in edit mode
   useEffect(() => {
     if (isEditMode && initialData && categories.length > 0) {
@@ -402,8 +395,9 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
     </>
   );
 
-  // ── Form investimento (senza tastiera custom) ──────────────────────────────
-  if (currentType === 'investment') {
+  // ── Form investimento — mostrato solo dopo selezione categoria ─────────────
+  // (il blocco !selectedCategory qui sopra gestisce la griglia per tutti i tipi)
+  if (currentType === 'investment' && selectedCategory) {
     const qty = parseFloat(investQty) || 0;
     const price = parseFloat(investPrice) || 0;
     const commission = parseFloat(investCommission) || 0;
@@ -557,7 +551,7 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
     );
   }
 
-  // ── Griglia selezione categoria (expense / income / transfer) ──────────────
+  // ── Griglia selezione categoria (tutti i tipi) ────────────────────────────
   if (!selectedCategory) {
     return (
       <div onTouchStart={handleCategorySwipeStart} onTouchEnd={handleCategorySwipeEnd} className="space-y-4">
