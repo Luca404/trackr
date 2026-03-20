@@ -159,6 +159,12 @@ class ApiService {
     try { return JSON.parse(userStr); } catch { return null; }
   }
 
+  async profileExists(): Promise<boolean> {
+    const userId = await getCurrentUserId();
+    const { data } = await supabase.from('profiles').select('id').eq('id', userId).single();
+    return !!data;
+  }
+
   // ==================== ACCOUNTS ====================
 
   async getAccounts(): Promise<Account[]> {

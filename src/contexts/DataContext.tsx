@@ -104,6 +104,13 @@ export function DataProvider({ children }: DataProviderProps) {
     isFetchingRef.current = true;
     setIsLoading(true);
     try {
+      // Verifica che il profilo esista — se mancante (es. cancellato dal DB) forza logout
+      const hasProfile = await apiService.profileExists();
+      if (!hasProfile) {
+        console.warn('Profile not found, signing out');
+        await supabase.auth.signOut();
+        return;
+      }
       await Promise.all([refreshAccounts(), refreshCategories()]);
       // Crea transazioni ricorrenti scadute, poi carica tutto fresco
       await apiService.processRecurringTransactions().catch(console.error);
