@@ -117,7 +117,25 @@ export function DataProvider({ children }: DataProviderProps) {
         await supabase.auth.signOut();
         return;
       }
-      await Promise.all([refreshAccounts(), refreshCategories()]);
+      // Carica accounts e categories
+      const [accountsData, categoriesData] = await Promise.all([
+        apiService.getAccounts(),
+        apiService.getCategories(),
+      ]);
+      // Controllo rigido: crea default se mancanti
+      let finalAccounts = accountsData;
+      if (accountsData.length === 0) {
+        finalAccounts = await apiService.createDefaultAccounts();
+      }
+      let finalCategories = categoriesData;
+      const hasExpense = categoriesData.some(c => c.category_type === 'expense' || c.category_type == null);
+      const hasIncome = categoriesData.some(c => c.category_type === 'income');
+      const hasInvestment = categoriesData.some(c => c.category_type === 'investment');
+      if (!hasExpense || !hasIncome || !hasInvestment) {
+        finalCategories = await apiService.createDefaultCategories(categoriesData);
+      }
+      setAccounts(finalAccounts);
+      setCategories(finalCategories);
       // Crea transazioni ricorrenti scadute, poi carica tutto fresco
       await apiService.processRecurringTransactions().catch(console.error);
       await refreshTransactions();

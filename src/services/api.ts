@@ -168,27 +168,13 @@ class ApiService {
   // ==================== ACCOUNTS ====================
 
   async getAccounts(): Promise<Account[]> {
-    const { data, error } = await supabase
-      .from('accounts')
-      .select('*')
-      .order('id');
+    const { data, error } = await supabase.from('accounts').select('*').order('id');
     if (error) throw error;
-
-    const accounts = (data || []).map(mapAccount);
-
-    // Crea account di default se vuoti
-    if (accounts.length === 0) {
-      return this._createDefaultAccounts();
-    }
-    return accounts;
+    return (data || []).map(mapAccount);
   }
 
-  private async _createDefaultAccounts(): Promise<Account[]> {
+  async createDefaultAccounts(): Promise<Account[]> {
     const userId = await getCurrentUserId();
-    // Re-check nel DB per prevenire race condition (chiamate concorrenti)
-    const { data: existing } = await supabase.from('accounts').select('*').eq('user_id', userId).order('id');
-    if (existing && existing.length > 0) return existing.map(mapAccount);
-
     const defaults = [
       { user_id: userId, name: 'Conto Corrente', icon: '🏦', initial_balance: 0, is_favorite: true },
       { user_id: userId, name: 'Contanti', icon: '💵', initial_balance: 0, is_favorite: false },
@@ -230,48 +216,29 @@ class ApiService {
   // ==================== CATEGORIES ====================
 
   async getCategories(): Promise<CategoryWithStats[]> {
-    const { data, error } = await supabase
-      .from('categories')
-      .select('*, subcategories(*)')
-      .order('id');
+    const { data, error } = await supabase.from('categories').select('*, subcategories(*)').order('id');
     if (error) throw error;
-
-    const categories = (data || []).map(mapCategory);
-
-    // Crea categorie di default se vuoti per gruppo
-    const hasExpense = categories.some(c => c.category_type === 'expense' || c.category_type == null);
-    const hasIncome = categories.some(c => c.category_type === 'income');
-    const hasInvestment = categories.some(c => c.category_type === 'investment');
-
-    if (!hasExpense || !hasIncome || !hasInvestment) {
-      return this._createDefaultCategories();
-    }
-    return categories;
+    return (data || []).map(mapCategory);
   }
 
-  private async _createDefaultCategories(): Promise<CategoryWithStats[]> {
+  async createDefaultCategories(existing: CategoryWithStats[]): Promise<CategoryWithStats[]> {
     const userId = await getCurrentUserId();
-
-    // Re-check nel DB per prevenire race condition (chiamate concorrenti)
-    const { data: freshData } = await supabase.from('categories').select('*, subcategories(*)').eq('user_id', userId).order('id');
-    const fresh = (freshData || []).map(mapCategory);
-    const freshHasExpense = fresh.some(c => c.category_type === 'expense' || c.category_type == null);
-    const freshHasIncome = fresh.some(c => c.category_type === 'income');
-    const freshHasInvestment = fresh.some(c => c.category_type === 'investment');
-    if (freshHasExpense && freshHasIncome && freshHasInvestment) return fresh;
+    const hasExpense = existing.some(c => c.category_type === 'expense' || c.category_type == null);
+    const hasIncome = existing.some(c => c.category_type === 'income');
+    const hasInvestment = existing.some(c => c.category_type === 'investment');
 
     const toCreate = DEFAULT_CATEGORIES.filter(cat => {
       const isExpense = cat.category_type === 'expense' || cat.category_type === null;
       const isIncome = cat.category_type === 'income';
       const isInvestment = cat.category_type === 'investment';
-      return (isExpense && !freshHasExpense) || (isIncome && !freshHasIncome) || (isInvestment && !freshHasInvestment);
+      return (isExpense && !hasExpense) || (isIncome && !hasIncome) || (isInvestment && !hasInvestment);
     }).map(cat => ({ ...cat, user_id: userId }));
 
-    if (toCreate.length === 0) return fresh;
+    if (toCreate.length === 0) return existing;
 
     const { data, error } = await supabase.from('categories').insert(toCreate).select('*, subcategories(*)');
     if (error) throw error;
-    return [...fresh, ...(data || []).map(mapCategory)];
+    return [...existing, ...(data || []).map(mapCategory)];
   }
 
   async createCategory(formData: CategoryFormData): Promise<Category> {
