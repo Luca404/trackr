@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useRef, type ReactNode } from 'react';
 import { apiService } from '../services/api';
 import { supabase } from '../services/supabase';
 import type { Account, Category, Transaction } from '../types';
@@ -48,6 +48,7 @@ export function DataProvider({ children }: DataProviderProps) {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isInitialized, setIsInitialized] = useState(false);
+  const isFetchingRef = useRef(false);
 
   useEffect(() => {
     // Carica i dati se c'è una sessione attiva
@@ -60,11 +61,12 @@ export function DataProvider({ children }: DataProviderProps) {
       }
     });
 
-    // Ascolta cambio sessione
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    // Ascolta cambio sessione — INITIAL_SESSION può sparare in parallelo con getSession,
+    // il guard isFetchingRef previene doppie chiamate concorrenti
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (session?.user) {
         fetchAllData();
-      } else {
+      } else if (event === 'SIGNED_OUT') {
         clearCache();
       }
     });
@@ -98,6 +100,8 @@ export function DataProvider({ children }: DataProviderProps) {
   }, [transactions, isInitialized]);
 
   const fetchAllData = async () => {
+    if (isFetchingRef.current) return; // previeni chiamate concorrenti
+    isFetchingRef.current = true;
     setIsLoading(true);
     try {
       await Promise.all([refreshAccounts(), refreshCategories()]);
@@ -109,6 +113,7 @@ export function DataProvider({ children }: DataProviderProps) {
     } finally {
       setIsLoading(false);
       setIsInitialized(true);
+      isFetchingRef.current = false;
     }
   };
 

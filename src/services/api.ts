@@ -179,6 +179,10 @@ class ApiService {
 
   private async _createDefaultAccounts(): Promise<Account[]> {
     const userId = await getCurrentUserId();
+    // Re-check nel DB per prevenire race condition (chiamate concorrenti)
+    const { data: existing } = await supabase.from('accounts').select('*').eq('user_id', userId).order('id');
+    if (existing && existing.length > 0) return existing.map(mapAccount);
+
     const defaults = [
       { user_id: userId, name: 'Conto Corrente', icon: '🏦', initial_balance: 0, is_favorite: true },
       { user_id: userId, name: 'Contanti', icon: '💵', initial_balance: 0, is_favorite: false },
@@ -234,30 +238,34 @@ class ApiService {
     const hasInvestment = categories.some(c => c.category_type === 'investment');
 
     if (!hasExpense || !hasIncome || !hasInvestment) {
-      return this._createDefaultCategories(categories, hasExpense, hasIncome, hasInvestment);
+      return this._createDefaultCategories();
     }
     return categories;
   }
 
-  private async _createDefaultCategories(
-    existing: CategoryWithStats[],
-    hasExpense: boolean,
-    hasIncome: boolean,
-    hasInvestment: boolean,
-  ): Promise<CategoryWithStats[]> {
+  private async _createDefaultCategories(): Promise<CategoryWithStats[]> {
     const userId = await getCurrentUserId();
+
+    // Re-check nel DB per prevenire race condition (chiamate concorrenti)
+    const { data: freshData } = await supabase.from('categories').select('*, subcategories(*)').eq('user_id', userId).order('id');
+    const fresh = (freshData || []).map(mapCategory);
+    const freshHasExpense = fresh.some(c => c.category_type === 'expense' || c.category_type == null);
+    const freshHasIncome = fresh.some(c => c.category_type === 'income');
+    const freshHasInvestment = fresh.some(c => c.category_type === 'investment');
+    if (freshHasExpense && freshHasIncome && freshHasInvestment) return fresh;
+
     const toCreate = DEFAULT_CATEGORIES.filter(cat => {
       const isExpense = cat.category_type === 'expense' || cat.category_type === null;
       const isIncome = cat.category_type === 'income';
       const isInvestment = cat.category_type === 'investment';
-      return (isExpense && !hasExpense) || (isIncome && !hasIncome) || (isInvestment && !hasInvestment);
+      return (isExpense && !freshHasExpense) || (isIncome && !freshHasIncome) || (isInvestment && !freshHasInvestment);
     }).map(cat => ({ ...cat, user_id: userId }));
 
-    if (toCreate.length === 0) return existing;
+    if (toCreate.length === 0) return fresh;
 
     const { data, error } = await supabase.from('categories').insert(toCreate).select('*, subcategories(*)');
     if (error) throw error;
-    return [...existing, ...(data || []).map(mapCategory)];
+    return [...fresh, ...(data || []).map(mapCategory)];
   }
 
   async createCategory(formData: CategoryFormData): Promise<Category> {
