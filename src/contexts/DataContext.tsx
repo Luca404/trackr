@@ -104,9 +104,15 @@ export function DataProvider({ children }: DataProviderProps) {
     isFetchingRef.current = true;
     setIsLoading(true);
     try {
-      // Verifica che il profilo esista — se mancante (es. cancellato dal DB) forza logout
-      const hasProfile = await apiService.profileExists();
-      if (!hasProfile) {
+      // Valida la sessione server-side (getUser fa una chiamata al server, non usa la cache)
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        await supabase.auth.signOut();
+        return;
+      }
+      // Verifica che il profilo esista nel DB
+      const { data: profile } = await supabase.from('profiles').select('id').eq('id', user.id).single();
+      if (!profile) {
         console.warn('Profile not found, signing out');
         await supabase.auth.signOut();
         return;
