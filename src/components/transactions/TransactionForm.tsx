@@ -408,8 +408,6 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
 
     return (
       <form onSubmit={handleSubmit} className="space-y-4">
-        {tabSelector}
-
         {/* Categoria + Conto */}
         <div className="flex gap-2">
           <button type="button" onClick={() => setShowCategoryPicker(true)}
