@@ -3,6 +3,7 @@ import { apiService } from '../services/api';
 import Layout from '../components/layout/Layout';
 import Modal from '../components/common/Modal';
 import { SkeletonPortfolioCard } from '../components/common/SkeletonLoader';
+import { useSkeletonCount } from '../hooks/useSkeletonCount';
 import type { Portfolio, PortfolioFormData } from '../types';
 
 const CACHE_KEY = 'portfolios_cache';
@@ -16,6 +17,7 @@ interface CachedData {
 export default function PortfoliosPage() {
   const [portfolios, setPortfolios] = useState<Portfolio[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const skeletonCount = useSkeletonCount('portfolios', portfolios.length, isLoading, 3);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [selectedPortfolio, setSelectedPortfolio] = useState<Portfolio | null>(null);
@@ -112,7 +114,7 @@ export default function PortfoliosPage() {
         {/* Lista portafogli */}
         <div className="space-y-3">
           {isLoading
-            ? Array.from({ length: 3 }).map((_, i) => <SkeletonPortfolioCard key={i} />)
+            ? Array.from({ length: skeletonCount }).map((_, i) => <SkeletonPortfolioCard key={i} />)
             : portfolios.map((portfolio) => (
               <div
                 key={portfolio.id}

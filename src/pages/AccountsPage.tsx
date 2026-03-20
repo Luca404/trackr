@@ -5,12 +5,14 @@ import Layout from '../components/layout/Layout';
 import Modal from '../components/common/Modal';
 import ConfirmDialog from '../components/common/ConfirmDialog';
 import { SkeletonAccountCard, SkeletonValue } from '../components/common/SkeletonLoader';
+import { useSkeletonCount } from '../hooks/useSkeletonCount';
 import type { Account, AccountFormData } from '../types';
 
 const ACCOUNT_ICONS = ['💳', '🏦', '💰', '💵', '💶', '💷', '💴', '🪙', '💸', '🏧', '📱', '💎'];
 
 export default function AccountsPage() {
   const { accounts, isLoading, addAccount, updateAccount: updateAccountCache, deleteAccount: deleteAccountCache, refreshAccounts } = useData();
+  const skeletonCount = useSkeletonCount('accounts', accounts.length, isLoading, 3);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [hideBalances, setHideBalances] = useState(() => localStorage.getItem('hideBalances') === 'true');
 
@@ -253,7 +255,7 @@ export default function AccountsPage() {
         {/* Lista conti */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {isLoading
-            ? Array.from({ length: 3 }).map((_, i) => <SkeletonAccountCard key={i} />)
+            ? Array.from({ length: skeletonCount }).map((_, i) => <SkeletonAccountCard key={i} />)
             : [...accounts].sort((a, b) => (b.current_balance ?? b.initial_balance) - (a.current_balance ?? a.initial_balance)).map((account) => (
               <div
                 key={account.id}

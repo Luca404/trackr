@@ -5,6 +5,7 @@ import Layout from '../components/layout/Layout';
 import Modal from '../components/common/Modal';
 import ConfirmDialog from '../components/common/ConfirmDialog';
 import { SkeletonCategoryTile } from '../components/common/SkeletonLoader';
+import { useSkeletonCount } from '../hooks/useSkeletonCount';
 import PeriodSelector from '../components/common/PeriodSelector';
 import DateRangePicker from '../components/common/DateRangePicker';
 import { usePeriod } from '../hooks/usePeriod';
@@ -367,6 +368,7 @@ export default function CategoriesPage() {
   const filteredCategories = categories
     .filter(category => category.category_type === filter || (!category.category_type && filter === 'expense'))
     .sort((a, b) => b.total_amount - a.total_amount);
+  const skeletonCount = useSkeletonCount(`categories:${filter}`, filteredCategories.length, isLoading, 9);
 
   return (
     <Layout>
@@ -416,7 +418,7 @@ export default function CategoriesPage() {
         {/* Grid categorie compatto */}
         <div className="grid grid-cols-3 gap-3">
           {isLoading
-            ? Array.from({ length: 9 }).map((_, i) => <SkeletonCategoryTile key={i} />)
+            ? Array.from({ length: skeletonCount }).map((_, i) => <SkeletonCategoryTile key={i} />)
             : filteredCategories.map((category) => (
               <button
                 key={category.id}

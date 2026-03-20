@@ -4,6 +4,7 @@ import Layout from '../components/layout/Layout';
 import Modal from '../components/common/Modal';
 import TransactionForm from '../components/transactions/TransactionForm';
 import { SkeletonValue, SkeletonRecentTransaction } from '../components/common/SkeletonLoader';
+import { useSkeletonCount } from '../hooks/useSkeletonCount';
 import type { Transaction, TransactionStats, TransactionFormData } from '../types';
 
 export default function DashboardPage() {
@@ -11,6 +12,7 @@ export default function DashboardPage() {
   const [stats, setStats] = useState<TransactionStats | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const skeletonCount = useSkeletonCount('recentTransactions', transactions.length, isLoading, 4);
   const [period, setPeriod] = useState<'month' | 'year'>('month');
 
   useEffect(() => {
@@ -242,7 +244,7 @@ export default function DashboardPage() {
 
           <div className="space-y-3">
             {isLoading
-              ? Array.from({ length: 4 }).map((_, i) => <SkeletonRecentTransaction key={i} />)
+              ? Array.from({ length: skeletonCount }).map((_, i) => <SkeletonRecentTransaction key={i} />)
               : transactions.map((transaction) => (
                 <div
                   key={transaction.id}

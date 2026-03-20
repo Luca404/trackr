@@ -5,6 +5,7 @@ import Layout from '../components/layout/Layout';
 import Modal from '../components/common/Modal';
 import TransactionForm from '../components/transactions/TransactionForm';
 import { SkeletonTransactionRow } from '../components/common/SkeletonLoader';
+import { useSkeletonCount } from '../hooks/useSkeletonCount';
 import PeriodSelector from '../components/common/PeriodSelector';
 import DateRangePicker from '../components/common/DateRangePicker';
 import { usePeriod } from '../hooks/usePeriod';
@@ -14,6 +15,7 @@ type PeriodType = 'day' | 'week' | 'month' | 'year' | 'all' | 'custom';
 
 export default function TransactionsPage() {
   const { transactions: allTransactions, accounts, categories, isLoading: dataLoading, addTransaction, updateTransaction: updateTransactionCache, deleteTransaction: deleteTransactionCache } = useData();
+  const skeletonCount = useSkeletonCount('transactions', allTransactions.length, dataLoading, 5);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
@@ -139,7 +141,7 @@ export default function TransactionsPage() {
         {/* Lista transazioni */}
         <div className="space-y-2">
           {dataLoading
-            ? Array.from({ length: 5 }).map((_, i) => <SkeletonTransactionRow key={i} />)
+            ? Array.from({ length: skeletonCount }).map((_, i) => <SkeletonTransactionRow key={i} />)
             : transactions.map((transaction) => (
                 <div
                   key={transaction.id}
