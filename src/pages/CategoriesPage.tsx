@@ -529,6 +529,7 @@ export default function CategoriesPage() {
                     onChange={(e) => setSubcategoryFormData({ ...subcategoryFormData, name: e.target.value })}
                     className="flex-[3] px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-sm"
                     placeholder="Nome sottocategoria"
+                    autoComplete="off" autoCorrect="off" spellCheck={false}
                     required
                     autoFocus
                   />
@@ -569,6 +570,7 @@ export default function CategoriesPage() {
                 value={categoryFormData.name}
                 onChange={(e) => setCategoryFormData({ ...categoryFormData, name: e.target.value })}
                 className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+                autoComplete="off" autoCorrect="off" spellCheck={false}
                 required
               />
             </div>

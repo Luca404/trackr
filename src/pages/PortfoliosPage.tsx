@@ -246,6 +246,7 @@ function PortfolioForm({ onSubmit, onCancel, initialData, isEditMode }: Portfoli
           onChange={(e) => setName(e.target.value)}
           className="input"
           placeholder="Es: Il mio portafoglio"
+          autoComplete="off" autoCorrect="off" spellCheck={false}
           required
         />
       </div>

@@ -316,6 +316,7 @@ export default function AccountsPage() {
               <input
                 type="text"
                 value={formData.name}
+                autoComplete="off" autoCorrect="off" spellCheck={false}
                 onChange={(e) => {
                   setFormData({ ...formData, name: e.target.value });
                   if (showNameError && e.target.value.trim() !== '') {

@@ -404,6 +404,7 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
     const total = qty * price + commission;
 
     const inputClass = "w-full px-3 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-base";
+    const noFill = { autoComplete: "off", autoCorrect: "off", spellCheck: false } as const;
     const labelClass = "block text-xs text-gray-500 dark:text-gray-400 mb-1";
 
     return (
@@ -440,6 +441,7 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
               onChange={(e) => setTicker(e.target.value.toUpperCase())}
               placeholder="es. AAPL"
               className={inputClass + " uppercase tracking-wider font-mono"}
+              {...noFill}
             />
           </div>
           <div>
@@ -453,6 +455,7 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
               onChange={(e) => setInvestQty(e.target.value)}
               placeholder="0"
               className={inputClass}
+              {...noFill}
             />
           </div>
         </div>
@@ -470,6 +473,7 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
               onChange={(e) => setInvestPrice(e.target.value)}
               placeholder="0,00"
               className={inputClass}
+              {...noFill}
             />
           </div>
           <div>
@@ -483,6 +487,7 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
               onChange={(e) => setInvestCommission(e.target.value)}
               placeholder="0,00"
               className={inputClass}
+              {...noFill}
             />
           </div>
         </div>
@@ -517,6 +522,7 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
           onChange={(e) => setDescription(e.target.value)}
           placeholder="Note (opzionale)"
           className={inputClass}
+          {...noFill}
         />
 
         {error && (
@@ -659,6 +665,7 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
       {/* Descrizione */}
       <input type="text" value={description} onChange={(e) => setDescription(e.target.value)}
         placeholder="Descrizione (opzionale)"
+        autoComplete="off" autoCorrect="off" spellCheck={false}
         className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-sm" />
 
       {error && (
