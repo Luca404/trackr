@@ -5,7 +5,6 @@ import { SkeletonValue } from '../components/common/SkeletonLoader';
 import PeriodSelector from '../components/common/PeriodSelector';
 import DateRangePicker from '../components/common/DateRangePicker';
 import { usePeriod } from '../hooks/usePeriod';
-import { useTabSwipe } from '../hooks/useSwipeNavigation';
 
 type StatsFilter = 'expense' | 'income' | 'investment';
 type PeriodType = 'day' | 'week' | 'month' | 'year' | 'all' | 'custom';
@@ -21,8 +20,6 @@ interface CategoryStat {
 export default function StatsPage() {
   const { transactions: allTransactions, categories, isLoading } = useData();
   const [filter, setFilter] = useState<StatsFilter>('expense');
-  const TABS: StatsFilter[] = ['expense', 'income', 'investment'];
-  useTabSwipe(TABS, filter, (t) => setFilter(t as StatsFilter));
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
 
@@ -357,7 +354,7 @@ export default function StatsPage() {
 
         {/* Grafico a barre per periodo (filtrato per tab) */}
         {filteredTransactions.length > 0 && (
-          <div className="card" data-tab-swipe>
+          <div className="card">
             <div className="flex items-end justify-between gap-1 h-40">
               {timelineData.map((period, index) => {
                 const barHeight = period.totalAmount > 0 ? (period.totalAmount / maxPeriodAmount) * 100 : 0;

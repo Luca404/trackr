@@ -1,43 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 
-// Interceptor per pagine con tab: se registrato, viene chiamato prima della navigazione.
-// Restituisce true se lo swipe è stato consumato (tab cambiato), false per procedere con la navigazione.
-type TabInterceptor = (dir: 'left' | 'right') => boolean;
-let _tabInterceptor: TabInterceptor | null = null;
-
-// Hook da usare nelle pagine con tab per intercettare lo swipe orizzontale
-export function useTabSwipe(
-  tabs: readonly string[],
-  current: string,
-  onChange: (tab: string) => void
-) {
-  const currentRef = useRef(current);
-  const onChangeRef = useRef(onChange);
-  currentRef.current = current;
-  onChangeRef.current = onChange;
-
-  useEffect(() => {
-    _tabInterceptor = (dir) => {
-      const idx = tabs.indexOf(currentRef.current);
-      if (dir === 'left' && idx < tabs.length - 1) {
-        onChangeRef.current(tabs[idx + 1]);
-        return true;
-      }
-      if (dir === 'right' && idx > 0) {
-        onChangeRef.current(tabs[idx - 1]);
-        return true;
-      }
-      return false;
-    };
-    return () => { _tabInterceptor = null; };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-}
-
 interface SwipeNavigationConfig {
-  threshold?: number; // Distanza minima in px per attivare lo swipe
-  velocityThreshold?: number; // Velocità minima per lo swipe
-  routes: string[]; // Array delle route in ordine
+  threshold?: number;
+  velocityThreshold?: number;
+  routes: string[];
 }
 
 export function useSwipeNavigation({
@@ -50,32 +17,30 @@ export function useSwipeNavigation({
   const touchStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
   const swipeOffsetRef = useRef(0);
   const isSwipingRef = useRef(false);
-  const isTabZoneRef = useRef(false);
+  const shouldAnimateRef = useRef(false);
+  const routesRef = useRef(routes);
+  const locationRef = useRef(location.pathname);
+  routesRef.current = routes;
+  locationRef.current = location.pathname;
+
   const [swipeOffset, setSwipeOffset] = useState(0);
   const [isSwipingHorizontally, setIsSwipingHorizontally] = useState(false);
 
   useEffect(() => {
     const handleTouchStart = (e: TouchEvent) => {
-      // Ignora solo input, select, textarea e elementi con data-no-swipe
       const target = e.target as HTMLElement;
       if (
         target.closest('input') ||
         target.closest('select') ||
         target.closest('textarea') ||
         target.closest('[data-no-swipe]')
-      ) {
-        return;
-      }
+      ) return;
 
       const touch = e.touches[0];
-      touchStartRef.current = {
-        x: touch.clientX,
-        y: touch.clientY,
-        time: Date.now()
-      };
+      touchStartRef.current = { x: touch.clientX, y: touch.clientY, time: Date.now() };
       swipeOffsetRef.current = 0;
       isSwipingRef.current = false;
-      isTabZoneRef.current = !!target.closest('[data-tab-swipe]');
+      shouldAnimateRef.current = false;
       setIsSwipingHorizontally(false);
       setSwipeOffset(0);
     };
@@ -87,21 +52,23 @@ export function useSwipeNavigation({
       const deltaX = touch.clientX - touchStartRef.current.x;
       const deltaY = touch.clientY - touchStartRef.current.y;
 
-      // Determina se è uno swipe orizzontale o verticale
       if (!isSwipingRef.current && Math.abs(deltaX) > 15) {
         if (Math.abs(deltaX) > Math.abs(deltaY) * 1.5) {
           isSwipingRef.current = true;
-          // Animazione visiva solo per swipe di navigazione pagina
-          if (!isTabZoneRef.current) {
+          // Mostra animazione solo se non siamo ai bordi
+          const currentIndex = routesRef.current.indexOf(locationRef.current);
+          const atStart = currentIndex === 0 && deltaX > 0;
+          const atEnd = currentIndex === routesRef.current.length - 1 && deltaX < 0;
+          shouldAnimateRef.current = !atStart && !atEnd;
+          if (shouldAnimateRef.current) {
             setIsSwipingHorizontally(true);
           }
         }
       }
 
-      // Se è uno swipe orizzontale, aggiorna l'offset e previeni lo scroll
       if (isSwipingRef.current) {
         swipeOffsetRef.current = deltaX;
-        if (!isTabZoneRef.current) {
+        if (shouldAnimateRef.current) {
           setSwipeOffset(deltaX);
         }
         e.preventDefault();
@@ -115,39 +82,22 @@ export function useSwipeNavigation({
       const deltaTime = Date.now() - touchStartRef.current.time;
       const velocity = Math.abs(deltaX) / deltaTime;
 
-      // Reset visual feedback
       setSwipeOffset(0);
       setIsSwipingHorizontally(false);
 
-      // Controlla se lo swipe è abbastanza lungo o veloce
       if (Math.abs(deltaX) > threshold || velocity > velocityThreshold) {
-        // Se c'è un modal aperto, swipe destra lo chiude invece di navigare
         const modalOpen = document.querySelector('[data-no-swipe]');
         if (modalOpen) {
           if (deltaX > 0) {
             window.dispatchEvent(new CustomEvent('trackr:swipe-back'));
           }
         } else {
-          const dir = deltaX > 0 ? 'right' : 'left';
-          // Il tab interceptor si attiva solo se lo swipe parte dalla zona tab
-          const consumed = isTabZoneRef.current ? (_tabInterceptor?.(dir) ?? false) : false;
-
-          if (!consumed) {
-            const currentIndex = routes.indexOf(location.pathname);
-
-            if (currentIndex !== -1) {
-              let nextIndex = -1;
-
-              if (deltaX > 0 && currentIndex > 0) {
-                nextIndex = currentIndex - 1;
-              } else if (deltaX < 0 && currentIndex < routes.length - 1) {
-                nextIndex = currentIndex + 1;
-              }
-
-              if (nextIndex !== -1) {
-                navigate(routes[nextIndex]);
-              }
-            }
+          const currentIndex = routesRef.current.indexOf(locationRef.current);
+          if (currentIndex !== -1) {
+            let nextIndex = -1;
+            if (deltaX > 0 && currentIndex > 0) nextIndex = currentIndex - 1;
+            else if (deltaX < 0 && currentIndex < routesRef.current.length - 1) nextIndex = currentIndex + 1;
+            if (nextIndex !== -1) navigate(routesRef.current[nextIndex]);
           }
         }
       }
@@ -157,7 +107,6 @@ export function useSwipeNavigation({
       isSwipingRef.current = false;
     };
 
-    // Aggiungi event listeners
     document.addEventListener('touchstart', handleTouchStart, { passive: true });
     document.addEventListener('touchmove', handleTouchMove, { passive: false });
     document.addEventListener('touchend', handleTouchEnd);
@@ -169,7 +118,7 @@ export function useSwipeNavigation({
       document.removeEventListener('touchend', handleTouchEnd);
       document.removeEventListener('touchcancel', handleTouchEnd);
     };
-  }, [navigate, location.pathname, routes, threshold, velocityThreshold]);
+  }, [navigate, threshold, velocityThreshold]);
 
   return { swipeOffset, isSwipingHorizontally };
 }

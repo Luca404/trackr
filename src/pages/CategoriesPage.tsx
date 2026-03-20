@@ -8,7 +8,6 @@ import { SkeletonCategoryTile } from '../components/common/SkeletonLoader';
 import PeriodSelector from '../components/common/PeriodSelector';
 import DateRangePicker from '../components/common/DateRangePicker';
 import { usePeriod } from '../hooks/usePeriod';
-import { useTabSwipe } from '../hooks/useSwipeNavigation';
 import type { CategoryWithStats, CategoryFormData, SubcategoryFormData } from '../types';
 
 type CategoryFilter = 'income' | 'expense' | 'investment';
@@ -143,8 +142,6 @@ const getSuggestedIcons = (name: string): string[] => {
 export default function CategoriesPage() {
   const { categories: baseCategories, transactions: allTransactions, isLoading, addCategory, updateCategory: updateCategoryCache, deleteCategory: deleteCategoryCache } = useData();
   const [filter, setFilter] = useState<CategoryFilter>('expense');
-  const TABS: CategoryFilter[] = ['expense', 'income', 'investment'];
-  useTabSwipe(TABS, filter, (t) => setFilter(t as CategoryFilter));
   const [selectedCategory, setSelectedCategory] = useState<CategoryWithStats | null>(null);
   const [isSubcategoryModalOpen, setIsSubcategoryModalOpen] = useState(false);
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
@@ -417,7 +414,7 @@ export default function CategoriesPage() {
         </div>
 
         {/* Grid categorie compatto */}
-        <div className="grid grid-cols-3 gap-3" data-tab-swipe>
+        <div className="grid grid-cols-3 gap-3">
           {isLoading
             ? Array.from({ length: 9 }).map((_, i) => <SkeletonCategoryTile key={i} />)
             : filteredCategories.map((category) => (
