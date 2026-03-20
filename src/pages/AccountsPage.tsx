@@ -223,22 +223,27 @@ export default function AccountsPage() {
         {/* Totale liquidità */}
         {(isLoading || accounts.length > 0) && (
           <div className="sticky top-0 z-10 -mx-4 px-4 pt-1 pb-3 bg-gray-50 dark:bg-gray-900 relative">
-          <div className="card text-center py-6 relative">
-            <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">Liquidità totale</div>
-            <div className="text-4xl font-bold">
-              {isLoading
-                ? <SkeletonValue className="h-10 w-40 animate-pulse inline-block" />
-                : hideBalances
-                  ? maskAmount(formatCurrency(totalLiquidity), totalLiquidity >= 0)
-                  : <span className={totalLiquidity >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>{formatCurrency(totalLiquidity)}</span>}
+          <div className="card py-6">
+            <div className="text-sm text-gray-500 dark:text-gray-400 mb-1 text-center">Liquidità totale</div>
+            <div className="flex items-center justify-center">
+              <div className="flex-1" />
+              <div className="text-4xl font-bold">
+                {isLoading
+                  ? <SkeletonValue className="h-10 w-40 animate-pulse inline-block" />
+                  : hideBalances
+                    ? maskAmount(formatCurrency(totalLiquidity), totalLiquidity >= 0)
+                    : <span className={totalLiquidity >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>{formatCurrency(totalLiquidity)}</span>}
+              </div>
+              <div className="flex-1 flex justify-end pr-2">
+                <button
+                  onClick={toggleHideBalances}
+                  className="text-gray-400 dark:text-gray-500 text-xl outline-none focus:outline-none select-none"
+                  style={{ WebkitTapHighlightColor: 'transparent' }}
+                >
+                  {hideBalances ? '🙈' : '👁️'}
+                </button>
+              </div>
             </div>
-            <button
-              onClick={toggleHideBalances}
-              className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500 text-xl outline-none focus:outline-none select-none"
-              style={{ WebkitTapHighlightColor: 'transparent' }}
-            >
-              {hideBalances ? '🙈' : '👁️'}
-            </button>
           </div>
           {/* Gradient fade */}
           <div className="absolute left-0 right-0 h-6 bg-gradient-to-b from-gray-50 dark:from-gray-900 to-transparent pointer-events-none" style={{ top: '100%' }} />
