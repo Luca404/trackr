@@ -307,7 +307,7 @@ export default function AccountsPage() {
           onClose={handleCloseModal}
           title={isEditMode ? 'Modifica Conto' : 'Nuovo Conto'}
         >
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} autoComplete="off" className="space-y-4">
             {/* Nome */}
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">

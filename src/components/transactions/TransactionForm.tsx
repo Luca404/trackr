@@ -408,7 +408,7 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
     const labelClass = "block text-xs text-gray-500 dark:text-gray-400 mb-1";
 
     return (
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit} autoComplete="off" className="space-y-4">
         {/* Categoria + Conto */}
         <div className="flex gap-2">
           <button type="button" onClick={() => setShowCategoryPicker(true)}
@@ -582,7 +582,7 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
 
   // ── Form con tastierino numerico (expense / income / transfer) ─────────────
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <form onSubmit={handleSubmit} autoComplete="off" className="space-y-4">
       {/* Categoria e Conto */}
       <div className="flex gap-2">
         <button type="button" onClick={() => setShowCategoryPicker(true)}

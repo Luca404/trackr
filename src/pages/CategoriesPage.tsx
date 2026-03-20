@@ -517,7 +517,7 @@ export default function CategoriesPage() {
                 </button>
               </div>
             ) : (
-              <form onSubmit={handleSubcategorySubmit} className="space-y-3">
+              <form onSubmit={handleSubcategorySubmit} autoComplete="off" className="space-y-3">
                 <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">
                   Nuova Sottocategoria
                 </h4>
@@ -560,7 +560,7 @@ export default function CategoriesPage() {
           }}
           title={isEditMode ? 'Modifica Categoria' : 'Nuova Categoria'}
         >
-          <form onSubmit={handleCategorySubmit} className="space-y-4">
+          <form onSubmit={handleCategorySubmit} autoComplete="off" className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Nome
