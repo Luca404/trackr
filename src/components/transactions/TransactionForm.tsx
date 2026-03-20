@@ -18,14 +18,11 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
   const { categories: allCategories, accounts: allAccounts } = useData();
   const [currentType, setCurrentType] = useState<TransactionType>(initialData?.type || 'expense');
 
-  // Filtra le categorie in base al tipo corrente
   const categories = useMemo(() => {
-    if (currentType === 'transfer') {
-      return [];
-    }
-    // Filtra solo categorie che hanno esattamente category_type === currentType
+    if (currentType === 'transfer') return [];
     return allCategories.filter(c => c.category_type === currentType);
   }, [allCategories, currentType]);
+
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
   const [selectedSubcategory, setSelectedSubcategory] = useState<Subcategory | null>(null);
   const [selectedAccount, setSelectedAccount] = useState<Account | null>(null);
@@ -39,38 +36,52 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
   const [showCurrencyPicker, setShowCurrencyPicker] = useState(false);
   const [currency, setCurrency] = useState<string>('EUR');
 
+  // Campi investimento
+  const [ticker, setTicker] = useState<string>(initialData?.ticker || '');
+  const [investQty, setInvestQty] = useState<string>(initialData?.quantity?.toString() || '');
+  const [investPrice, setInvestPrice] = useState<string>(initialData?.price?.toString() || '');
+  const [investCommission, setInvestCommission] = useState<string>(() => {
+    if (initialData?.quantity && initialData?.price) {
+      const commission = (initialData.amount) - (initialData.quantity * initialData.price);
+      return commission > 0 ? commission.toFixed(2) : '';
+    }
+    return '';
+  });
+
   const [recurrence, setRecurrence] = useState<RecurringFrequency | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [showRecurringDeleteModal, setShowRecurringDeleteModal] = useState(false);
 
-  // Back gesture quando la categoria è selezionata → torna alla griglia categorie (solo in nuova transazione)
+  // Back gesture quando la categoria è selezionata → torna alla griglia (solo nuova transazione)
   useEffect(() => {
     if (!selectedCategory || isEditMode) return;
     return registerBackHandler(() => setSelectedCategory(null));
   }, [selectedCategory, isEditMode]);
 
-  // Inizializza l'account selezionato al primo caricamento
+  // Account preferito di default
   useEffect(() => {
     if (!selectedAccount && allAccounts.length > 0) {
-      // Cerca il conto preferito
       const favoriteAccount = allAccounts.find(acc => acc.is_favorite);
-      if (favoriteAccount) {
-        setSelectedAccount(favoriteAccount);
-      } else {
-        // Se non c'è un preferito, usa il primo
-        setSelectedAccount(allAccounts[0]);
-      }
+      setSelectedAccount(favoriteAccount || allAccounts[0]);
     }
   }, [allAccounts, selectedAccount]);
 
-  // Reset categoria e sottocategoria quando cambia il tipo
+  // Reset categoria quando cambia tipo (non per investment → si auto-seleziona)
   useEffect(() => {
     setSelectedCategory(null);
     setSelectedSubcategory(null);
   }, [currentType]);
 
+  // Auto-selezione prima categoria investment
+  useEffect(() => {
+    if (currentType === 'investment' && categories.length > 0 && !selectedCategory) {
+      setSelectedCategory(categories[0]);
+    }
+  }, [currentType, categories, selectedCategory]);
+
+  // Pre-fill categoria in edit mode
   useEffect(() => {
     if (isEditMode && initialData && categories.length > 0) {
       const category = categories.find(c => c.name === initialData.category);
@@ -78,21 +89,17 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
         setSelectedCategory(category);
         if (initialData.subcategory) {
           const subcategory = category.subcategories?.find(s => s.name === initialData.subcategory);
-          if (subcategory) {
-            setSelectedSubcategory(subcategory);
-          }
+          if (subcategory) setSelectedSubcategory(subcategory);
         }
       }
     }
   }, [isEditMode, initialData, categories]);
 
-  // Inizializza il conto selezionato quando siamo in modalità modifica
+  // Pre-fill conto in edit mode
   useEffect(() => {
     if (isEditMode && initialData?.account_id && allAccounts.length > 0) {
       const account = allAccounts.find(acc => acc.id === initialData.account_id);
-      if (account) {
-        setSelectedAccount(account);
-      }
+      if (account) setSelectedAccount(account);
     }
   }, [isEditMode, initialData, allAccounts]);
 
@@ -114,14 +121,16 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
     return negative ? `-${result}` : result;
   };
 
+  const formatCurrency = (n: number) => {
+    const abs = Math.abs(n);
+    const sign = n < 0 ? '-' : '';
+    const [intStr, decStr] = abs.toFixed(2).split('.');
+    const intFormatted = intStr.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+    return `${sign}€ ${intFormatted},${decStr}`;
+  };
+
   const getCurrencySymbol = (curr: string) => {
-    const symbols: Record<string, string> = {
-      'EUR': '€',
-      'USD': '$',
-      'GBP': '£',
-      'JPY': '¥',
-      'CHF': 'Fr',
-    };
+    const symbols: Record<string, string> = { 'EUR': '€', 'USD': '$', 'GBP': '£', 'JPY': '¥', 'CHF': 'Fr' };
     return symbols[curr] || curr;
   };
 
@@ -150,27 +159,33 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
 
-    if (!selectedCategory) {
-      setError('Seleziona una categoria');
-      return;
-    }
+    if (!selectedAccount) { setError('Seleziona un conto'); return; }
 
-    if (!selectedAccount) {
-      setError('Seleziona un conto');
-      return;
-    }
+    let submitData: TransactionFormData;
 
-    const amountNum = parseFloat(amount) || 0;
-    if (amountNum <= 0) {
-      setError('Inserisci un importo valido');
-      return;
-    }
-
-    setError('');
-    setIsLoading(true);
-
-    try {
-      await onSubmit({
+    if (currentType === 'investment') {
+      const qty = parseFloat(investQty) || 0;
+      const price = parseFloat(investPrice) || 0;
+      const commission = parseFloat(investCommission) || 0;
+      const total = qty * price + commission;
+      if (total <= 0) { setError('Inserisci quantità e prezzo'); return; }
+      if (!selectedCategory) { setError('Seleziona una categoria'); return; }
+      submitData = {
+        type: currentType,
+        category: selectedCategory.name,
+        amount: total,
+        description,
+        date,
+        account_id: selectedAccount.id,
+        ticker: ticker.trim().toUpperCase() || undefined,
+        quantity: qty || undefined,
+        price: price || undefined,
+      };
+    } else {
+      if (!selectedCategory) { setError('Seleziona una categoria'); return; }
+      const amountNum = parseFloat(amount) || 0;
+      if (amountNum <= 0) { setError('Inserisci un importo valido'); return; }
+      submitData = {
         type: currentType,
         category: selectedCategory.name,
         subcategory: selectedSubcategory?.name,
@@ -179,7 +194,13 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
         date,
         account_id: selectedAccount.id,
         recurrence: recurrence ?? undefined,
-      });
+      };
+    }
+
+    setError('');
+    setIsLoading(true);
+    try {
+      await onSubmit(submitData);
       onCancel();
     } catch (err: any) {
       setError(err.response?.data?.message || 'Errore durante il salvataggio');
@@ -190,12 +211,7 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
 
   const formatDate = (dateStr: string) => {
     const d = new Date(dateStr);
-    return d.toLocaleDateString('it-IT', {
-      weekday: 'short',
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric'
-    });
+    return d.toLocaleDateString('it-IT', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
   };
 
   const typeButtons = [
@@ -205,7 +221,27 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
     { type: 'transfer' as TransactionType, label: 'Trasferimento', icon: '🔄', color: 'purple' },
   ];
 
-  // Swipe orizzontale sulla griglia categorie per cambiare tab
+  const tabSelector = (
+    <div className="flex gap-2 border-b border-gray-200 dark:border-gray-700">
+      {typeButtons.map(({ type, label, icon }) => (
+        <button
+          key={type}
+          type="button"
+          onClick={() => setCurrentType(type)}
+          className={`flex-1 px-3 py-2 font-medium text-sm transition-colors flex flex-col items-center ${
+            currentType === type
+              ? 'border-b-2 border-primary-500 text-primary-600 dark:text-primary-400'
+              : 'text-gray-600 dark:text-gray-400'
+          }`}
+        >
+          <span className="text-xl mb-0.5">{icon}</span>
+          <span>{label}</span>
+        </button>
+      ))}
+    </div>
+  );
+
+  // Swipe sulla griglia categorie per cambiare tab
   const swipeCategoryRef = useRef<{ x: number; y: number } | null>(null);
   const handleCategorySwipeStart = (e: React.TouchEvent) => {
     swipeCategoryRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
@@ -234,197 +270,8 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
     setShowDatePicker(false);
   };
 
-  // Se non è stata selezionata una categoria, mostra la griglia
-  if (!selectedCategory) {
-    return (
-      <div
-        className="space-y-4"
-        onTouchStart={handleCategorySwipeStart}
-        onTouchEnd={handleCategorySwipeEnd}
-      >
-        {/* Tab tipi transazione */}
-        <div className="flex gap-2 border-b border-gray-200 dark:border-gray-700">
-          {typeButtons.map(({ type, label, icon }) => (
-            <button
-              key={type}
-              type="button"
-              onClick={() => setCurrentType(type)}
-              className={`flex-1 px-3 py-2 font-medium text-sm transition-colors flex flex-col items-center ${
-                currentType === type
-                  ? 'border-b-2 border-primary-500 text-primary-600 dark:text-primary-400'
-                  : 'text-gray-600 dark:text-gray-400'
-              }`}
-            >
-              <span className="text-xl mb-0.5">{icon}</span>
-              <span>{label}</span>
-            </button>
-          ))}
-        </div>
-
-        {/* Griglia categorie */}
-        <div>
-          <div className="text-sm text-gray-600 dark:text-gray-400 mb-3">
-            Seleziona categoria
-          </div>
-          <div className="grid grid-cols-3 gap-3 max-h-[60vh] overflow-y-auto">
-            {categories.map((category) => (
-              <button
-                key={category.id}
-                type="button"
-                onClick={() => setSelectedCategory(category)}
-                className="flex flex-col items-center justify-center p-4 rounded-xl border-2 border-gray-200 dark:border-gray-700 hover:border-primary-500 dark:hover:border-primary-500 hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-colors bg-white dark:bg-gray-800"
-              >
-                <span className="text-4xl mb-2">{category.icon}</span>
-                <span className="text-xs font-medium text-gray-700 dark:text-gray-300 text-center">
-                  {category.name}
-                </span>
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // Form con tastierino numerico
-  return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      {/* Categoria e Conto selezionati */}
-      <div className="flex gap-2">
-        <button
-          type="button"
-          onClick={() => setShowCategoryPicker(true)}
-          className="flex-1 flex items-center gap-2 p-3 rounded-lg border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 hover:border-primary-500 transition-colors"
-        >
-          <span className="text-2xl">{selectedCategory.icon}</span>
-          <div className="flex-1 text-left">
-            <div className="text-xs text-gray-500 dark:text-gray-400">Categoria</div>
-            <div className="font-medium text-gray-900 dark:text-gray-100">{selectedCategory.name}</div>
-          </div>
-          <span className="text-gray-400">›</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setShowAccountPicker(true)}
-          className="flex-1 flex items-center gap-2 p-3 rounded-lg border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 hover:border-primary-500 transition-colors"
-        >
-          <span className="text-2xl">{selectedAccount?.icon || '💳'}</span>
-          <div className="flex-1 text-left">
-            <div className="text-xs text-gray-500 dark:text-gray-400">Conto</div>
-            <div className="font-medium text-gray-900 dark:text-gray-100">{selectedAccount?.name || 'Seleziona'}</div>
-          </div>
-          <span className="text-gray-400">›</span>
-        </button>
-      </div>
-
-      {/* Sottocategorie */}
-      {selectedCategory.subcategories && selectedCategory.subcategories.length > 0 && (
-        <div className="flex gap-2 flex-wrap">
-          {selectedCategory.subcategories.map((sub) => (
-            <button
-              key={sub.id}
-              type="button"
-              onClick={() => setSelectedSubcategory(selectedSubcategory?.id === sub.id ? null : sub)}
-              className={`px-3 py-1.5 rounded-lg text-sm transition-colors flex items-center gap-1 ${
-                selectedSubcategory?.id === sub.id
-                  ? 'bg-primary-500 text-white'
-                  : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
-              }`}
-            >
-              <span>{sub.name}</span>
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* Display importo */}
-      <div className="text-center py-4">
-        <div className="text-5xl font-bold text-gray-900 dark:text-gray-100">
-          {getCurrencySymbol(currency)} {formatAmountDisplay(amount || '0')}
-        </div>
-      </div>
-
-      {/* Tastierino numerico con colonna comandi a destra */}
-      <div className="flex gap-2">
-        {/* Griglia numeri 3x4 (sinistra) */}
-        <div className="flex-1 grid grid-cols-3 gap-2">
-          {/* Riga 1: 1 2 3 */}
-          <button type="button" onClick={() => handleNumberClick('1')} className="h-14 text-2xl font-semibold rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-900 dark:text-gray-100 transition-colors">1</button>
-          <button type="button" onClick={() => handleNumberClick('2')} className="h-14 text-2xl font-semibold rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-900 dark:text-gray-100 transition-colors">2</button>
-          <button type="button" onClick={() => handleNumberClick('3')} className="h-14 text-2xl font-semibold rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-900 dark:text-gray-100 transition-colors">3</button>
-
-          {/* Riga 2: 4 5 6 */}
-          <button type="button" onClick={() => handleNumberClick('4')} className="h-14 text-2xl font-semibold rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-900 dark:text-gray-100 transition-colors">4</button>
-          <button type="button" onClick={() => handleNumberClick('5')} className="h-14 text-2xl font-semibold rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-900 dark:text-gray-100 transition-colors">5</button>
-          <button type="button" onClick={() => handleNumberClick('6')} className="h-14 text-2xl font-semibold rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-900 dark:text-gray-100 transition-colors">6</button>
-
-          {/* Riga 3: 7 8 9 */}
-          <button type="button" onClick={() => handleNumberClick('7')} className="h-14 text-2xl font-semibold rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-900 dark:text-gray-100 transition-colors">7</button>
-          <button type="button" onClick={() => handleNumberClick('8')} className="h-14 text-2xl font-semibold rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-900 dark:text-gray-100 transition-colors">8</button>
-          <button type="button" onClick={() => handleNumberClick('9')} className="h-14 text-2xl font-semibold rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-900 dark:text-gray-100 transition-colors">9</button>
-
-          {/* Riga 4: € 0 . */}
-          <button type="button" onClick={() => setShowCurrencyPicker(true)} className="h-14 text-lg font-semibold rounded-lg bg-primary-100 dark:bg-primary-900/30 hover:bg-primary-200 dark:hover:bg-primary-900/50 text-primary-600 dark:text-primary-400 transition-colors">{getCurrencySymbol(currency)}</button>
-          <button type="button" onClick={() => handleNumberClick('0')} className="h-14 text-2xl font-semibold rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-900 dark:text-gray-100 transition-colors">0</button>
-          <button type="button" onClick={() => handleNumberClick('.')} className="h-14 text-2xl font-semibold rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-900 dark:text-gray-100 transition-colors">,</button>
-        </div>
-
-        {/* Colonna comandi (destra) */}
-        <div className="flex flex-col gap-2">
-          {/* Backspace */}
-          <button type="button" onClick={handleBackspace} className="h-14 w-14 text-2xl rounded-lg bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-900 dark:text-gray-100 transition-colors">←</button>
-
-          {/* OK (doppia altezza - prende lo spazio rimanente) */}
-          <button type="submit" disabled={isLoading || !selectedCategory || !selectedAccount || parseFloat(amount) <= 0} className="flex-1 w-14 rounded-lg bg-green-500 hover:bg-green-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-bold text-3xl transition-colors flex items-center justify-center">{isLoading ? '...' : '✓'}</button>
-
-          {/* Calendario */}
-          <button type="button" onClick={() => setShowDateSelector(true)} className="h-14 w-14 text-2xl rounded-lg bg-primary-100 dark:bg-primary-900/30 hover:bg-primary-200 dark:hover:bg-primary-900/50 text-primary-600 dark:text-primary-400 transition-colors">📅</button>
-        </div>
-      </div>
-
-      {/* Data selezionata */}
-      <div className="text-center text-sm text-gray-600 dark:text-gray-400">
-        {formatDate(date)}
-        {!isEditMode && recurrence && (
-          <span className="ml-2 inline-flex items-center gap-1 text-primary-600 dark:text-primary-400">
-            🔄 {{ weekly: 'Settimanale', monthly: 'Mensile', yearly: 'Annuale' }[recurrence]}
-          </span>
-        )}
-        {isEditMode && isRecurring && (
-          <span className="ml-2 text-primary-600 dark:text-primary-400">🔄</span>
-        )}
-      </div>
-
-      {/* Descrizione (opzionale) */}
-      <div>
-        <input
-          type="text"
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          placeholder="Descrizione (opzionale)"
-          className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-sm"
-        />
-      </div>
-
-      {error && (
-        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 px-4 py-3 rounded-lg text-sm">
-          {error}
-        </div>
-      )}
-
-      {/* Pulsante elimina solo in edit mode */}
-      {isEditMode && onDelete && (
-        <button
-          type="button"
-          onClick={() => isRecurring ? setShowRecurringDeleteModal(true) : setIsDeleteDialogOpen(true)}
-          className="w-full px-4 py-3 rounded-lg bg-red-500 text-white hover:bg-red-600 transition-colors font-medium"
-          disabled={isLoading}
-        >
-          🗑️ Elimina
-        </button>
-      )}
-
+  const sharedModals = (
+    <>
       {/* Modal cambio categoria */}
       <Modal isOpen={showCategoryPicker} onClose={() => setShowCategoryPicker(false)} title="Cambia Categoria">
         <div className="grid grid-cols-3 gap-3">
@@ -432,11 +279,7 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
             <button
               key={category.id}
               type="button"
-              onClick={() => {
-                setSelectedCategory(category);
-                setSelectedSubcategory(null);
-                setShowCategoryPicker(false);
-              }}
+              onClick={() => { setSelectedCategory(category); setSelectedSubcategory(null); setShowCategoryPicker(false); }}
               className="flex flex-col items-center p-3 rounded-lg border-2 border-gray-200 dark:border-gray-700 hover:border-primary-500 transition-colors"
             >
               <span className="text-3xl mb-1">{category.icon}</span>
@@ -453,10 +296,7 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
             <button
               key={account.id}
               type="button"
-              onClick={() => {
-                setSelectedAccount(account);
-                setShowAccountPicker(false);
-              }}
+              onClick={() => { setSelectedAccount(account); setShowAccountPicker(false); }}
               className={`w-full flex items-center gap-3 p-3 rounded-lg border-2 transition-colors ${
                 selectedAccount?.id === account.id
                   ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20'
@@ -470,103 +310,41 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
         </div>
       </Modal>
 
-      {/* Modal selettore valuta */}
-      <Modal isOpen={showCurrencyPicker} onClose={() => setShowCurrencyPicker(false)} title="Seleziona Valuta">
-        <div className="space-y-2">
-          {[
-            { code: 'EUR', name: 'Euro', symbol: '€' },
-            { code: 'USD', name: 'Dollaro USA', symbol: '$' },
-            { code: 'GBP', name: 'Sterlina Britannica', symbol: '£' },
-            { code: 'JPY', name: 'Yen Giapponese', symbol: '¥' },
-            { code: 'CHF', name: 'Franco Svizzero', symbol: 'Fr' },
-          ].map((curr) => (
-            <button
-              key={curr.code}
-              type="button"
-              onClick={() => {
-                setCurrency(curr.code);
-                setShowCurrencyPicker(false);
-              }}
-              className={`w-full flex items-center gap-3 p-3 rounded-lg border-2 transition-colors ${
-                currency === curr.code
-                  ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20'
-                  : 'border-gray-200 dark:border-gray-700 hover:border-primary-500'
-              }`}
-            >
-              <span className="text-2xl font-bold w-12">{curr.symbol}</span>
-              <div className="flex-1 text-left">
-                <div className="font-medium text-gray-900 dark:text-gray-100">{curr.name}</div>
-                <div className="text-sm text-gray-500 dark:text-gray-400">{curr.code}</div>
-              </div>
-            </button>
-          ))}
-        </div>
-      </Modal>
-
       {/* Modal selettore data */}
       <Modal isOpen={showDateSelector} onClose={() => { setShowDateSelector(false); setShowDatePicker(false); }} title="Seleziona Data">
         <div className="space-y-2">
-          <button
-            type="button"
-            onClick={() => handleDateQuickSelect('today')}
-            className="w-full flex items-center gap-3 p-4 rounded-lg border-2 border-gray-200 dark:border-gray-700 hover:border-primary-500 transition-colors"
-          >
+          <button type="button" onClick={() => handleDateQuickSelect('today')} className="w-full flex items-center gap-3 p-4 rounded-lg border-2 border-gray-200 dark:border-gray-700 hover:border-primary-500 transition-colors">
             <span className="text-2xl">📅</span>
             <div className="flex-1 text-left">
               <div className="font-medium text-gray-900 dark:text-gray-100">Oggi</div>
-              <div className="text-sm text-gray-500 dark:text-gray-400">
-                {new Date().toLocaleDateString('it-IT', { day: 'numeric', month: 'short', year: 'numeric' })}
-              </div>
+              <div className="text-sm text-gray-500 dark:text-gray-400">{new Date().toLocaleDateString('it-IT', { day: 'numeric', month: 'short', year: 'numeric' })}</div>
             </div>
           </button>
-
-          <button
-            type="button"
-            onClick={() => handleDateQuickSelect('yesterday')}
-            className="w-full flex items-center gap-3 p-4 rounded-lg border-2 border-gray-200 dark:border-gray-700 hover:border-primary-500 transition-colors"
-          >
+          <button type="button" onClick={() => handleDateQuickSelect('yesterday')} className="w-full flex items-center gap-3 p-4 rounded-lg border-2 border-gray-200 dark:border-gray-700 hover:border-primary-500 transition-colors">
             <span className="text-2xl">⏮️</span>
             <div className="flex-1 text-left">
               <div className="font-medium text-gray-900 dark:text-gray-100">Ieri</div>
-              <div className="text-sm text-gray-500 dark:text-gray-400">
-                {(() => {
-                  const yesterday = new Date();
-                  yesterday.setDate(yesterday.getDate() - 1);
-                  return yesterday.toLocaleDateString('it-IT', { day: 'numeric', month: 'short', year: 'numeric' });
-                })()}
-              </div>
+              <div className="text-sm text-gray-500 dark:text-gray-400">{(() => { const y = new Date(); y.setDate(y.getDate() - 1); return y.toLocaleDateString('it-IT', { day: 'numeric', month: 'short', year: 'numeric' }); })()}</div>
             </div>
           </button>
-
-          <button
-            type="button"
-            onClick={() => setShowDatePicker(true)}
-            className="w-full flex items-center gap-3 p-4 rounded-lg border-2 border-gray-200 dark:border-gray-700 hover:border-primary-500 transition-colors"
-          >
+          <button type="button" onClick={() => setShowDatePicker(true)} className="w-full flex items-center gap-3 p-4 rounded-lg border-2 border-gray-200 dark:border-gray-700 hover:border-primary-500 transition-colors">
             <span className="text-2xl">🗓️</span>
             <div className="flex-1 text-left">
               <div className="font-medium text-gray-900 dark:text-gray-100">Seleziona giorno</div>
               <div className="text-sm text-gray-500 dark:text-gray-400">Scegli una data specifica</div>
             </div>
           </button>
-
           {showDatePicker && (
             <div className="pt-3 border-t border-gray-200 dark:border-gray-700">
               <input
                 type="date"
                 value={date}
-                onChange={(e) => {
-                  setDate(e.target.value);
-                  setShowDatePicker(false);
-                  setShowDateSelector(false);
-                }}
+                onChange={(e) => { setDate(e.target.value); setShowDatePicker(false); setShowDateSelector(false); }}
                 className="w-full px-4 py-3 rounded-lg border-2 border-primary-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 text-lg"
                 autoFocus
               />
             </div>
           )}
-
-          {/* Selettore ricorrenza — solo per nuove transazioni */}
           {!isEditMode && (
             <div className="pt-3 border-t border-gray-200 dark:border-gray-700">
               <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">🔄 Ripeti</div>
@@ -575,16 +353,8 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
                   const labels = { null: 'Mai', weekly: 'Sett.', monthly: 'Mens.', yearly: 'Ann.' };
                   const key = freq ?? 'null';
                   return (
-                    <button
-                      key={key}
-                      type="button"
-                      onClick={() => setRecurrence(freq)}
-                      className={`py-2 rounded-lg text-sm font-medium transition-colors ${
-                        recurrence === freq
-                          ? 'bg-primary-500 text-white'
-                          : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
-                      }`}
-                    >
+                    <button key={key} type="button" onClick={() => setRecurrence(freq)}
+                      className={`py-2 rounded-lg text-sm font-medium transition-colors ${recurrence === freq ? 'bg-primary-500 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'}`}>
                       {labels[key as keyof typeof labels]}
                     </button>
                   );
@@ -595,7 +365,7 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
         </div>
       </Modal>
 
-      {/* Confirm Dialog (transazioni normali) */}
+      {/* Confirm Dialog */}
       <ConfirmDialog
         isOpen={isDeleteDialogOpen}
         onClose={() => setIsDeleteDialogOpen(false)}
@@ -607,34 +377,20 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
         isDestructive={true}
       />
 
-      {/* Modal eliminazione transazione ricorrente */}
+      {/* Modal eliminazione ricorrente */}
       <Modal isOpen={showRecurringDeleteModal} onClose={() => setShowRecurringDeleteModal(false)} title="Elimina Transazione Ricorrente">
         <div className="space-y-3">
           <p className="text-sm text-gray-600 dark:text-gray-400">Cosa vuoi eliminare?</p>
-          <button
-            type="button"
-            onClick={async () => {
-              setShowRecurringDeleteModal(false);
-              await handleDeleteConfirm();
-            }}
-            className="w-full flex items-center gap-3 p-4 rounded-lg border-2 border-red-200 dark:border-red-800 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors text-left"
-            disabled={isLoading}
-          >
+          <button type="button" onClick={async () => { setShowRecurringDeleteModal(false); await handleDeleteConfirm(); }}
+            className="w-full flex items-center gap-3 p-4 rounded-lg border-2 border-red-200 dark:border-red-800 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors text-left" disabled={isLoading}>
             <span className="text-2xl">🗑️</span>
             <div>
               <div className="font-medium text-gray-900 dark:text-gray-100">Solo questa</div>
               <div className="text-sm text-gray-500 dark:text-gray-400">Elimina solo questa transazione</div>
             </div>
           </button>
-          <button
-            type="button"
-            onClick={async () => {
-              setShowRecurringDeleteModal(false);
-              await handleDeleteRuleConfirm();
-            }}
-            className="w-full flex items-center gap-3 p-4 rounded-lg border-2 border-orange-200 dark:border-orange-800 hover:bg-orange-50 dark:hover:bg-orange-900/20 transition-colors text-left"
-            disabled={isLoading}
-          >
+          <button type="button" onClick={async () => { setShowRecurringDeleteModal(false); await handleDeleteRuleConfirm(); }}
+            className="w-full flex items-center gap-3 p-4 rounded-lg border-2 border-orange-200 dark:border-orange-800 hover:bg-orange-50 dark:hover:bg-orange-900/20 transition-colors text-left" disabled={isLoading}>
             <span className="text-2xl">🔄</span>
             <div>
               <div className="font-medium text-gray-900 dark:text-gray-100">Elimina regola</div>
@@ -643,6 +399,313 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
           </button>
         </div>
       </Modal>
+    </>
+  );
+
+  // ── Form investimento (senza tastiera custom) ──────────────────────────────
+  if (currentType === 'investment') {
+    const qty = parseFloat(investQty) || 0;
+    const price = parseFloat(investPrice) || 0;
+    const commission = parseFloat(investCommission) || 0;
+    const total = qty * price + commission;
+
+    const inputClass = "w-full px-3 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-base";
+    const labelClass = "block text-xs text-gray-500 dark:text-gray-400 mb-1";
+
+    return (
+      <form onSubmit={handleSubmit} className="space-y-4">
+        {tabSelector}
+
+        {/* Categoria + Conto */}
+        <div className="flex gap-2">
+          <button type="button" onClick={() => setShowCategoryPicker(true)}
+            className="flex-1 flex items-center gap-2 p-3 rounded-lg border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 hover:border-primary-500 transition-colors">
+            <span className="text-2xl">{selectedCategory?.icon || '📈'}</span>
+            <div className="flex-1 text-left">
+              <div className="text-xs text-gray-500 dark:text-gray-400">Categoria</div>
+              <div className="font-medium text-gray-900 dark:text-gray-100">{selectedCategory?.name || '...'}</div>
+            </div>
+            <span className="text-gray-400">›</span>
+          </button>
+          <button type="button" onClick={() => setShowAccountPicker(true)}
+            className="flex-1 flex items-center gap-2 p-3 rounded-lg border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 hover:border-primary-500 transition-colors">
+            <span className="text-2xl">{selectedAccount?.icon || '💳'}</span>
+            <div className="flex-1 text-left">
+              <div className="text-xs text-gray-500 dark:text-gray-400">Conto</div>
+              <div className="font-medium text-gray-900 dark:text-gray-100">{selectedAccount?.name || 'Seleziona'}</div>
+            </div>
+            <span className="text-gray-400">›</span>
+          </button>
+        </div>
+
+        {/* Ticker + Quantità */}
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className={labelClass}>Ticker</label>
+            <input
+              type="text"
+              value={ticker}
+              onChange={(e) => setTicker(e.target.value.toUpperCase())}
+              placeholder="es. AAPL"
+              className={inputClass + " uppercase tracking-wider font-mono"}
+            />
+          </div>
+          <div>
+            <label className={labelClass}>Quantità</label>
+            <input
+              type="number"
+              inputMode="decimal"
+              min="0"
+              step="any"
+              value={investQty}
+              onChange={(e) => setInvestQty(e.target.value)}
+              placeholder="0"
+              className={inputClass}
+            />
+          </div>
+        </div>
+
+        {/* Prezzo + Commissioni */}
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className={labelClass}>Prezzo per unità (€)</label>
+            <input
+              type="number"
+              inputMode="decimal"
+              min="0"
+              step="any"
+              value={investPrice}
+              onChange={(e) => setInvestPrice(e.target.value)}
+              placeholder="0,00"
+              className={inputClass}
+            />
+          </div>
+          <div>
+            <label className={labelClass}>Commissioni (€)</label>
+            <input
+              type="number"
+              inputMode="decimal"
+              min="0"
+              step="any"
+              value={investCommission}
+              onChange={(e) => setInvestCommission(e.target.value)}
+              placeholder="0,00"
+              className={inputClass}
+            />
+          </div>
+        </div>
+
+        {/* Totale calcolato */}
+        <div className="text-center py-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl">
+          <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">Totale</div>
+          <div className={`text-4xl font-bold ${total > 0 ? 'text-blue-600 dark:text-blue-400' : 'text-gray-400 dark:text-gray-500'}`}>
+            {formatCurrency(total)}
+          </div>
+          {qty > 0 && price > 0 && commission > 0 && (
+            <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+              {qty} × {formatCurrency(price)} + {formatCurrency(commission)} commissioni
+            </div>
+          )}
+        </div>
+
+        {/* Data */}
+        <button type="button" onClick={() => setShowDateSelector(true)}
+          className="w-full flex items-center justify-between px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:border-primary-500 transition-colors">
+          <span className="flex items-center gap-2">
+            <span>📅</span>
+            <span className="text-sm">{formatDate(date)}</span>
+          </span>
+          <span className="text-gray-400">›</span>
+        </button>
+
+        {/* Descrizione */}
+        <input
+          type="text"
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          placeholder="Note (opzionale)"
+          className={inputClass}
+        />
+
+        {error && (
+          <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 px-4 py-3 rounded-lg text-sm">
+            {error}
+          </div>
+        )}
+
+        <button
+          type="submit"
+          disabled={isLoading || total <= 0 || !selectedAccount}
+          className="w-full py-4 rounded-xl bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-bold text-lg transition-colors"
+        >
+          {isLoading ? 'Salvataggio...' : isEditMode ? 'Salva modifiche' : 'Aggiungi investimento'}
+        </button>
+
+        {isEditMode && onDelete && (
+          <button
+            type="button"
+            onClick={() => isRecurring ? setShowRecurringDeleteModal(true) : setIsDeleteDialogOpen(true)}
+            className="w-full px-4 py-3 rounded-lg bg-red-500 text-white hover:bg-red-600 transition-colors font-medium"
+            disabled={isLoading}
+          >
+            🗑️ Elimina
+          </button>
+        )}
+
+        {sharedModals}
+      </form>
+    );
+  }
+
+  // ── Griglia selezione categoria (expense / income / transfer) ──────────────
+  if (!selectedCategory) {
+    return (
+      <div onTouchStart={handleCategorySwipeStart} onTouchEnd={handleCategorySwipeEnd} className="space-y-4">
+        {tabSelector}
+        <div>
+          <div className="text-sm text-gray-600 dark:text-gray-400 mb-3">Seleziona categoria</div>
+          <div className="grid grid-cols-3 gap-3 max-h-[60vh] overflow-y-auto">
+            {categories.map((category) => (
+              <button
+                key={category.id}
+                type="button"
+                onClick={() => setSelectedCategory(category)}
+                className="flex flex-col items-center justify-center p-4 rounded-xl border-2 border-gray-200 dark:border-gray-700 hover:border-primary-500 dark:hover:border-primary-500 hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-colors bg-white dark:bg-gray-800"
+              >
+                <span className="text-4xl mb-2">{category.icon}</span>
+                <span className="text-xs font-medium text-gray-700 dark:text-gray-300 text-center">{category.name}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Form con tastierino numerico (expense / income / transfer) ─────────────
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      {/* Categoria e Conto */}
+      <div className="flex gap-2">
+        <button type="button" onClick={() => setShowCategoryPicker(true)}
+          className="flex-1 flex items-center gap-2 p-3 rounded-lg border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 hover:border-primary-500 transition-colors">
+          <span className="text-2xl">{selectedCategory.icon}</span>
+          <div className="flex-1 text-left">
+            <div className="text-xs text-gray-500 dark:text-gray-400">Categoria</div>
+            <div className="font-medium text-gray-900 dark:text-gray-100">{selectedCategory.name}</div>
+          </div>
+          <span className="text-gray-400">›</span>
+        </button>
+        <button type="button" onClick={() => setShowAccountPicker(true)}
+          className="flex-1 flex items-center gap-2 p-3 rounded-lg border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 hover:border-primary-500 transition-colors">
+          <span className="text-2xl">{selectedAccount?.icon || '💳'}</span>
+          <div className="flex-1 text-left">
+            <div className="text-xs text-gray-500 dark:text-gray-400">Conto</div>
+            <div className="font-medium text-gray-900 dark:text-gray-100">{selectedAccount?.name || 'Seleziona'}</div>
+          </div>
+          <span className="text-gray-400">›</span>
+        </button>
+      </div>
+
+      {/* Sottocategorie */}
+      {selectedCategory.subcategories && selectedCategory.subcategories.length > 0 && (
+        <div className="flex gap-2 flex-wrap">
+          {selectedCategory.subcategories.map((sub) => (
+            <button key={sub.id} type="button"
+              onClick={() => setSelectedSubcategory(selectedSubcategory?.id === sub.id ? null : sub)}
+              className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${selectedSubcategory?.id === sub.id ? 'bg-primary-500 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'}`}>
+              {sub.name}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Display importo */}
+      <div className="text-center py-4">
+        <div className="text-5xl font-bold text-gray-900 dark:text-gray-100">
+          {getCurrencySymbol(currency)} {formatAmountDisplay(amount || '0')}
+        </div>
+      </div>
+
+      {/* Tastierino */}
+      <div className="flex gap-2">
+        <div className="flex-1 grid grid-cols-3 gap-2">
+          {['1','2','3','4','5','6','7','8','9'].map(n => (
+            <button key={n} type="button" onClick={() => handleNumberClick(n)}
+              className="h-14 text-2xl font-semibold rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-900 dark:text-gray-100 transition-colors">{n}</button>
+          ))}
+          <button type="button" onClick={() => setShowCurrencyPicker(true)}
+            className="h-14 text-lg font-semibold rounded-lg bg-primary-100 dark:bg-primary-900/30 hover:bg-primary-200 dark:hover:bg-primary-900/50 text-primary-600 dark:text-primary-400 transition-colors">{getCurrencySymbol(currency)}</button>
+          <button type="button" onClick={() => handleNumberClick('0')}
+            className="h-14 text-2xl font-semibold rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-900 dark:text-gray-100 transition-colors">0</button>
+          <button type="button" onClick={() => handleNumberClick('.')}
+            className="h-14 text-2xl font-semibold rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-900 dark:text-gray-100 transition-colors">,</button>
+        </div>
+        <div className="flex flex-col gap-2">
+          <button type="button" onClick={handleBackspace}
+            className="h-14 w-14 text-2xl rounded-lg bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-900 dark:text-gray-100 transition-colors">←</button>
+          <button type="submit" disabled={isLoading || !selectedCategory || !selectedAccount || parseFloat(amount) <= 0}
+            className="flex-1 w-14 rounded-lg bg-green-500 hover:bg-green-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-bold text-3xl transition-colors flex items-center justify-center">
+            {isLoading ? '...' : '✓'}
+          </button>
+          <button type="button" onClick={() => setShowDateSelector(true)}
+            className="h-14 w-14 text-2xl rounded-lg bg-primary-100 dark:bg-primary-900/30 hover:bg-primary-200 dark:hover:bg-primary-900/50 text-primary-600 dark:text-primary-400 transition-colors">📅</button>
+        </div>
+      </div>
+
+      {/* Data */}
+      <div className="text-center text-sm text-gray-600 dark:text-gray-400">
+        {formatDate(date)}
+        {!isEditMode && recurrence && (
+          <span className="ml-2 inline-flex items-center gap-1 text-primary-600 dark:text-primary-400">
+            🔄 {{ weekly: 'Settimanale', monthly: 'Mensile', yearly: 'Annuale' }[recurrence]}
+          </span>
+        )}
+        {isEditMode && isRecurring && <span className="ml-2 text-primary-600 dark:text-primary-400">🔄</span>}
+      </div>
+
+      {/* Descrizione */}
+      <input type="text" value={description} onChange={(e) => setDescription(e.target.value)}
+        placeholder="Descrizione (opzionale)"
+        className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-sm" />
+
+      {error && (
+        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 px-4 py-3 rounded-lg text-sm">{error}</div>
+      )}
+
+      {isEditMode && onDelete && (
+        <button type="button"
+          onClick={() => isRecurring ? setShowRecurringDeleteModal(true) : setIsDeleteDialogOpen(true)}
+          className="w-full px-4 py-3 rounded-lg bg-red-500 text-white hover:bg-red-600 transition-colors font-medium"
+          disabled={isLoading}>
+          🗑️ Elimina
+        </button>
+      )}
+
+      {/* Modal valuta */}
+      <Modal isOpen={showCurrencyPicker} onClose={() => setShowCurrencyPicker(false)} title="Seleziona Valuta">
+        <div className="space-y-2">
+          {[
+            { code: 'EUR', name: 'Euro', symbol: '€' },
+            { code: 'USD', name: 'Dollaro USA', symbol: '$' },
+            { code: 'GBP', name: 'Sterlina Britannica', symbol: '£' },
+            { code: 'JPY', name: 'Yen Giapponese', symbol: '¥' },
+            { code: 'CHF', name: 'Franco Svizzero', symbol: 'Fr' },
+          ].map((curr) => (
+            <button key={curr.code} type="button"
+              onClick={() => { setCurrency(curr.code); setShowCurrencyPicker(false); }}
+              className={`w-full flex items-center gap-3 p-3 rounded-lg border-2 transition-colors ${currency === curr.code ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20' : 'border-gray-200 dark:border-gray-700 hover:border-primary-500'}`}>
+              <span className="text-2xl font-bold w-12">{curr.symbol}</span>
+              <div className="flex-1 text-left">
+                <div className="font-medium text-gray-900 dark:text-gray-100">{curr.name}</div>
+                <div className="text-sm text-gray-500 dark:text-gray-400">{curr.code}</div>
+              </div>
+            </button>
+          ))}
+        </div>
+      </Modal>
+
+      {sharedModals}
     </form>
   );
 }
