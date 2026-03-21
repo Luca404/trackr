@@ -26,6 +26,8 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
   const [selectedSubcategory, setSelectedSubcategory] = useState<Subcategory | null>(null);
   const [selectedAccount, setSelectedAccount] = useState<Account | null>(null);
+  const [selectedToAccount, setSelectedToAccount] = useState<Account | null>(null);
+  const [showToAccountPicker, setShowToAccountPicker] = useState(false);
   const [amount, setAmount] = useState<string>(initialData?.amount.toString() || '');
   const [date, setDate] = useState<string>(initialData?.date || new Date().toISOString().split('T')[0]);
   const [description, setDescription] = useState<string>(initialData?.description || '');
@@ -72,6 +74,11 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
   useEffect(() => {
     setSelectedCategory(null);
     setSelectedSubcategory(null);
+    // Per il trasferimento: auto-seleziona il primo conto diverso da quello di origine
+    if (currentType === 'transfer' && !selectedToAccount && allAccounts.length >= 2) {
+      const other = allAccounts.find(a => a.id !== selectedAccount?.id);
+      if (other) setSelectedToAccount(other);
+    }
   }, [currentType]);
 
   // Pre-fill categoria in edit mode
@@ -155,6 +162,33 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
     if (!selectedAccount) { setError('Seleziona un conto'); return; }
 
     let submitData: TransactionFormData;
+
+    if (currentType === 'transfer') {
+      if (!selectedToAccount) { setError('Seleziona il conto di destinazione'); return; }
+      if (selectedToAccount.id === selectedAccount.id) { setError('I conti devono essere diversi'); return; }
+      const amountNum = parseFloat(amount) || 0;
+      if (amountNum <= 0) { setError('Inserisci un importo valido'); return; }
+      submitData = {
+        type: 'transfer',
+        category: 'Trasferimento',
+        amount: amountNum,
+        description,
+        date,
+        account_id: selectedAccount.id,
+        to_account_id: selectedToAccount.id,
+      };
+      setError('');
+      setIsLoading(true);
+      try {
+        await onSubmit(submitData);
+        onCancel();
+      } catch (err: any) {
+        setError(err.response?.data?.message || 'Errore durante il salvataggio');
+      } finally {
+        setIsLoading(false);
+      }
+      return;
+    }
 
     if (currentType === 'investment') {
       const qty = parseFloat(investQty) || 0;
@@ -294,6 +328,27 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
                 selectedAccount?.id === account.id
                   ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20'
                   : 'border-gray-200 dark:border-gray-700 hover:border-primary-500'
+              }`}
+            >
+              <span className="text-2xl">{account.icon}</span>
+              <span className="font-medium">{account.name}</span>
+            </button>
+          ))}
+        </div>
+      </Modal>
+
+      {/* Modal conto destinazione (trasferimento) */}
+      <Modal isOpen={showToAccountPicker} onClose={() => setShowToAccountPicker(false)} title="Conto di destinazione">
+        <div className="space-y-2">
+          {allAccounts.filter(a => a.id !== selectedAccount?.id).map((account) => (
+            <button
+              key={account.id}
+              type="button"
+              onClick={() => { setSelectedToAccount(account); setShowToAccountPicker(false); }}
+              className={`w-full flex items-center gap-3 p-3 rounded-lg border-2 transition-colors ${
+                selectedToAccount?.id === account.id
+                  ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20'
+                  : 'border-gray-200 dark:border-gray-700 hover:border-purple-500'
               }`}
             >
               <span className="text-2xl">{account.icon}</span>
@@ -548,6 +603,108 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
           >
             🗑️ Elimina
           </button>
+        )}
+
+        {sharedModals}
+      </form>
+    );
+  }
+
+  // ── Form trasferimento ────────────────────────────────────────────────────
+  if (currentType === 'transfer') {
+    return (
+      <form onSubmit={handleSubmit} autoComplete="off" className="space-y-4">
+        {tabSelector}
+
+        {/* Da → A */}
+        <div className="flex items-stretch gap-2">
+          <button
+            type="button"
+            onClick={() => setShowAccountPicker(true)}
+            className="flex-1 flex items-center gap-2 p-3 rounded-lg border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 hover:border-purple-500 transition-colors"
+          >
+            <span className="text-2xl">{selectedAccount?.icon || '💳'}</span>
+            <div className="flex-1 text-left">
+              <div className="text-xs text-gray-500 dark:text-gray-400">Da</div>
+              <div className="font-medium text-gray-900 dark:text-gray-100">{selectedAccount?.name || 'Seleziona'}</div>
+              {selectedAccount?.current_balance !== undefined && (
+                <div className="text-xs text-gray-400 dark:text-gray-500">{formatCurrency(selectedAccount.current_balance)}</div>
+              )}
+            </div>
+            <span className="text-gray-400">›</span>
+          </button>
+
+          <div className="flex items-center px-1 text-2xl text-purple-400 select-none">→</div>
+
+          <button
+            type="button"
+            onClick={() => setShowToAccountPicker(true)}
+            className={`flex-1 flex items-center gap-2 p-3 rounded-lg border-2 transition-colors ${
+              selectedToAccount
+                ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20 hover:border-purple-600'
+                : 'border-dashed border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 hover:border-purple-500'
+            }`}
+          >
+            <span className="text-2xl">{selectedToAccount?.icon || '💳'}</span>
+            <div className="flex-1 text-left">
+              <div className="text-xs text-gray-500 dark:text-gray-400">A</div>
+              <div className={`font-medium ${selectedToAccount ? 'text-gray-900 dark:text-gray-100' : 'text-gray-400 dark:text-gray-500'}`}>
+                {selectedToAccount?.name || 'Seleziona'}
+              </div>
+              {selectedToAccount?.current_balance !== undefined && (
+                <div className="text-xs text-gray-400 dark:text-gray-500">{formatCurrency(selectedToAccount.current_balance)}</div>
+              )}
+            </div>
+            <span className="text-gray-400">›</span>
+          </button>
+        </div>
+
+        {/* Display importo */}
+        <div className="text-center py-4">
+          <div className="text-5xl font-bold text-purple-600 dark:text-purple-400">
+            € {formatAmountDisplay(amount || '0')}
+          </div>
+        </div>
+
+        {/* Tastierino */}
+        <div className="flex gap-2">
+          <div className="flex-1 grid grid-cols-3 gap-2">
+            {['1','2','3','4','5','6','7','8','9'].map(n => (
+              <button key={n} type="button" onClick={() => handleNumberClick(n)}
+                className="h-14 text-2xl font-semibold rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-900 dark:text-gray-100 transition-colors">{n}</button>
+            ))}
+            <button type="button" onClick={() => handleNumberClick('00')}
+              className="h-14 text-xl font-semibold rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-900 dark:text-gray-100 transition-colors">00</button>
+            <button type="button" onClick={() => handleNumberClick('0')}
+              className="h-14 text-2xl font-semibold rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-900 dark:text-gray-100 transition-colors">0</button>
+            <button type="button" onClick={() => handleNumberClick('.')}
+              className="h-14 text-2xl font-semibold rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-900 dark:text-gray-100 transition-colors">,</button>
+          </div>
+          <div className="flex flex-col gap-2">
+            <button type="button" onClick={handleBackspace}
+              className="h-14 w-14 text-2xl rounded-lg bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-900 dark:text-gray-100 transition-colors">←</button>
+            <button type="submit" disabled={isLoading || !selectedAccount || !selectedToAccount || parseFloat(amount) <= 0}
+              className="flex-1 w-14 rounded-lg bg-purple-500 hover:bg-purple-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-bold text-3xl transition-colors flex items-center justify-center">
+              {isLoading ? '...' : '✓'}
+            </button>
+            <button type="button" onClick={() => setShowDateSelector(true)}
+              className="h-14 w-14 text-2xl rounded-lg bg-purple-100 dark:bg-purple-900/30 hover:bg-purple-200 dark:hover:bg-purple-900/50 text-purple-600 dark:text-purple-400 transition-colors">📅</button>
+          </div>
+        </div>
+
+        {/* Data */}
+        <div className="text-center text-sm text-gray-600 dark:text-gray-400">
+          {formatDate(date)}
+        </div>
+
+        {/* Descrizione */}
+        <input type="text" value={description} onChange={(e) => setDescription(e.target.value)}
+          placeholder="Note (opzionale)"
+          autoComplete="off" autoCorrect="off" spellCheck={false}
+          className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-sm" />
+
+        {error && (
+          <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 px-4 py-3 rounded-lg text-sm">{error}</div>
         )}
 
         {sharedModals}

@@ -88,6 +88,9 @@ export function DataProvider({ children }: DataProviderProps) {
             currentBalance += transaction.amount;
           } else if (transaction.type === 'expense' || transaction.type === 'investment') {
             currentBalance -= transaction.amount;
+          } else if (transaction.type === 'transfer') {
+            if (transaction.ticker === 'out') currentBalance -= transaction.amount;
+            else if (transaction.ticker === 'in') currentBalance += transaction.amount;
           }
         });
 

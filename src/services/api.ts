@@ -321,6 +321,23 @@ class ApiService {
     return mapTransaction(data);
   }
 
+  async createTransfer(formData: TransactionFormData): Promise<Transaction[]> {
+    const userId = await getCurrentUserId();
+    const { recurrence: _, to_account_id, ...rest } = formData;
+    if (!to_account_id) throw new Error('Conto di destinazione mancante');
+
+    const base = { ...rest, type: 'transfer', category: 'Trasferimento', user_id: userId };
+    const { data, error } = await supabase
+      .from('transactions')
+      .insert([
+        { ...base, ticker: 'out' },
+        { ...base, account_id: to_account_id, ticker: 'in' },
+      ])
+      .select();
+    if (error) throw error;
+    return (data || []).map(mapTransaction);
+  }
+
   async updateTransaction(id: number, formData: Partial<TransactionFormData>): Promise<Transaction> {
     const { data, error } = await supabase
       .from('transactions')

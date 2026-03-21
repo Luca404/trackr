@@ -64,6 +64,7 @@ export interface TransactionFormData {
   description: string;
   date: string;
   account_id?: number;
+  to_account_id?: number; // solo per trasferimenti
 
   // Campi opzionali per investimenti
   ticker?: string;

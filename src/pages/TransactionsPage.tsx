@@ -52,6 +52,11 @@ export default function TransactionsPage() {
   };
 
   const handleCreateTransaction = async (data: TransactionFormData) => {
+    if (data.type === 'transfer') {
+      const txs = await apiService.createTransfer(data);
+      txs.forEach(addTransaction);
+      return;
+    }
     if (data.recurrence) {
       const rule = await apiService.createRecurringTransaction({
         account_id: data.account_id!,
@@ -165,7 +170,7 @@ export default function TransactionsPage() {
                           {transaction.description}
                         </div>
                       )}
-                      {transaction.ticker && (
+                      {transaction.ticker && transaction.type !== 'transfer' && (
                         <div className="text-xs text-blue-600 dark:text-blue-400 mt-1">
                           {transaction.ticker} • {transaction.quantity} x {formatCurrency(transaction.price || 0)}
                         </div>
