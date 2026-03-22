@@ -229,6 +229,15 @@ export default function TransactionsPage() {
           onCustomClick={() => setIsDatePickerOpen(true)}
         />
 
+        {/* Aggiungi nuova transazione */}
+        <div
+          className="bg-white dark:bg-gray-800 rounded-xl shadow-md px-4 py-6 flex items-center justify-center border-2 border-dashed border-gray-200 dark:border-gray-700 cursor-pointer outline-none select-none"
+          style={{ WebkitTapHighlightColor: 'transparent' }}
+          onClick={handleNewTransaction}
+        >
+          <div className="w-10 h-10 rounded-full border-2 border-gray-300 dark:border-gray-600 flex items-center justify-center text-gray-400 dark:text-gray-500 font-bold text-2xl">+</div>
+        </div>
+
         {/* Lista unificata transazioni + trasferimenti */}
         <div className="space-y-2">
           {dataLoading
@@ -318,14 +327,6 @@ export default function TransactionsPage() {
                 );
               })}
 
-          {/* Aggiungi nuova transazione */}
-          <div
-            className="bg-white dark:bg-gray-800 rounded-xl shadow-md px-4 py-6 flex items-center justify-center border-2 border-dashed border-gray-200 dark:border-gray-700 cursor-pointer outline-none select-none"
-            style={{ WebkitTapHighlightColor: 'transparent' }}
-            onClick={handleNewTransaction}
-          >
-            <div className="w-10 h-10 rounded-full border-2 border-gray-300 dark:border-gray-600 flex items-center justify-center text-gray-400 dark:text-gray-500 font-bold text-2xl">+</div>
-          </div>
         </div>
 
         {/* Modal transazione */}
