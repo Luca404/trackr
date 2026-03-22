@@ -116,6 +116,23 @@ export default function TransactionsPage() {
     } else {
       const newTransaction = await apiService.createTransaction(data);
       addTransaction(newTransaction);
+      // Se investimento con portafoglio e ticker, crea anche l'ordine
+      if (data.type === 'investment' && data.portfolio_id && data.ticker) {
+        const qty = data.quantity ?? 0;
+        const price = data.price ?? 0;
+        const commission = data.amount - qty * price;
+        apiService.createOrder({
+          portfolio_id: data.portfolio_id,
+          symbol: data.ticker,
+          currency: 'EUR',
+          quantity: qty,
+          price: price,
+          commission: commission > 0 ? commission : 0,
+          order_type: 'buy',
+          date: data.date,
+          transaction_id: newTransaction.id,
+        }).catch(console.error);
+      }
     }
   };
 

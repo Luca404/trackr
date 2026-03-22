@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useEffect, useRef, type ReactNode } from 'react';
 import { apiService } from '../services/api';
 import { supabase } from '../services/supabase';
-import type { Account, Category, Transaction, Transfer } from '../types';
+import type { Account, Category, Transaction, Transfer, Portfolio } from '../types';
 
 interface DataContextType {
   // Data
@@ -9,6 +9,7 @@ interface DataContextType {
   categories: Category[];
   transactions: Transaction[];
   transfers: Transfer[];
+  portfolios: Portfolio[];
 
   // Loading states
   isLoading: boolean;
@@ -31,11 +32,16 @@ interface DataContextType {
   updateTransfer: (transfer: Transfer) => void;
   deleteTransfer: (id: number) => void;
 
+  addPortfolio: (portfolio: Portfolio) => void;
+  updatePortfolio: (portfolio: Portfolio) => void;
+  deletePortfolio: (id: number) => void;
+
   // Refresh functions
   refreshAccounts: () => Promise<void>;
   refreshCategories: () => Promise<void>;
   refreshTransactions: (startDate?: string, endDate?: string) => Promise<void>;
   refreshTransfers: () => Promise<void>;
+  refreshPortfolios: () => Promise<void>;
   refreshAll: () => Promise<void>;
 
   // Clear cache
@@ -53,6 +59,7 @@ export function DataProvider({ children }: DataProviderProps) {
   const [categories, setCategories] = useState<Category[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [transfers, setTransfers] = useState<Transfer[]>([]);
+  const [portfolios, setPortfolios] = useState<Portfolio[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isInitialized, setIsInitialized] = useState(false);
   const isFetchingRef = useRef(false);
@@ -147,7 +154,7 @@ export function DataProvider({ children }: DataProviderProps) {
       setCategories(finalCategories);
       // Crea transazioni ricorrenti scadute, poi carica tutto fresco
       await apiService.processRecurringTransactions().catch(console.error);
-      await Promise.all([refreshTransactions(), refreshTransfers()]);
+      await Promise.all([refreshTransactions(), refreshTransfers(), refreshPortfolios()]);
     } catch (error) {
       console.error('Error fetching all data:', error);
     } finally {
@@ -199,6 +206,16 @@ export function DataProvider({ children }: DataProviderProps) {
     }
   };
 
+  const refreshPortfolios = async () => {
+    try {
+      const data = await apiService.getPortfolios();
+      setPortfolios(data);
+    } catch (error) {
+      console.error('Error refreshing portfolios:', error);
+      throw error;
+    }
+  };
+
   const refreshAll = async () => {
     await fetchAllData();
   };
@@ -208,6 +225,7 @@ export function DataProvider({ children }: DataProviderProps) {
     setCategories([]);
     setTransactions([]);
     setTransfers([]);
+    setPortfolios([]);
     setIsInitialized(false);
   };
 
@@ -280,11 +298,25 @@ export function DataProvider({ children }: DataProviderProps) {
     setTransfers(prev => prev.filter(t => t.id !== id));
   };
 
+  // Portfolio operations
+  const addPortfolio = (portfolio: Portfolio) => {
+    setPortfolios(prev => [...prev, portfolio]);
+  };
+
+  const updatePortfolio = (portfolio: Portfolio) => {
+    setPortfolios(prev => prev.map(p => p.id === portfolio.id ? portfolio : p));
+  };
+
+  const deletePortfolio = (id: number) => {
+    setPortfolios(prev => prev.filter(p => p.id !== id));
+  };
+
   const value: DataContextType = {
     accounts,
     categories,
     transactions,
     transfers,
+    portfolios,
     isLoading,
     isInitialized,
     addAccount,
@@ -299,10 +331,14 @@ export function DataProvider({ children }: DataProviderProps) {
     addTransfer,
     updateTransfer,
     deleteTransfer,
+    addPortfolio,
+    updatePortfolio,
+    deletePortfolio,
     refreshAccounts,
     refreshCategories,
     refreshTransactions,
     refreshTransfers,
+    refreshPortfolios,
     refreshAll,
     clearCache,
   };

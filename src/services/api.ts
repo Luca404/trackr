@@ -13,6 +13,8 @@ import type {
   SubcategoryFormData,
   Portfolio,
   PortfolioFormData,
+  Order,
+  OrderFormData,
   User,
   RecurringTransaction,
   RecurringFrequency,
@@ -139,6 +141,7 @@ function mapPortfolio(row: any): Portfolio {
     risk_free_source: row.risk_free_source ?? '',
     market_benchmark: row.market_benchmark ?? '',
     created_at: row.created_at,
+    category_id: row.category_id ?? undefined,
     total_value: row.total_value,
     total_cost: row.total_cost,
     total_gain_loss: row.total_gain_loss,
@@ -525,6 +528,70 @@ class ApiService {
     }
 
     return created;
+  }
+
+  // ==================== ORDERS ====================
+
+  async getOrders(portfolioId: number): Promise<Order[]> {
+    const { data, error } = await supabase
+      .from('orders')
+      .select('*')
+      .eq('portfolio_id', portfolioId)
+      .order('date', { ascending: false });
+    if (error) throw error;
+    return (data || []).map((row: any): Order => ({
+      id: row.id,
+      user_id: row.user_id,
+      portfolio_id: row.portfolio_id,
+      symbol: row.symbol,
+      isin: row.isin,
+      name: row.name,
+      exchange: row.exchange,
+      currency: row.currency ?? 'EUR',
+      quantity: row.quantity,
+      price: row.price,
+      commission: row.commission ?? 0,
+      instrument_type: row.instrument_type,
+      order_type: row.order_type,
+      date: row.date,
+      ter: row.ter,
+      transaction_id: row.transaction_id,
+      created_at: row.created_at,
+    }));
+  }
+
+  async createOrder(formData: OrderFormData): Promise<Order> {
+    const userId = await getCurrentUserId();
+    const { data, error } = await supabase
+      .from('orders')
+      .insert({ ...formData, user_id: userId })
+      .select()
+      .single();
+    if (error) throw error;
+    return {
+      id: data.id,
+      user_id: data.user_id,
+      portfolio_id: data.portfolio_id,
+      symbol: data.symbol,
+      isin: data.isin,
+      name: data.name,
+      exchange: data.exchange,
+      currency: data.currency ?? 'EUR',
+      quantity: data.quantity,
+      price: data.price,
+      commission: data.commission ?? 0,
+      instrument_type: data.instrument_type,
+      order_type: data.order_type,
+      date: data.date,
+      ter: data.ter,
+      transaction_id: data.transaction_id,
+      created_at: data.created_at,
+    };
+  }
+
+  async deleteOrder(id: number): Promise<void> {
+    const { error } = await supabase.from('orders').delete().eq('id', id);
+    if (error) throw error;
   }
 
   // ==================== PORTFOLIOS ====================

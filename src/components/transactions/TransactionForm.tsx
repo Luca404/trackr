@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef, type FormEvent } from 'react';
-import type { TransactionFormData, TransactionType, Category, Subcategory, Account, RecurringFrequency } from '../../types';
+import type { TransactionFormData, TransactionType, Category, Subcategory, Account, Portfolio, RecurringFrequency } from '../../types';
 import { useData } from '../../contexts/DataContext';
 import ConfirmDialog from '../common/ConfirmDialog';
 import Modal, { registerBackHandler } from '../common/Modal';
@@ -15,7 +15,7 @@ interface TransactionFormProps {
 }
 
 export default function TransactionForm({ onSubmit, onCancel, initialData, isEditMode, onDelete, isRecurring, onDeleteRecurringRule }: TransactionFormProps) {
-  const { categories: allCategories, accounts: allAccounts } = useData();
+  const { categories: allCategories, accounts: allAccounts, portfolios: allPortfolios } = useData();
   const [currentType, setCurrentType] = useState<TransactionType>(initialData?.type || 'expense');
 
   const categories = useMemo(() => {
@@ -48,6 +48,8 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
     }
     return '';
   });
+
+  const [selectedPortfolio, setSelectedPortfolio] = useState<Portfolio | null>(null);
 
   const [recurrence, setRecurrence] = useState<RecurringFrequency | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -109,6 +111,19 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
       if (account) setSelectedToAccount(account);
     }
   }, [isEditMode, initialData, allAccounts]);
+
+  // Auto-seleziona portafoglio quando cambia categoria investimento
+  useEffect(() => {
+    if (currentType !== 'investment' || allPortfolios.length === 0) return;
+    if (isEditMode && initialData?.portfolio_id) {
+      const p = allPortfolios.find(p => p.id === initialData.portfolio_id);
+      if (p) { setSelectedPortfolio(p); return; }
+    }
+    if (selectedCategory) {
+      const linked = allPortfolios.find(p => p.category_id === selectedCategory.id);
+      setSelectedPortfolio(linked ?? allPortfolios[0] ?? null);
+    }
+  }, [selectedCategory, currentType, allPortfolios]);
 
   const handleNumberClick = (num: string) => {
     if (num === '.' && amount.includes('.')) return;
@@ -214,6 +229,7 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
         ticker: ticker.trim().toUpperCase() || undefined,
         quantity: qty || undefined,
         price: price || undefined,
+        portfolio_id: selectedPortfolio?.id,
       };
     } else {
       if (!selectedCategory) { setError('Seleziona una categoria'); return; }
@@ -490,6 +506,26 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
           </button>
         </div>
 
+        {/* Portafoglio */}
+        {allPortfolios.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {allPortfolios.map(p => (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => setSelectedPortfolio(p)}
+                className={`px-3 py-1.5 rounded-lg text-sm border-2 transition-colors ${
+                  selectedPortfolio?.id === p.id
+                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300'
+                    : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400'
+                }`}
+              >
+                {p.name}
+              </button>
+            ))}
+          </div>
+        )}
+
         {/* Ticker + Quantità */}
         <div className="grid grid-cols-2 gap-3">
           <div>
@@ -579,7 +615,7 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
           type="text"
           value={description}
           onChange={(e) => setDescription(e.target.value)}
-          placeholder="Note (opzionale)"
+          placeholder="Descrizione (opzionale)"
           className={inputClass}
           {...noFill}
         />
@@ -699,7 +735,7 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
 
         {/* Descrizione */}
         <input type="text" value={description} onChange={(e) => setDescription(e.target.value)}
-          placeholder="Note (opzionale)"
+          placeholder="Descrizione (opzionale)"
           autoComplete="off" autoCorrect="off" spellCheck={false}
           className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-sm" />
 

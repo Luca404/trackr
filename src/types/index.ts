@@ -76,7 +76,8 @@ export interface TransactionFormData {
   description: string;
   date: string;
   account_id?: number;
-  to_account_id?: number; // solo per trasferimenti
+  to_account_id?: number;   // solo per trasferimenti
+  portfolio_id?: number;    // solo per investimenti (opzionale)
 
   // Campi opzionali per investimenti
   ticker?: string;
@@ -176,6 +177,7 @@ export interface Portfolio {
   risk_free_source: string;
   market_benchmark: string;
   created_at: string;
+  category_id?: number;   // link opzionale a categoria investimento
   total_value?: number;
   total_cost?: number;
   total_gain_loss?: number;
@@ -189,4 +191,42 @@ export interface PortfolioFormData {
   reference_currency?: string;
   risk_free_source?: string;
   market_benchmark?: string;
+  category_id?: number;
+}
+
+export interface Order {
+  id: number;
+  user_id?: string;
+  portfolio_id: number;
+  symbol: string;
+  isin?: string;
+  name?: string;
+  exchange?: string;
+  currency: string;
+  quantity: number;
+  price: number;
+  commission: number;
+  instrument_type?: string;
+  order_type: string;   // 'buy' | 'sell'
+  date: string;
+  ter?: number;
+  transaction_id?: number;
+  created_at?: string;
+}
+
+export interface OrderFormData {
+  portfolio_id: number;
+  symbol: string;
+  isin?: string;
+  name?: string;
+  exchange?: string;
+  currency: string;
+  quantity: number;
+  price: number;
+  commission: number;
+  instrument_type?: string;
+  order_type: string;
+  date: string;
+  ter?: number;
+  transaction_id?: number;
 }
