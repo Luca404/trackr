@@ -360,7 +360,7 @@ export default function StatsPage() {
                 const barHeight = period.totalAmount > 0 ? (period.totalAmount / maxPeriodAmount) * 100 : 0;
                 const showLabel = showBarLabel(index, timelineData.length);
                 return (
-                  <div key={index} className="flex-1 flex flex-col items-center">
+                  <div key={index} className="flex-1 min-w-0 flex flex-col items-center overflow-hidden">
                     <div className="w-full flex flex-col justify-end" style={{ height: '120px' }}>
                       {period.totalAmount > 0 ? (
                         <div className="w-full rounded-t flex flex-col-reverse" style={{ height: `${barHeight}%` }}>
@@ -382,10 +382,8 @@ export default function StatsPage() {
                       )}
                     </div>
                     <div className="mt-1 h-4 flex items-center justify-center w-full">
-                      {showLabel ? (
+                      {showLabel && (
                         <span className="text-xs text-gray-500 dark:text-gray-400">{period.label}</span>
-                      ) : (
-                        <div className="w-full h-0.5 bg-gray-200 dark:bg-gray-600 rounded" />
                       )}
                     </div>
                   </div>
