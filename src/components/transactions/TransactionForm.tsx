@@ -355,8 +355,8 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
               onClick={() => { setSelectedToAccount(account); setShowToAccountPicker(false); }}
               className={`w-full flex items-center gap-3 p-3 rounded-lg border-2 transition-colors ${
                 selectedToAccount?.id === account.id
-                  ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20'
-                  : 'border-gray-200 dark:border-gray-700 hover:border-purple-500'
+                  ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20'
+                  : 'border-gray-200 dark:border-gray-700 hover:border-primary-500'
               }`}
             >
               <span className="text-2xl">{account.icon}</span>
