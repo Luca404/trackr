@@ -156,9 +156,16 @@ export default function StatsPage() {
         if (t.type === 'income') runningBalance += t.amount;
         else if (t.type === 'expense') runningBalance -= Math.abs(t.amount);
       });
-      return { label: period.label, balance: runningBalance, hasTransactions: periodTransactions.length > 0 };
+      return { label: period.label, balance: runningBalance, hasTransactions: periodTransactions.length > 0, date: period.date };
     });
   }, [transactions, periods.length, periodType]);
+
+  // Punti da disegnare nel grafico saldo: solo fino ad oggi
+  const today = useMemo(() => { const d = new Date(); d.setHours(23, 59, 59, 999); return d; }, []);
+  const visibleTrendData = useMemo(
+    () => balanceTrendData.filter(p => p.date <= today),
+    [balanceTrendData, today]
+  );
 
   const dataMaxBalance = Math.max(...balanceTrendData.map(d => d.balance), 0);
   const dataMinBalance = Math.min(...balanceTrendData.map(d => d.balance), 0);
@@ -175,7 +182,7 @@ export default function StatsPage() {
 
   // Label asse X per grafico a barre
   const showBarLabel = (index: number, total: number) => {
-    if (total <= 7) return true;
+    if (total <= 12) return true;
     if (total <= 14) return index % 2 === 0 || index === total - 1;
     if (total <= 21) return index % 3 === 0 || index === total - 1;
     if (total <= 31) return index % 3 === 0 || index === total - 1;
@@ -257,36 +264,40 @@ export default function StatsPage() {
                         <stop offset="100%" stopColor="#0ea5e9" stopOpacity="0" />
                       </linearGradient>
                     </defs>
-                    <polygon
-                      fill="url(#balanceGradient)"
-                      points={[
-                        `0,100`,
-                        ...balanceTrendData.map((point, i) => {
-                          const x = balanceTrendData.length > 1 ? (i / (balanceTrendData.length - 1)) * 100 : 50;
-                          const y = 100 - ((point.balance - dataMinBalance) / balanceRange) * 100;
-                          return `${x},${y}`;
-                        }),
-                        `100,100`
-                      ].join(' ')}
-                    />
-                    <polyline
-                      fill="none"
-                      stroke="#0ea5e9"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      vectorEffect="non-scaling-stroke"
-                      points={balanceTrendData.map((point, i) => {
-                        const x = balanceTrendData.length > 1 ? (i / (balanceTrendData.length - 1)) * 100 : 50;
+                    {(() => {
+                      const totalLen = balanceTrendData.length;
+                      const svgPoints = visibleTrendData.map((point) => {
+                        const i = balanceTrendData.indexOf(point);
+                        const x = totalLen > 1 ? (i / (totalLen - 1)) * 100 : 50;
                         const y = 100 - ((point.balance - dataMinBalance) / balanceRange) * 100;
-                        return `${x},${y}`;
-                      }).join(' ')}
-                    />
+                        return { x, y };
+                      });
+                      const lastX = svgPoints.length > 0 ? svgPoints[svgPoints.length - 1].x : 0;
+                      const pointsStr = svgPoints.map(p => `${p.x},${p.y}`).join(' ');
+                      return (
+                        <>
+                          <polygon
+                            fill="url(#balanceGradient)"
+                            points={[`0,100`, ...svgPoints.map(p => `${p.x},${p.y}`), `${lastX},100`].join(' ')}
+                          />
+                          <polyline
+                            fill="none"
+                            stroke="#0ea5e9"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            vectorEffect="non-scaling-stroke"
+                            points={pointsStr}
+                          />
+                        </>
+                      );
+                    })()}
                   </svg>
 
-                  {/* Punti solo sui giorni con transazioni */}
-                  {balanceTrendData.map((point, index) => {
+                  {/* Punti solo sui giorni con transazioni (fino ad oggi) */}
+                  {visibleTrendData.map((point) => {
                     if (!point.hasTransactions) return null;
+                    const index = balanceTrendData.indexOf(point);
                     const x = balanceTrendData.length > 1 ? (index / (balanceTrendData.length - 1)) * 100 : 50;
                     const y = 100 - ((point.balance - dataMinBalance) / balanceRange) * 100;
                     return (
@@ -360,7 +371,7 @@ export default function StatsPage() {
                 const barHeight = period.totalAmount > 0 ? (period.totalAmount / maxPeriodAmount) * 100 : 0;
                 const showLabel = showBarLabel(index, timelineData.length);
                 return (
-                  <div key={index} className="flex-1 min-w-0 flex flex-col items-center overflow-hidden">
+                  <div key={index} className="flex-1 min-w-0 flex flex-col items-center">
                     <div className="w-full flex flex-col justify-end" style={{ height: '120px' }}>
                       {period.totalAmount > 0 ? (
                         <div className="w-full rounded-t flex flex-col-reverse" style={{ height: `${barHeight}%` }}>
@@ -381,9 +392,9 @@ export default function StatsPage() {
                         <div className="w-full h-0.5 bg-gray-200 dark:bg-gray-700 rounded" />
                       )}
                     </div>
-                    <div className="mt-1 h-4 flex items-center justify-center w-full">
+                    <div className="relative mt-1 h-4 w-full">
                       {showLabel && (
-                        <span className="text-xs text-gray-500 dark:text-gray-400">{period.label}</span>
+                        <span className="absolute left-1/2 -translate-x-1/2 text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">{period.label}</span>
                       )}
                     </div>
                   </div>
