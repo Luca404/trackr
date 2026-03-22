@@ -629,7 +629,7 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
           <button
             type="button"
             onClick={() => setShowAccountPicker(true)}
-            className="flex-1 flex items-center gap-2 p-3 rounded-lg border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 hover:border-purple-500 transition-colors"
+            className="flex-1 flex items-center gap-2 p-3 rounded-lg border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 hover:border-primary-500 transition-colors"
           >
             <span className="text-2xl">{selectedAccount?.icon || '💳'}</span>
             <div className="flex-1 text-left">
@@ -642,16 +642,12 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
             <span className="text-gray-400">›</span>
           </button>
 
-          <div className="flex items-center px-1 text-2xl text-purple-400 select-none">→</div>
+          <div className="flex items-center px-1 text-2xl text-gray-400 select-none">→</div>
 
           <button
             type="button"
             onClick={() => setShowToAccountPicker(true)}
-            className={`flex-1 flex items-center gap-2 p-3 rounded-lg border-2 transition-colors ${
-              selectedToAccount
-                ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20 hover:border-purple-600'
-                : 'border-dashed border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 hover:border-purple-500'
-            }`}
+            className="flex-1 flex items-center gap-2 p-3 rounded-lg border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 hover:border-primary-500 transition-colors"
           >
             <span className="text-2xl">{selectedToAccount?.icon || '💳'}</span>
             <div className="flex-1 text-left">
@@ -669,8 +665,8 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
 
         {/* Display importo */}
         <div className="text-center py-4">
-          <div className="text-5xl font-bold text-purple-600 dark:text-purple-400">
-            € {formatAmountDisplay(amount || '0')}
+          <div className="text-5xl font-bold text-gray-900 dark:text-gray-100">
+            {getCurrencySymbol(currency)} {formatAmountDisplay(amount || '0')}
           </div>
         </div>
 
@@ -681,8 +677,8 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
               <button key={n} type="button" onClick={() => handleNumberClick(n)}
                 className="h-14 text-2xl font-semibold rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-900 dark:text-gray-100 transition-colors">{n}</button>
             ))}
-            <button type="button" onClick={() => handleNumberClick('00')}
-              className="h-14 text-xl font-semibold rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-900 dark:text-gray-100 transition-colors">00</button>
+            <button type="button" onClick={() => setShowCurrencyPicker(true)}
+              className="h-14 text-lg font-semibold rounded-lg bg-primary-100 dark:bg-primary-900/30 hover:bg-primary-200 dark:hover:bg-primary-900/50 text-primary-600 dark:text-primary-400 transition-colors">{getCurrencySymbol(currency)}</button>
             <button type="button" onClick={() => handleNumberClick('0')}
               className="h-14 text-2xl font-semibold rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-900 dark:text-gray-100 transition-colors">0</button>
             <button type="button" onClick={() => handleNumberClick('.')}
@@ -692,11 +688,11 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
             <button type="button" onClick={handleBackspace}
               className="h-14 w-14 text-2xl rounded-lg bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-900 dark:text-gray-100 transition-colors">←</button>
             <button type="submit" disabled={isLoading || !selectedAccount || !selectedToAccount || parseFloat(amount) <= 0}
-              className="flex-1 w-14 rounded-lg bg-purple-500 hover:bg-purple-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-bold text-3xl transition-colors flex items-center justify-center">
+              className="flex-1 w-14 rounded-lg bg-primary-500 hover:bg-primary-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-bold text-3xl transition-colors flex items-center justify-center">
               {isLoading ? '...' : '✓'}
             </button>
             <button type="button" onClick={() => setShowDateSelector(true)}
-              className="h-14 w-14 text-2xl rounded-lg bg-purple-100 dark:bg-purple-900/30 hover:bg-purple-200 dark:hover:bg-purple-900/50 text-purple-600 dark:text-purple-400 transition-colors">📅</button>
+              className="h-14 w-14 text-2xl rounded-lg bg-primary-100 dark:bg-primary-900/30 hover:bg-primary-200 dark:hover:bg-primary-900/50 text-primary-600 dark:text-primary-400 transition-colors">📅</button>
           </div>
         </div>
 
@@ -713,6 +709,17 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
 
         {error && (
           <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 px-4 py-3 rounded-lg text-sm">{error}</div>
+        )}
+
+        {isEditMode && onDelete && (
+          <button
+            type="button"
+            onClick={() => setIsDeleteDialogOpen(true)}
+            className="w-full px-4 py-3 rounded-lg bg-red-500 text-white hover:bg-red-600 transition-colors font-medium"
+            disabled={isLoading}
+          >
+            🗑️ Elimina
+          </button>
         )}
 
         {sharedModals}
