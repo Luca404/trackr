@@ -31,7 +31,6 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
   const [amount, setAmount] = useState<string>(initialData?.amount.toString() || '');
   const [date, setDate] = useState<string>(initialData?.date || new Date().toISOString().split('T')[0]);
   const [description, setDescription] = useState<string>(initialData?.description || '');
-  const [showDatePicker, setShowDatePicker] = useState(false);
   const [showDateSelector, setShowDateSelector] = useState(false);
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
   const [showAccountPicker, setShowAccountPicker] = useState(false);
@@ -276,6 +275,8 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
     </div>
   );
 
+  const dateInputRef = useRef<HTMLInputElement>(null);
+
   // Swipe sulla griglia categorie per cambiare tab
   const swipeCategoryRef = useRef<{ x: number; y: number } | null>(null);
   const handleCategorySwipeStart = (e: React.TouchEvent) => {
@@ -302,7 +303,6 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
       setDate(yesterday.toISOString().split('T')[0]);
     }
     setShowDateSelector(false);
-    setShowDatePicker(false);
   };
 
   const sharedModals = (
@@ -367,7 +367,7 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
       </Modal>
 
       {/* Modal selettore data */}
-      <Modal isOpen={showDateSelector} onClose={() => { setShowDateSelector(false); setShowDatePicker(false); }} title="Seleziona Data">
+      <Modal isOpen={showDateSelector} onClose={() => setShowDateSelector(false)} title="Seleziona Data">
         <div className="space-y-2">
           <button type="button" onClick={() => handleDateQuickSelect('today')} className="w-full flex items-center gap-3 p-4 rounded-lg border-2 border-gray-200 dark:border-gray-700 hover:border-primary-500 transition-colors">
             <span className="text-2xl">📅</span>
@@ -383,24 +383,20 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
               <div className="text-sm text-gray-500 dark:text-gray-400">{(() => { const y = new Date(); y.setDate(y.getDate() - 1); return y.toLocaleDateString('it-IT', { day: 'numeric', month: 'short', year: 'numeric' }); })()}</div>
             </div>
           </button>
-          <button type="button" onClick={() => setShowDatePicker(true)} className="w-full flex items-center gap-3 p-4 rounded-lg border-2 border-gray-200 dark:border-gray-700 hover:border-primary-500 transition-colors">
+          <button type="button" onClick={() => { setTimeout(() => dateInputRef.current?.showPicker?.(), 0); }} className="w-full flex items-center gap-3 p-4 rounded-lg border-2 border-gray-200 dark:border-gray-700 hover:border-primary-500 transition-colors">
             <span className="text-2xl">🗓️</span>
             <div className="flex-1 text-left">
               <div className="font-medium text-gray-900 dark:text-gray-100">Seleziona giorno</div>
               <div className="text-sm text-gray-500 dark:text-gray-400">Scegli una data specifica</div>
             </div>
           </button>
-          {showDatePicker && (
-            <div className="pt-3 border-t border-gray-200 dark:border-gray-700">
-              <input
-                type="date"
-                value={date}
-                onChange={(e) => { setDate(e.target.value); setShowDatePicker(false); setShowDateSelector(false); }}
-                className="w-full px-4 py-3 rounded-lg border-2 border-primary-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 text-lg"
-                autoFocus
-              />
-            </div>
-          )}
+          <input
+            ref={dateInputRef}
+            type="date"
+            value={date}
+            onChange={(e) => { if (e.target.value) { setDate(e.target.value); setShowDateSelector(false); } }}
+            className="sr-only"
+          />
           {!isEditMode && (
             <div className="pt-3 border-t border-gray-200 dark:border-gray-700">
               <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">🔄 Ripeti</div>
@@ -688,7 +684,7 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
             <button type="button" onClick={handleBackspace}
               className="h-14 w-14 text-2xl rounded-lg bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-900 dark:text-gray-100 transition-colors">←</button>
             <button type="submit" disabled={isLoading || !selectedAccount || !selectedToAccount || parseFloat(amount) <= 0}
-              className="flex-1 w-14 rounded-lg bg-primary-500 hover:bg-primary-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-bold text-3xl transition-colors flex items-center justify-center">
+              className="flex-1 w-14 rounded-lg bg-green-500 hover:bg-green-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-bold text-3xl transition-colors flex items-center justify-center">
               {isLoading ? '...' : '✓'}
             </button>
             <button type="button" onClick={() => setShowDateSelector(true)}

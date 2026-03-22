@@ -246,16 +246,16 @@ export default function TransactionsPage() {
                         <span className="text-2xl">🔄</span>
                         <div className="flex-1">
                           <div className="font-medium text-gray-900 dark:text-gray-100">Trasferimento</div>
-                          <div className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
-                            {getAccountName(t.from_account_id)} → {getAccountName(t.to_account_id)}
-                          </div>
                           {t.description && (
                             <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">{t.description}</div>
                           )}
                         </div>
                       </div>
                       <div className="text-right ml-4">
-                        <div className="font-bold text-lg text-purple-600 dark:text-purple-400">
+                        <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">
+                          {getAccountName(t.from_account_id)} → {getAccountName(t.to_account_id)}
+                        </div>
+                        <div className="font-bold text-lg text-gray-900 dark:text-gray-100">
                           {formatCurrency(t.amount)}
                         </div>
                         <div className="text-xs text-gray-500 dark:text-gray-400">
