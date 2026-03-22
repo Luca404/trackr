@@ -1,13 +1,14 @@
 import { createContext, useContext, useState, useEffect, useRef, type ReactNode } from 'react';
 import { apiService } from '../services/api';
 import { supabase } from '../services/supabase';
-import type { Account, Category, Transaction } from '../types';
+import type { Account, Category, Transaction, Transfer } from '../types';
 
 interface DataContextType {
   // Data
   accounts: Account[];
   categories: Category[];
   transactions: Transaction[];
+  transfers: Transfer[];
 
   // Loading states
   isLoading: boolean;
@@ -26,10 +27,15 @@ interface DataContextType {
   updateTransaction: (transaction: Transaction) => void;
   deleteTransaction: (id: number) => void;
 
+  addTransfer: (transfer: Transfer) => void;
+  updateTransfer: (transfer: Transfer) => void;
+  deleteTransfer: (id: number) => void;
+
   // Refresh functions
   refreshAccounts: () => Promise<void>;
   refreshCategories: () => Promise<void>;
   refreshTransactions: (startDate?: string, endDate?: string) => Promise<void>;
+  refreshTransfers: () => Promise<void>;
   refreshAll: () => Promise<void>;
 
   // Clear cache
@@ -46,6 +52,7 @@ export function DataProvider({ children }: DataProviderProps) {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [transfers, setTransfers] = useState<Transfer[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isInitialized, setIsInitialized] = useState(false);
   const isFetchingRef = useRef(false);
@@ -74,24 +81,23 @@ export function DataProvider({ children }: DataProviderProps) {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Ricalcola i current_balance degli account quando cambiano le transazioni
+  // Ricalcola i current_balance degli account quando cambiano transazioni o trasferimenti
   useEffect(() => {
     if (!isInitialized || accounts.length === 0) return;
 
     setAccounts(prevAccounts => {
       return prevAccounts.map(account => {
-        const accountTransactions = transactions.filter(t => t.account_id === account.id);
         let currentBalance = account.initial_balance;
 
-        accountTransactions.forEach(transaction => {
-          if (transaction.type === 'income') {
-            currentBalance += transaction.amount;
-          } else if (transaction.type === 'expense' || transaction.type === 'investment') {
-            currentBalance -= transaction.amount;
-          } else if (transaction.type === 'transfer') {
-            if (transaction.ticker === 'out') currentBalance -= transaction.amount;
-            else if (transaction.ticker === 'in') currentBalance += transaction.amount;
-          }
+        transactions.forEach(t => {
+          if (t.account_id !== account.id) return;
+          if (t.type === 'income') currentBalance += t.amount;
+          else if (t.type === 'expense' || t.type === 'investment') currentBalance -= t.amount;
+        });
+
+        transfers.forEach(t => {
+          if (t.from_account_id === account.id) currentBalance -= t.amount;
+          if (t.to_account_id === account.id) currentBalance += t.amount;
         });
 
         if (currentBalance !== account.current_balance) {
@@ -100,7 +106,7 @@ export function DataProvider({ children }: DataProviderProps) {
         return account;
       });
     });
-  }, [transactions, isInitialized]);
+  }, [transactions, transfers, isInitialized]);
 
   const fetchAllData = async () => {
     if (isFetchingRef.current) return; // previeni chiamate concorrenti
@@ -141,7 +147,7 @@ export function DataProvider({ children }: DataProviderProps) {
       setCategories(finalCategories);
       // Crea transazioni ricorrenti scadute, poi carica tutto fresco
       await apiService.processRecurringTransactions().catch(console.error);
-      await refreshTransactions();
+      await Promise.all([refreshTransactions(), refreshTransfers()]);
     } catch (error) {
       console.error('Error fetching all data:', error);
     } finally {
@@ -183,6 +189,16 @@ export function DataProvider({ children }: DataProviderProps) {
     }
   };
 
+  const refreshTransfers = async () => {
+    try {
+      const data = await apiService.getTransfers();
+      setTransfers(data);
+    } catch (error) {
+      console.error('Error refreshing transfers:', error);
+      throw error;
+    }
+  };
+
   const refreshAll = async () => {
     await fetchAllData();
   };
@@ -191,6 +207,7 @@ export function DataProvider({ children }: DataProviderProps) {
     setAccounts([]);
     setCategories([]);
     setTransactions([]);
+    setTransfers([]);
     setIsInitialized(false);
   };
 
@@ -248,10 +265,26 @@ export function DataProvider({ children }: DataProviderProps) {
     setTransactions(prev => prev.filter(t => t.id !== id));
   };
 
+  // Transfer operations
+  const addTransfer = (transfer: Transfer) => {
+    setTransfers(prev => [...prev, transfer].sort((a, b) =>
+      new Date(b.date).getTime() - new Date(a.date).getTime()
+    ));
+  };
+
+  const updateTransfer = (transfer: Transfer) => {
+    setTransfers(prev => prev.map(t => t.id === transfer.id ? transfer : t));
+  };
+
+  const deleteTransfer = (id: number) => {
+    setTransfers(prev => prev.filter(t => t.id !== id));
+  };
+
   const value: DataContextType = {
     accounts,
     categories,
     transactions,
+    transfers,
     isLoading,
     isInitialized,
     addAccount,
@@ -263,9 +296,13 @@ export function DataProvider({ children }: DataProviderProps) {
     addTransaction,
     updateTransaction,
     deleteTransaction,
+    addTransfer,
+    updateTransfer,
+    deleteTransfer,
     refreshAccounts,
     refreshCategories,
     refreshTransactions,
+    refreshTransfers,
     refreshAll,
     clearCache,
   };

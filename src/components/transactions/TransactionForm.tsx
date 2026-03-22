@@ -103,6 +103,14 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
     }
   }, [isEditMode, initialData, allAccounts]);
 
+  // Pre-fill conto destinazione in edit mode (transfer)
+  useEffect(() => {
+    if (isEditMode && initialData?.to_account_id && allAccounts.length > 0) {
+      const account = allAccounts.find(acc => acc.id === initialData.to_account_id);
+      if (account) setSelectedToAccount(account);
+    }
+  }, [isEditMode, initialData, allAccounts]);
+
   const handleNumberClick = (num: string) => {
     if (num === '.' && amount.includes('.')) return;
     setAmount(prev => prev === '0' ? num : prev + num);

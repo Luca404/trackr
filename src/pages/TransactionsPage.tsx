@@ -9,28 +9,64 @@ import { useSkeletonCount } from '../hooks/useSkeletonCount';
 import PeriodSelector from '../components/common/PeriodSelector';
 import DateRangePicker from '../components/common/DateRangePicker';
 import { usePeriod } from '../hooks/usePeriod';
-import type { Transaction, TransactionFormData } from '../types';
+import type { Transaction, Transfer, TransactionFormData } from '../types';
 
 type PeriodType = 'day' | 'week' | 'month' | 'year' | 'all' | 'custom';
 
+type ListItem =
+  | { kind: 'transaction'; data: Transaction }
+  | { kind: 'transfer'; data: Transfer };
+
 export default function TransactionsPage() {
-  const { transactions: allTransactions, accounts, categories, isLoading: dataLoading, addTransaction, updateTransaction: updateTransactionCache, deleteTransaction: deleteTransactionCache } = useData();
-  const skeletonCount = useSkeletonCount('transactions', allTransactions.length, dataLoading, 5);
+  const {
+    transactions: allTransactions,
+    transfers: allTransfers,
+    accounts,
+    categories,
+    isLoading: dataLoading,
+    addTransaction,
+    updateTransaction: updateTransactionCache,
+    deleteTransaction: deleteTransactionCache,
+    addTransfer,
+    updateTransfer: updateTransferCache,
+    deleteTransfer: deleteTransferCache,
+  } = useData();
+
+  const totalCount = allTransactions.length + allTransfers.length;
+  const skeletonCount = useSkeletonCount('transactions', totalCount, dataLoading, 5);
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
+  const [selectedTransfer, setSelectedTransfer] = useState<Transfer | null>(null);
   const [isEditMode, setIsEditMode] = useState(false);
 
-  // Period state - condiviso tra le pagine
   const { startDate, endDate, setPeriod } = usePeriod();
 
-  // Filtra le transazioni in base al periodo selezionato
-  const transactions = useMemo(() => {
-    return allTransactions.filter(transaction => {
-      const transactionDate = new Date(transaction.date);
-      return transactionDate >= startDate && transactionDate <= endDate;
+  // Lista unificata filtrata per periodo, ordinata per data
+  const listItems = useMemo((): ListItem[] => {
+    const txItems: ListItem[] = allTransactions
+      .filter(t => {
+        const d = new Date(t.date);
+        return d >= startDate && d <= endDate;
+      })
+      .map(t => ({ kind: 'transaction', data: t }));
+
+    const trItems: ListItem[] = allTransfers
+      .filter(t => {
+        const d = new Date(t.date);
+        return d >= startDate && d <= endDate;
+      })
+      .map(t => ({ kind: 'transfer', data: t }));
+
+    return [...txItems, ...trItems].sort((a, b) => {
+      const dateA = new Date(a.data.date).getTime();
+      const dateB = new Date(b.data.date).getTime();
+      if (dateB !== dateA) return dateB - dateA;
+      return (b.data.created_at ? new Date(b.data.created_at).getTime() : 0)
+           - (a.data.created_at ? new Date(a.data.created_at).getTime() : 0);
     });
-  }, [allTransactions, startDate, endDate]);
+  }, [allTransactions, allTransfers, startDate, endDate]);
 
   const getAccountName = (accountId: number) => {
     if (!accountId) return '';
@@ -51,10 +87,17 @@ export default function TransactionsPage() {
     setPeriod(start, end, 'custom');
   };
 
+  const closeModal = () => {
+    setIsModalOpen(false);
+    setSelectedTransaction(null);
+    setSelectedTransfer(null);
+    setIsEditMode(false);
+  };
+
   const handleCreateTransaction = async (data: TransactionFormData) => {
     if (data.type === 'transfer') {
-      const txs = await apiService.createTransfer(data);
-      txs.forEach(addTransaction);
+      const transfer = await apiService.createTransfer(data);
+      addTransfer(transfer);
       return;
     }
     if (data.recurrence) {
@@ -80,39 +123,52 @@ export default function TransactionsPage() {
     if (selectedTransaction?.recurring_id) {
       await apiService.deleteRecurringTransaction(selectedTransaction.recurring_id);
     }
-    setIsModalOpen(false);
-    setSelectedTransaction(null);
-    setIsEditMode(false);
+    closeModal();
   };
 
   const handleUpdateTransaction = async (data: TransactionFormData) => {
+    if (data.type === 'transfer' && selectedTransfer) {
+      const updated = await apiService.updateTransfer(selectedTransfer.id, data);
+      updateTransferCache(updated);
+      closeModal();
+      return;
+    }
     if (selectedTransaction) {
       const updated = await apiService.updateTransaction(selectedTransaction.id, data);
       updateTransactionCache(updated);
-      setIsModalOpen(false);
-      setSelectedTransaction(null);
-      setIsEditMode(false);
+      closeModal();
     }
   };
 
   const handleDeleteTransaction = async () => {
+    if (selectedTransfer) {
+      await apiService.deleteTransfer(selectedTransfer.id);
+      deleteTransferCache(selectedTransfer.id);
+      closeModal();
+      return;
+    }
     if (selectedTransaction) {
       await apiService.deleteTransaction(selectedTransaction.id);
       deleteTransactionCache(selectedTransaction.id);
-      setIsModalOpen(false);
-      setSelectedTransaction(null);
-      setIsEditMode(false);
+      closeModal();
     }
   };
 
-  const handleTransactionClick = (transaction: Transaction) => {
-    setSelectedTransaction(transaction);
+  const handleItemClick = (item: ListItem) => {
+    if (item.kind === 'transfer') {
+      setSelectedTransfer(item.data);
+      setSelectedTransaction(null);
+    } else {
+      setSelectedTransaction(item.data);
+      setSelectedTransfer(null);
+    }
     setIsEditMode(true);
     setIsModalOpen(true);
   };
 
   const handleNewTransaction = () => {
     setSelectedTransaction(null);
+    setSelectedTransfer(null);
     setIsEditMode(false);
     setIsModalOpen(true);
   };
@@ -132,6 +188,36 @@ export default function TransactionsPage() {
     });
   };
 
+  // initialData per il form in edit mode
+  const editInitialData = useMemo((): TransactionFormData | undefined => {
+    if (selectedTransfer) {
+      return {
+        type: 'transfer',
+        category: 'Trasferimento',
+        amount: selectedTransfer.amount,
+        description: selectedTransfer.description || '',
+        date: selectedTransfer.date,
+        account_id: selectedTransfer.from_account_id,
+        to_account_id: selectedTransfer.to_account_id,
+      };
+    }
+    if (selectedTransaction) {
+      return {
+        type: selectedTransaction.type,
+        category: selectedTransaction.category,
+        subcategory: selectedTransaction.subcategory,
+        amount: Math.abs(selectedTransaction.amount),
+        description: selectedTransaction.description || '',
+        date: selectedTransaction.date,
+        account_id: selectedTransaction.account_id,
+        ticker: selectedTransaction.ticker,
+        quantity: selectedTransaction.quantity,
+        price: selectedTransaction.price,
+      };
+    }
+    return undefined;
+  }, [selectedTransaction, selectedTransfer]);
+
   return (
     <Layout>
       <div className="space-y-4">
@@ -143,61 +229,95 @@ export default function TransactionsPage() {
           onCustomClick={() => setIsDatePickerOpen(true)}
         />
 
-        {/* Lista transazioni */}
+        {/* Lista unificata transazioni + trasferimenti */}
         <div className="space-y-2">
           {dataLoading
             ? Array.from({ length: skeletonCount }).map((_, i) => <SkeletonTransactionRow key={i} />)
-            : transactions.map((transaction) => (
-                <div
-                  key={transaction.id}
-                  className="card flex items-center justify-between hover:shadow-md transition-shadow cursor-pointer"
-                  onClick={() => handleTransactionClick(transaction)}
-                >
-                  <div className="flex items-center gap-3 flex-1">
-                    <span className="text-2xl">{getCategoryIcon(transaction.category)}</span>
-                    <div className="flex-1">
-                      <div className="font-medium text-gray-900 dark:text-gray-100 flex items-center gap-1">
-                        {transaction.category}
-                        {transaction.subcategory && (
-                          <span className="text-sm text-gray-500 dark:text-gray-400"> ({transaction.subcategory})</span>
+            : listItems.map((item) => {
+                if (item.kind === 'transfer') {
+                  const t = item.data;
+                  return (
+                    <div
+                      key={`transfer-${t.id}`}
+                      className="card flex items-center justify-between hover:shadow-md transition-shadow cursor-pointer"
+                      onClick={() => handleItemClick(item)}
+                    >
+                      <div className="flex items-center gap-3 flex-1">
+                        <span className="text-2xl">🔄</span>
+                        <div className="flex-1">
+                          <div className="font-medium text-gray-900 dark:text-gray-100">Trasferimento</div>
+                          <div className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+                            {getAccountName(t.from_account_id)} → {getAccountName(t.to_account_id)}
+                          </div>
+                          {t.description && (
+                            <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">{t.description}</div>
+                          )}
+                        </div>
+                      </div>
+                      <div className="text-right ml-4">
+                        <div className="font-bold text-lg text-purple-600 dark:text-purple-400">
+                          {formatCurrency(t.amount)}
+                        </div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400">
+                          {formatDate(t.date)}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                }
+
+                const transaction = item.data;
+                return (
+                  <div
+                    key={`tx-${transaction.id}`}
+                    className="card flex items-center justify-between hover:shadow-md transition-shadow cursor-pointer"
+                    onClick={() => handleItemClick(item)}
+                  >
+                    <div className="flex items-center gap-3 flex-1">
+                      <span className="text-2xl">{getCategoryIcon(transaction.category)}</span>
+                      <div className="flex-1">
+                        <div className="font-medium text-gray-900 dark:text-gray-100 flex items-center gap-1">
+                          {transaction.category}
+                          {transaction.subcategory && (
+                            <span className="text-sm text-gray-500 dark:text-gray-400"> ({transaction.subcategory})</span>
+                          )}
+                          {transaction.recurring_id && (
+                            <span className="text-xs text-primary-500 dark:text-primary-400">🔄</span>
+                          )}
+                        </div>
+                        {transaction.description && (
+                          <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                            {transaction.description}
+                          </div>
                         )}
-                        {transaction.recurring_id && (
-                          <span className="text-xs text-primary-500 dark:text-primary-400">🔄</span>
+                        {transaction.ticker && (
+                          <div className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+                            {transaction.ticker} • {transaction.quantity} x {formatCurrency(transaction.price || 0)}
+                          </div>
                         )}
                       </div>
-                      {transaction.description && (
-                        <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                          {transaction.description}
-                        </div>
-                      )}
-                      {transaction.ticker && transaction.type !== 'transfer' && (
-                        <div className="text-xs text-blue-600 dark:text-blue-400 mt-1">
-                          {transaction.ticker} • {transaction.quantity} x {formatCurrency(transaction.price || 0)}
-                        </div>
-                      )}
+                    </div>
+                    <div className="text-right ml-4">
+                      <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">
+                        {getAccountName(transaction.account_id)}
+                      </div>
+                      <div className={`font-bold text-lg ${
+                        transaction.type === 'income'
+                          ? 'text-green-600 dark:text-green-400'
+                          : transaction.type === 'expense'
+                          ? 'text-red-600 dark:text-red-400'
+                          : 'text-blue-600 dark:text-blue-400'
+                      }`}>
+                        {transaction.type === 'income' ? '+' : '-'}{formatCurrency(Math.abs(transaction.amount))}
+                      </div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">
+                        {formatDate(transaction.date)}
+                      </div>
                     </div>
                   </div>
-                  <div className="text-right ml-4">
-                    <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">
-                      {getAccountName(transaction.account_id)}
-                    </div>
-                    <div className={`font-bold text-lg ${
-                      transaction.type === 'income'
-                        ? 'text-green-600 dark:text-green-400'
-                        : transaction.type === 'expense'
-                        ? 'text-red-600 dark:text-red-400'
-                        : transaction.type === 'investment'
-                        ? 'text-blue-600 dark:text-blue-400'
-                        : 'text-purple-600 dark:text-purple-400'
-                    }`}>
-                      {transaction.type === 'income' ? '+' : '-'}{formatCurrency(Math.abs(transaction.amount))}
-                    </div>
-                    <div className="text-xs text-gray-500 dark:text-gray-400">
-                      {formatDate(transaction.date)}
-                    </div>
-                  </div>
-                </div>
-          ))}
+                );
+              })}
+
           {/* Aggiungi nuova transazione */}
           <div
             className="bg-white dark:bg-gray-800 rounded-xl shadow-md px-4 py-6 flex items-center justify-center border-2 border-dashed border-gray-200 dark:border-gray-700 cursor-pointer outline-none select-none"
@@ -211,32 +331,13 @@ export default function TransactionsPage() {
         {/* Modal transazione */}
         <Modal
           isOpen={isModalOpen}
-          onClose={() => {
-            setIsModalOpen(false);
-            setSelectedTransaction(null);
-            setIsEditMode(false);
-          }}
-          title={isEditMode ? "Modifica Transazione" : "Nuova Transazione"}
+          onClose={closeModal}
+          title={isEditMode ? "Modifica" : "Nuova Transazione"}
         >
           <TransactionForm
             onSubmit={isEditMode ? handleUpdateTransaction : handleCreateTransaction}
-            onCancel={() => {
-              setIsModalOpen(false);
-              setSelectedTransaction(null);
-              setIsEditMode(false);
-            }}
-            initialData={selectedTransaction ? {
-              type: selectedTransaction.type,
-              category: selectedTransaction.category,
-              subcategory: selectedTransaction.subcategory,
-              amount: Math.abs(selectedTransaction.amount),
-              description: selectedTransaction.description || '',
-              date: selectedTransaction.date,
-              account_id: selectedTransaction.account_id,
-              ticker: selectedTransaction.ticker,
-              quantity: selectedTransaction.quantity,
-              price: selectedTransaction.price,
-            } : undefined}
+            onCancel={closeModal}
+            initialData={editInitialData}
             isEditMode={isEditMode}
             onDelete={isEditMode ? handleDeleteTransaction : undefined}
             isRecurring={isEditMode && !!selectedTransaction?.recurring_id}

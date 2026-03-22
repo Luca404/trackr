@@ -56,6 +56,18 @@ export interface Transaction {
   recurring_id?: number;
 }
 
+export interface Transfer {
+  id: number;
+  user_id?: string;
+  from_account_id: number;
+  to_account_id: number;
+  amount: number;
+  description?: string;
+  date: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
 export interface TransactionFormData {
   type: TransactionType;
   category: string;

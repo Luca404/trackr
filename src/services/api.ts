@@ -3,6 +3,7 @@ import type {
   Transaction,
   TransactionFormData,
   TransactionStats,
+  Transfer,
   Account,
   AccountFormData,
   Category,
@@ -84,6 +85,20 @@ function mapTransaction(row: any): Transaction {
   };
 }
 
+function mapTransfer(row: any): Transfer {
+  return {
+    id: row.id,
+    user_id: row.user_id,
+    from_account_id: row.from_account_id,
+    to_account_id: row.to_account_id,
+    amount: row.amount,
+    description: row.description,
+    date: row.date,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+}
+
 function mapRecurringTransaction(row: any): RecurringTransaction {
   return {
     id: row.id,
@@ -143,7 +158,6 @@ const DEFAULT_CATEGORIES = [
   { name: 'Investimento', icon: '💰', category_type: 'investment' },
   { name: 'Stipendio', icon: '💵', category_type: 'income' },
   { name: 'Bonus', icon: '🎁', category_type: 'income' },
-  { name: 'Trasferimento', icon: '🔄', category_type: 'transfer' },
   { name: 'Altro', icon: '📌', category_type: null },
 ];
 
@@ -321,21 +335,60 @@ class ApiService {
     return mapTransaction(data);
   }
 
-  async createTransfer(formData: TransactionFormData): Promise<Transaction[]> {
-    const userId = await getCurrentUserId();
-    const { recurrence: _, to_account_id, ...rest } = formData;
-    if (!to_account_id) throw new Error('Conto di destinazione mancante');
+  // ==================== TRANSFERS ====================
 
-    const base = { ...rest, type: 'transfer', category: 'Trasferimento', user_id: userId };
-    const { data, error } = await supabase
-      .from('transactions')
-      .insert([
-        { ...base, ticker: 'out' },
-        { ...base, account_id: to_account_id, ticker: 'in' },
-      ])
-      .select();
+  async getTransfers(params?: { startDate?: string; endDate?: string }): Promise<Transfer[]> {
+    let query = supabase
+      .from('transfers')
+      .select('*')
+      .order('date', { ascending: false })
+      .order('id', { ascending: false });
+    if (params?.startDate) query = query.gte('date', params.startDate);
+    if (params?.endDate) query = query.lte('date', params.endDate);
+    const { data, error } = await query;
     if (error) throw error;
-    return (data || []).map(mapTransaction);
+    return (data || []).map(mapTransfer);
+  }
+
+  async createTransfer(formData: TransactionFormData): Promise<Transfer> {
+    const userId = await getCurrentUserId();
+    if (!formData.to_account_id) throw new Error('Conto di destinazione mancante');
+    const { data, error } = await supabase
+      .from('transfers')
+      .insert({
+        user_id: userId,
+        from_account_id: formData.account_id,
+        to_account_id: formData.to_account_id,
+        amount: formData.amount,
+        description: formData.description || null,
+        date: formData.date,
+      })
+      .select()
+      .single();
+    if (error) throw error;
+    return mapTransfer(data);
+  }
+
+  async updateTransfer(id: number, formData: TransactionFormData): Promise<Transfer> {
+    const { data, error } = await supabase
+      .from('transfers')
+      .update({
+        from_account_id: formData.account_id,
+        to_account_id: formData.to_account_id,
+        amount: formData.amount,
+        description: formData.description || null,
+        date: formData.date,
+      })
+      .eq('id', id)
+      .select()
+      .single();
+    if (error) throw error;
+    return mapTransfer(data);
+  }
+
+  async deleteTransfer(id: number): Promise<void> {
+    const { error } = await supabase.from('transfers').delete().eq('id', id);
+    if (error) throw error;
   }
 
   async updateTransaction(id: number, formData: Partial<TransactionFormData>): Promise<Transaction> {
