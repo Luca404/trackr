@@ -7,6 +7,7 @@ interface ModalProps {
   onBackdropClick?: () => void;
   title: string | ReactNode;
   children: ReactNode;
+  noBottomOffset?: boolean; // per pagine senza bottom nav (es. SettingsPage)
 }
 
 // Stack globale per gestire modal annidati: solo il modal più in alto risponde al back
@@ -78,7 +79,7 @@ export function registerBackHandler(onBack: () => void): () => void {
   };
 }
 
-export default function Modal({ isOpen, onClose, onBackdropClick, title, children }: ModalProps) {
+export default function Modal({ isOpen, onClose, onBackdropClick, title, children, noBottomOffset }: ModalProps) {
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
   const closedViaBackRef = useRef(false);
@@ -129,7 +130,7 @@ export default function Modal({ isOpen, onClose, onBackdropClick, title, childre
         className="relative bg-white dark:bg-gray-800 w-full sm:max-w-lg sm:rounded-lg rounded-t-2xl overflow-y-auto animate-slide-up"
         style={{
           maxHeight: '90vh',
-          marginBottom: 'calc(4rem + env(safe-area-inset-bottom, 0px))'
+          marginBottom: noBottomOffset ? 0 : 'calc(4rem + env(safe-area-inset-bottom, 0px))'
         }}
       >
         {/* Header */}

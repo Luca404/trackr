@@ -285,7 +285,7 @@ export default function SettingsPage() {
 
       </div>
 
-      <Modal isOpen={showKakeboImport} onClose={() => setShowKakeboImport(false)} title="Importa da Kakebo">
+      <Modal isOpen={showKakeboImport} onClose={() => setShowKakeboImport(false)} title="Importa da Kakebo" noBottomOffset>
         <KakeboImport onClose={() => setShowKakeboImport(false)} />
       </Modal>
     </div>
