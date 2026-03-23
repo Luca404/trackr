@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { apiService } from '../services/api';
 import { supabase } from '../services/supabase';
 import { useData } from '../contexts/DataContext';
@@ -563,71 +563,96 @@ function PositionForm({ currency, onAdd, onCancel }: PositionFormProps) {
   const [quantity, setQuantity] = useState('');
   const [price, setPrice] = useState('');
   const [date, setDate] = useState(today);
-  const symbols: Record<string, string> = { EUR: '€', USD: '$', GBP: '£', CHF: 'Fr' };
-  const currSymbol = symbols[currency] || currency;
+  const dateRef = useRef<HTMLInputElement>(null);
+  const currSymbols: Record<string, string> = { EUR: '€', USD: '$', GBP: '£', CHF: 'Fr' };
+  const currSymbol = currSymbols[currency] || currency;
+
+  const formatDisplayDate = (d: string) => {
+    if (!d) return 'Seleziona data';
+    const [y, m, day] = d.split('-');
+    return `${day}/${m}/${y}`;
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const qty = parseFloat(quantity);
+    const qty = parseFloat(quantity.replace(',', '.'));
     const prc = parseFloat(price.replace(',', '.'));
     if (!symbol.trim() || !qty || !prc) return;
     onAdd({ symbol: symbol.trim().toUpperCase(), quantity: qty, price: prc, date });
   };
 
   return (
-    <form onSubmit={handleSubmit} autoComplete="off" className="space-y-4">
+    <form onSubmit={handleSubmit} autoComplete="off" className="space-y-5">
+
+      {/* Ticker */}
       <div>
-        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Ticker</label>
+        <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">Ticker</div>
         <input
           type="text"
           value={symbol}
-          onChange={e => setSymbol(e.target.value)}
-          className="input font-mono uppercase"
-          placeholder="Es: VWCE, AAPL..."
+          onChange={e => setSymbol(e.target.value.toUpperCase())}
+          className="w-full px-4 py-3 text-2xl font-mono font-bold tracking-widest bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 text-gray-900 dark:text-gray-100 placeholder-gray-300 dark:placeholder-gray-600 uppercase"
+          placeholder="VWCE"
           autoComplete="off" autoCorrect="off" spellCheck={false}
+          autoCapitalize="characters"
           required
         />
       </div>
+
+      {/* Quantità e Prezzo */}
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Quantità</label>
+          <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">Quantità</div>
           <input
-            type="number"
-            step="0.0001"
-            min="0.0001"
+            type="text"
+            inputMode="decimal"
             value={quantity}
             onChange={e => setQuantity(e.target.value)}
-            className="input"
+            className="w-full px-4 py-3 text-xl font-semibold bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 text-gray-900 dark:text-gray-100 placeholder-gray-300 dark:placeholder-gray-600"
             placeholder="0"
             required
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Prezzo medio ({currSymbol})
-          </label>
+          <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
+            Prezzo ({currSymbol})
+          </div>
           <input
             type="text"
             inputMode="decimal"
             value={price}
             onChange={e => setPrice(e.target.value)}
-            className="input"
+            className="w-full px-4 py-3 text-xl font-semibold bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 text-gray-900 dark:text-gray-100 placeholder-gray-300 dark:placeholder-gray-600"
             placeholder="0,00"
             required
           />
         </div>
       </div>
+
+      {/* Data */}
       <div>
-        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Data acquisto</label>
+        <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">Data acquisto</div>
+        <button
+          type="button"
+          onClick={() => dateRef.current?.showPicker()}
+          className="w-full px-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-left text-gray-700 dark:text-gray-300 font-medium flex items-center justify-between"
+        >
+          <span>{formatDisplayDate(date)}</span>
+          <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+          </svg>
+        </button>
         <input
+          ref={dateRef}
           type="date"
           value={date}
           onChange={e => setDate(e.target.value)}
-          className="input"
           max={today}
+          className="sr-only"
           required
         />
       </div>
+
       <div className="flex gap-3 pt-1">
         <button type="button" onClick={onCancel} className="flex-1 btn-secondary">Annulla</button>
         <button type="submit" className="flex-1 btn-primary">Aggiungi</button>
