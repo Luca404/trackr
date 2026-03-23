@@ -1,11 +1,24 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { apiService } from '../services/api';
+import { supabase } from '../services/supabase';
 import { useData } from '../contexts/DataContext';
 import Layout from '../components/layout/Layout';
 import Modal from '../components/common/Modal';
 import { SkeletonPortfolioCard } from '../components/common/SkeletonLoader';
 import { useSkeletonCount } from '../hooks/useSkeletonCount';
 import type { Portfolio, PortfolioFormData, Order, Category } from '../types';
+
+const PF_BACKEND_URL = import.meta.env.VITE_PF_BACKEND_URL || 'https://portfolio-tracker-production-3bd4.up.railway.app';
+
+interface PortfolioSummary {
+  total_value: number;
+  total_cost: number;
+  total_gain_loss: number;
+  total_gain_loss_pct: number;
+  positions_count: number;
+  xirr: number | null;
+  reference_currency: string;
+}
 
 export default function PortfoliosPage() {
   const { portfolios, categories, isLoading, isInitialized, addPortfolio, updatePortfolio, deletePortfolio } = useData();
@@ -15,8 +28,42 @@ export default function PortfoliosPage() {
   const [selectedPortfolio, setSelectedPortfolio] = useState<Portfolio | null>(null);
   const [portfolioOrders, setPortfolioOrders] = useState<Order[]>([]);
   const [isLoadingOrders, setIsLoadingOrders] = useState(false);
+  const [summaries, setSummaries] = useState<Record<number, PortfolioSummary>>({});
+  const [loadingSummaries, setLoadingSummaries] = useState(false);
 
   const investmentCategories = categories.filter(c => c.category_type === 'investment');
+
+  useEffect(() => {
+    if (!isInitialized || portfolios.length === 0) return;
+    let cancelled = false;
+    const fetchSummaries = async () => {
+      setLoadingSummaries(true);
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.access_token) return;
+        const token = session.access_token;
+        const results = await Promise.allSettled(
+          portfolios.map(p =>
+            fetch(`${PF_BACKEND_URL}/portfolios/${p.id}/summary`, {
+              headers: { Authorization: `Bearer ${token}` },
+            }).then(r => r.ok ? r.json() : null)
+          )
+        );
+        if (cancelled) return;
+        const map: Record<number, PortfolioSummary> = {};
+        results.forEach((r, i) => {
+          if (r.status === 'fulfilled' && r.value) map[portfolios[i].id] = r.value;
+        });
+        setSummaries(map);
+      } catch (e) {
+        console.error('Error fetching portfolio summaries:', e);
+      } finally {
+        if (!cancelled) setLoadingSummaries(false);
+      }
+    };
+    fetchSummaries();
+    return () => { cancelled = true; };
+  }, [isInitialized, portfolios.length]);
 
   const handleCreatePortfolio = () => {
     setSelectedPortfolio(null);
@@ -109,27 +156,39 @@ export default function PortfoliosPage() {
                     <div className="text-sm text-gray-400 dark:text-gray-500 ml-2 shrink-0">{portfolio.reference_currency}</div>
                   </div>
 
-                  {portfolio.total_value !== undefined && (
-                    <div className="grid grid-cols-2 gap-4 pt-3 mt-2 border-t border-gray-200 dark:border-gray-700">
-                      <div>
-                        <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">Valore Attuale</div>
-                        <div className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                          {formatCurrency(portfolio.total_value, portfolio.reference_currency)}
-                        </div>
+                  {(() => {
+                    const sm = summaries[portfolio.id];
+                    if (loadingSummaries && !sm) return (
+                      <div className="pt-3 mt-2 border-t border-gray-200 dark:border-gray-700">
+                        <div className="h-6 w-32 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
                       </div>
-                      <div>
-                        <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">P/L</div>
-                        <div className={`text-lg font-semibold ${(portfolio.total_gain_loss || 0) >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
-                          {formatCurrency(portfolio.total_gain_loss || 0, portfolio.reference_currency)}
-                          {portfolio.total_gain_loss_pct !== undefined && (
+                    );
+                    if (!sm) return null;
+                    return (
+                      <div className="grid grid-cols-2 gap-4 pt-3 mt-2 border-t border-gray-200 dark:border-gray-700">
+                        <div>
+                          <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">Valore Attuale</div>
+                          <div className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                            {formatCurrency(sm.total_value, sm.reference_currency)}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">P/L</div>
+                          <div className={`text-lg font-semibold ${sm.total_gain_loss >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                            {formatCurrency(sm.total_gain_loss, sm.reference_currency)}
                             <span className="text-sm ml-1">
-                              ({portfolio.total_gain_loss_pct >= 0 ? '+' : ''}{portfolio.total_gain_loss_pct.toFixed(2)}%)
+                              ({sm.total_gain_loss_pct >= 0 ? '+' : ''}{sm.total_gain_loss_pct.toFixed(2)}%)
                             </span>
+                          </div>
+                          {sm.xirr != null && (
+                            <div className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
+                              XIRR: {sm.xirr >= 0 ? '+' : ''}{sm.xirr.toFixed(2)}%
+                            </div>
                           )}
                         </div>
                       </div>
-                    </div>
-                  )}
+                    );
+                  })()}
                 </div>
               ))}
 
