@@ -56,6 +56,13 @@ function queryAll<T>(db: any, sql: string): T[] {
   return rows;
 }
 
+function isInvestmentName(name: string): boolean {
+  return /investiment/i.test(name);
+}
+
+// Special sentinel: transfers TO this account → investment transactions
+const INV_SENTINEL = '__inv__';
+
 // ── main component ─────────────────────────────────────────────────────────────
 
 interface Props {
@@ -70,10 +77,12 @@ export default function KakeboImport({ onClose }: Props) {
 
   const [step, setStep] = useState<Step>('upload');
   const [parsed, setParsed] = useState<ParsedDB | null>(null);
+  // accountMap value: trackr account id (string), '' = skip, 'new' = create new, '__inv__' = investment sentinel
   const [accountMap, setAccountMap] = useState<Record<number, string>>({});
-  // value: trackr account id (string), '' = skip, 'new' = create new
+  // investmentCatIds: expense categories to treat as 'investment' type
+  const [investmentCatIds, setInvestmentCatIds] = useState<Set<number>>(new Set());
   const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<{ transactions: number; transfers: number; skipped: number } | null>(null);
+  const [result, setResult] = useState<{ transactions: number; investments: number; transfers: number; skipped: number } | null>(null);
   const [progress, setProgress] = useState('');
 
   // ── step 1: parse file ──────────────────────────────────────────────────────
@@ -119,20 +128,41 @@ export default function KakeboImport({ onClose }: Props) {
       db.close();
       setParsed({ conti, categorie, movimenti });
 
-      // Init account map: try to auto-match by name
+      // Init account map: investment accounts → INV_SENTINEL; others → match by name
       const initMap: Record<number, string> = {};
       for (const c of conti) {
-        const match = accounts.find(a => a.name.toLowerCase() === c.nome.toLowerCase().trim());
-        initMap[c.id] = match ? String(match.id) : '';
+        if (c.tipo === 1) {
+          initMap[c.id] = INV_SENTINEL;
+        } else {
+          const match = accounts.find(a => a.name.toLowerCase() === c.nome.toLowerCase().trim());
+          initMap[c.id] = match ? String(match.id) : '';
+        }
       }
       setAccountMap(initMap);
+
+      // Auto-detect investment expense categories (tipoMovimento=0, name contains "investiment")
+      const invCats = new Set<number>(
+        categorie
+          .filter(c => c.tipoMovimento === 0 && isInvestmentName(c.nome))
+          .map(c => c.id)
+      );
+      setInvestmentCatIds(invCats);
+
       setStep('mapping');
     } catch (e: any) {
       setError('Errore nel parsing del file: ' + (e.message || e));
     }
   };
 
-  // ── step 2: account mapping ─────────────────────────────────────────────────
+  // ── helpers for UI ──────────────────────────────────────────────────────────
+
+  const toggleInvCat = (id: number) => {
+    setInvestmentCatIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
 
   // ── step 3: import ──────────────────────────────────────────────────────────
 
@@ -149,10 +179,15 @@ export default function KakeboImport({ onClose }: Props) {
       // 1. Resolve / create accounts
       setProgress('Creazione conti...');
       const contoIdMap: Record<number, number> = {}; // kakebo id → trackr id
+      const invContoIds = new Set<number>(); // kakebo ids mapped as investment sentinel
 
       for (const c of parsed.conti) {
         const mapped = accountMap[c.id];
-        if (!mapped || mapped === '') continue; // skip
+        if (!mapped || mapped === '') continue;
+        if (mapped === INV_SENTINEL) {
+          invContoIds.add(c.id);
+          continue; // no trackr account for investment sentinels
+        }
         if (mapped === 'new') {
           const { data, error } = await supabase
             .from('accounts')
@@ -166,49 +201,18 @@ export default function KakeboImport({ onClose }: Props) {
         }
       }
 
-      // 2. Resolve / create categories + subcategories
+      // 2. Resolve category names & create missing categories
       setProgress('Sincronizzazione categorie...');
 
-      // Map: kakebo cat id → { trackrCategoryName, trackrSubcategoryName? }
-      const catResolved: Record<number, { catName: string; subName?: string }> = {};
-
-      // Current trackr categories (reload fresh)
-      const { data: freshCats } = await supabase.from('categories').select('*, subcategories(*)').eq('user_id', userId);
-      const trackrCats: CategoryWithStats[] = freshCats || [];
-
-      // Helper: find or create category
-      const catCreated: Record<string, number> = {}; // name_type → trackr category id
-      for (const tc of trackrCats) {
-        catCreated[`${tc.name.toLowerCase()}|${tc.category_type}`] = tc.id;
-      }
-
-      const getOrCreateCategory = async (name: string, type: 'expense' | 'income'): Promise<number> => {
-        const key = `${name.toLowerCase()}|${type}`;
-        if (catCreated[key]) return catCreated[key];
-        const { data, error } = await supabase
-          .from('categories')
-          .insert({ user_id: userId, name, icon: type === 'expense' ? '💸' : '💰', category_type: type })
-          .select()
-          .single();
-        if (error) throw error;
-        catCreated[key] = data.id;
-        return data.id;
-      };
-
-      // subcategory cache: catId_subName → sub id (not strictly needed since we use name string)
-      // In trackr, category is stored as a name string in transactions, subcategory also as string
-      // So we just need to map kakebo cat → name strings
-
-      // Build kakebo parent categories map
       const kCatById: Record<number, KCategoria> = {};
       for (const c of parsed.categorie) kCatById[c.id] = c;
 
+      // catResolved[kakebo cat id] → { catName, subName? }
+      const catResolved: Record<number, { catName: string; subName?: string }> = {};
       for (const c of parsed.categorie) {
         if (c.padreId == null) {
-          // main category
           catResolved[c.id] = { catName: c.nome.trim() };
         } else {
-          // subcategory
           const parent = kCatById[c.padreId];
           catResolved[c.id] = {
             catName: parent ? parent.nome.trim() : c.nome.trim(),
@@ -217,24 +221,55 @@ export default function KakeboImport({ onClose }: Props) {
         }
       }
 
-      // Pre-create categories that will be used
+      // Reload fresh trackr categories
+      const { data: freshCats } = await supabase.from('categories').select('*, subcategories(*)').eq('user_id', userId);
+      const catCreated: Record<string, number> = {};
+      for (const tc of (freshCats as CategoryWithStats[] || [])) {
+        catCreated[`${tc.name.toLowerCase()}|${tc.category_type}`] = tc.id;
+      }
+
+      const getOrCreateCategory = async (name: string, type: 'expense' | 'income' | 'investment'): Promise<void> => {
+        const key = `${name.toLowerCase()}|${type}`;
+        if (catCreated[key]) return;
+        const icon = type === 'expense' ? '💸' : type === 'income' ? '💰' : '📈';
+        const { data, error } = await supabase
+          .from('categories')
+          .insert({ user_id: userId, name, icon, category_type: type })
+          .select()
+          .single();
+        if (error) throw error;
+        catCreated[key] = data.id;
+      };
+
+      // Determine which type each kakebo category will become in trackr
+      const getCatTrackrType = (catId: number): 'expense' | 'income' | 'investment' => {
+        if (investmentCatIds.has(catId)) return 'investment';
+        const cat = kCatById[catId];
+        if (!cat) return 'expense';
+        // If subcategory, check parent's investment status too
+        if (cat.padreId != null && investmentCatIds.has(cat.padreId)) return 'investment';
+        return cat.tipoMovimento === 1 ? 'income' : 'expense';
+      };
+
+      // Pre-create all categories used by non-transfer movements
       const usedCatIds = new Set<number>();
       for (const m of parsed.movimenti) {
-        if (m.tipo === -1) continue; // transfer — no category
+        if (m.tipo === -1 && !invContoIds.has(m.contoId)) continue;
         const catId = m.sottocategoriaId ?? m.categoriaId;
         if (catId != null) usedCatIds.add(catId);
-        else if (m.categoriaId != null) usedCatIds.add(m.categoriaId);
       }
+      // Also ensure "Investimenti" category exists for investment sentinel transfers
+      const hasInvTransfers = parsed.movimenti.some(m => m.tipo === -1 && invContoIds.has(m.contoId));
+      if (hasInvTransfers) await getOrCreateCategory('Investimenti', 'investment');
 
       for (const cid of usedCatIds) {
         const resolved = catResolved[cid];
         if (!resolved) continue;
-        const tipo = kCatById[cid]?.tipoMovimento ?? (kCatById[kCatById[cid]?.padreId ?? -1]?.tipoMovimento ?? 0);
-        const type = tipo === 0 ? 'expense' : 'income';
+        const type = getCatTrackrType(cid);
         await getOrCreateCategory(resolved.catName, type);
       }
 
-      // 3. Batch insert transactions
+      // 3. Build transaction / transfer rows
       setProgress('Importazione transazioni...');
 
       const txRows: any[] = [];
@@ -247,23 +282,39 @@ export default function KakeboImport({ onClose }: Props) {
         const description = m.note || null;
 
         if (m.tipo === -1) {
-          // Transfer
-          const fromId = contoIdMap[m.contoPrelievoId!];
-          const toId = contoIdMap[m.contoId];
-          if (!fromId || !toId) { skipped++; continue; }
-          trRows.push({
-            user_id: userId,
-            from_account_id: fromId,
-            to_account_id: toId,
-            amount,
-            description,
-            date,
-          });
+          // Transfer or investment purchase
+          if (invContoIds.has(m.contoId)) {
+            // Transfer to investment account → investment transaction from source
+            const accountId = m.contoPrelievoId != null ? contoIdMap[m.contoPrelievoId] : undefined;
+            if (!accountId) { skipped++; continue; }
+            txRows.push({
+              user_id: userId,
+              account_id: accountId,
+              type: 'investment',
+              category: 'Investimenti',
+              subcategory: null,
+              amount,
+              description,
+              date,
+            });
+          } else {
+            // Regular transfer between normal accounts
+            const fromId = m.contoPrelievoId != null ? contoIdMap[m.contoPrelievoId] : undefined;
+            const toId = contoIdMap[m.contoId];
+            if (!fromId || !toId) { skipped++; continue; }
+            trRows.push({
+              user_id: userId,
+              from_account_id: fromId,
+              to_account_id: toId,
+              amount,
+              description,
+              date,
+            });
+          }
         } else {
           const accountId = contoIdMap[m.contoId];
           if (!accountId) { skipped++; continue; }
 
-          const type = m.tipo === 1 ? 'income' : 'expense';
           const catId = m.sottocategoriaId ?? m.categoriaId;
           let catName = 'Altro';
           let subName: string | undefined;
@@ -273,6 +324,16 @@ export default function KakeboImport({ onClose }: Props) {
             subName = catResolved[catId].subName;
           } else if (m.categoriaId != null && catResolved[m.categoriaId]) {
             catName = catResolved[m.categoriaId].catName;
+          }
+
+          // Determine type: expense category that's flagged as investment → 'investment'
+          let type: 'expense' | 'income' | 'investment' = m.tipo === 1 ? 'income' : 'expense';
+          if (catId != null) {
+            const resolved = getCatTrackrType(catId);
+            if (resolved === 'investment') type = 'investment';
+          } else if (m.categoriaId != null) {
+            const resolved = getCatTrackrType(m.categoriaId);
+            if (resolved === 'investment') type = 'investment';
           }
 
           txRows.push({
@@ -288,15 +349,16 @@ export default function KakeboImport({ onClose }: Props) {
         }
       }
 
-      // Insert in chunks of 500
-      let txCount = 0;
+      // 4. Batch insert
+      let txCount = 0; let invCount = 0; let trCount = 0;
+
       for (const batch of chunk(txRows, 500)) {
         const { error } = await supabase.from('transactions').insert(batch);
         if (error) throw error;
-        txCount += batch.length;
+        txCount += batch.filter(r => r.type !== 'investment').length;
+        invCount += batch.filter(r => r.type === 'investment').length;
       }
 
-      let trCount = 0;
       for (const batch of chunk(trRows, 500)) {
         const { error } = await supabase.from('transfers').insert(batch);
         if (error) throw error;
@@ -304,7 +366,7 @@ export default function KakeboImport({ onClose }: Props) {
       }
 
       setProgress('');
-      setResult({ transactions: txCount, transfers: trCount, skipped });
+      setResult({ transactions: txCount, investments: invCount, transfers: trCount, skipped });
       setStep('done');
       await refreshAll();
 
@@ -319,12 +381,12 @@ export default function KakeboImport({ onClose }: Props) {
   const dateRange = parsed?.movimenti.length
     ? (() => {
         const dates = parsed.movimenti.map(m => m.dataOperazione);
-        return {
-          from: msToDate(Math.min(...dates)),
-          to: msToDate(Math.max(...dates)),
-        };
+        return { from: msToDate(Math.min(...dates)), to: msToDate(Math.max(...dates)) };
       })()
     : null;
+
+  // Expense categories (potential investment candidates)
+  const expenseCats = parsed?.categorie.filter(c => c.padreId == null && c.tipoMovimento === 0) ?? [];
 
   return (
     <div className="space-y-5">
@@ -344,20 +406,15 @@ export default function KakeboImport({ onClose }: Props) {
             </svg>
             <span>Scegli file <code>kakebo_db</code></span>
           </button>
-          <input
-            ref={fileRef}
-            type="file"
-            className="hidden"
-            accept="*"
-            onChange={e => e.target.files?.[0] && handleFile(e.target.files[0])}
-          />
+          <input ref={fileRef} type="file" className="hidden" accept="*"
+            onChange={e => e.target.files?.[0] && handleFile(e.target.files[0])} />
           {error && <p className="mt-3 text-sm text-red-500 dark:text-red-400">{error}</p>}
         </div>
       )}
 
       {/* ── Mapping ── */}
       {step === 'mapping' && parsed && (
-        <div className="space-y-4">
+        <div className="space-y-5">
           {/* Summary */}
           <div className="grid grid-cols-3 gap-2 text-center">
             <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
@@ -373,7 +430,6 @@ export default function KakeboImport({ onClose }: Props) {
               <div className="text-xs text-gray-500 dark:text-gray-400">Categorie</div>
             </div>
           </div>
-
           {dateRange && (
             <p className="text-xs text-gray-500 dark:text-gray-400 text-center">
               Periodo: {dateRange.from} → {dateRange.to}
@@ -382,13 +438,11 @@ export default function KakeboImport({ onClose }: Props) {
 
           {/* Account mapping */}
           <div>
-            <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Associa i conti Kakebo ai tuoi conti Trackr
-            </div>
+            <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Conti</div>
             <div className="space-y-2">
               {parsed.conti.map(c => (
                 <div key={c.id} className="flex items-center gap-2">
-                  <span className="text-sm text-gray-700 dark:text-gray-300 w-32 shrink-0 truncate">{c.nome}</span>
+                  <span className="text-sm text-gray-700 dark:text-gray-300 w-32 shrink-0 truncate" title={c.nome}>{c.nome}</span>
                   <select
                     className="flex-1 input text-sm py-1.5"
                     value={accountMap[c.id] ?? ''}
@@ -396,6 +450,7 @@ export default function KakeboImport({ onClose }: Props) {
                   >
                     <option value="">— Ignora —</option>
                     <option value="new">+ Crea nuovo</option>
+                    <option value={INV_SENTINEL}>📈 Trasferimenti → Investimenti</option>
                     {accounts.map(a => (
                       <option key={a.id} value={String(a.id)}>{a.icon} {a.name}</option>
                     ))}
@@ -403,19 +458,42 @@ export default function KakeboImport({ onClose }: Props) {
                 </div>
               ))}
             </div>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1.5">
+              "Trasferimenti → Investimenti": i bonifici verso questo conto diventano transazioni di investimento.
+            </p>
           </div>
 
-          <p className="text-xs text-gray-500 dark:text-gray-400">
-            Le categorie verranno create automaticamente se non esistono già.
-          </p>
+          {/* Investment categories */}
+          {expenseCats.length > 0 && (
+            <div>
+              <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Categorie investimento</div>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                Le categorie selezionate vengono importate come <strong>investimenti</strong> invece che spese.
+              </p>
+              <div className="space-y-1">
+                {expenseCats.map(c => (
+                  <label key={c.id} className="flex items-center gap-2 py-1.5 px-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={investmentCatIds.has(c.id)}
+                      onChange={() => toggleInvCat(c.id)}
+                      className="w-4 h-4 rounded text-primary-500"
+                    />
+                    <span className="text-sm text-gray-700 dark:text-gray-300">{c.nome.trim()}</span>
+                    {isInvestmentName(c.nome) && (
+                      <span className="text-xs text-primary-500 dark:text-primary-400 ml-auto">auto</span>
+                    )}
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
 
           {error && <p className="text-sm text-red-500 dark:text-red-400">{error}</p>}
 
           <div className="flex gap-2">
             <button className="flex-1 btn-secondary text-sm" onClick={onClose}>Annulla</button>
-            <button className="flex-1 btn-primary text-sm" onClick={handleImport}>
-              Importa
-            </button>
+            <button className="flex-1 btn-primary text-sm" onClick={handleImport}>Importa</button>
           </div>
         </div>
       )}
@@ -437,9 +515,9 @@ export default function KakeboImport({ onClose }: Props) {
           <div className="bg-green-50 dark:bg-green-900/20 rounded-xl p-4 text-center space-y-1">
             <div className="text-2xl">✅</div>
             <div className="font-semibold text-green-800 dark:text-green-300">Importazione completata</div>
-            <div className="text-sm text-green-700 dark:text-green-400">
-              {result.transactions} transazioni · {result.transfers} trasferimenti
-              {result.skipped > 0 && ` · ${result.skipped} ignorati`}
+            <div className="text-sm text-green-700 dark:text-green-400 space-y-0.5">
+              <div>{result.transactions} transazioni · {result.investments} investimenti · {result.transfers} trasferimenti</div>
+              {result.skipped > 0 && <div className="text-xs opacity-75">{result.skipped} record ignorati (conto non mappato)</div>}
             </div>
           </div>
           <button className="w-full btn-primary" onClick={onClose}>Chiudi</button>
