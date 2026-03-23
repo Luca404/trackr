@@ -18,6 +18,7 @@ export default function Layout({ children }: LayoutProps) {
   const handleRefresh = async () => {
     setIsRefreshing(true);
     await refreshAll();
+    window.dispatchEvent(new CustomEvent('trackr:refresh'));
     setIsRefreshing(false);
   };
 

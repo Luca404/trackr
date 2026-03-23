@@ -33,37 +33,59 @@ export default function PortfoliosPage() {
 
   const investmentCategories = categories.filter(c => c.category_type === 'investment');
 
+  const SUMMARIES_CACHE_KEY = 'pf_summaries_cache';
+  const SUMMARIES_CACHE_TTL = 24 * 60 * 60 * 1000; // 24h
+
+  const loadSummariesFromServer = async (forceRefresh = false) => {
+    if (!forceRefresh) {
+      try {
+        const raw = localStorage.getItem(SUMMARIES_CACHE_KEY);
+        if (raw) {
+          const { time, data } = JSON.parse(raw);
+          if (Date.now() - time < SUMMARIES_CACHE_TTL) {
+            setSummaries(data);
+            return;
+          }
+        }
+      } catch (_) {}
+    }
+    setLoadingSummaries(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) return;
+      const token = session.access_token;
+      const results = await Promise.allSettled(
+        portfolios.map(p =>
+          fetch(`${PF_BACKEND_URL}/portfolios/${p.id}/summary`, {
+            headers: { Authorization: `Bearer ${token}` },
+          }).then(r => r.ok ? r.json() : null)
+        )
+      );
+      const map: Record<number, PortfolioSummary> = {};
+      results.forEach((r, i) => {
+        if (r.status === 'fulfilled' && r.value) map[portfolios[i].id] = r.value;
+      });
+      setSummaries(map);
+      try {
+        localStorage.setItem(SUMMARIES_CACHE_KEY, JSON.stringify({ time: Date.now(), data: map }));
+      } catch (_) {}
+    } catch (e) {
+      console.error('Error fetching portfolio summaries:', e);
+    } finally {
+      setLoadingSummaries(false);
+    }
+  };
+
   useEffect(() => {
     if (!isInitialized || portfolios.length === 0) return;
-    let cancelled = false;
-    const fetchSummaries = async () => {
-      setLoadingSummaries(true);
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session?.access_token) return;
-        const token = session.access_token;
-        const results = await Promise.allSettled(
-          portfolios.map(p =>
-            fetch(`${PF_BACKEND_URL}/portfolios/${p.id}/summary`, {
-              headers: { Authorization: `Bearer ${token}` },
-            }).then(r => r.ok ? r.json() : null)
-          )
-        );
-        if (cancelled) return;
-        const map: Record<number, PortfolioSummary> = {};
-        results.forEach((r, i) => {
-          if (r.status === 'fulfilled' && r.value) map[portfolios[i].id] = r.value;
-        });
-        setSummaries(map);
-      } catch (e) {
-        console.error('Error fetching portfolio summaries:', e);
-      } finally {
-        if (!cancelled) setLoadingSummaries(false);
-      }
-    };
-    fetchSummaries();
-    return () => { cancelled = true; };
+    loadSummariesFromServer(false);
   }, [isInitialized, portfolios.length]);
+
+  useEffect(() => {
+    const onRefresh = () => loadSummariesFromServer(true);
+    window.addEventListener('trackr:refresh', onRefresh);
+    return () => window.removeEventListener('trackr:refresh', onRefresh);
+  }, [portfolios]);
 
   const handleCreatePortfolio = () => {
     setSelectedPortfolio(null);
@@ -93,7 +115,7 @@ export default function PortfoliosPage() {
       const updated = await apiService.updatePortfolio(selectedPortfolio.id, data);
       updatePortfolio(updated);
     } else {
-      const created = await apiService.createPortfolio(data);
+      const created = await apiService.createPortfolio({ ...data, initial_capital: 0 });
       addPortfolio(created);
     }
     setIsModalOpen(false);
@@ -245,7 +267,6 @@ interface PortfolioFormProps {
 function PortfolioForm({ onSubmit, onDelete, onCancel, initialData, isEditMode, investmentCategories, orders, isLoadingOrders }: PortfolioFormProps) {
   const [name, setName] = useState(initialData?.name || '');
   const [description, setDescription] = useState(initialData?.description || '');
-  const [initialCapital, setInitialCapital] = useState(initialData?.initial_capital?.toString() || '');
   const [currency, setCurrency] = useState(initialData?.reference_currency || 'EUR');
   const [categoryId, setCategoryId] = useState<number | undefined>(initialData?.category_id);
   const [isLoading, setIsLoading] = useState(false);
@@ -259,7 +280,6 @@ function PortfolioForm({ onSubmit, onDelete, onCancel, initialData, isEditMode, 
       await onSubmit({
         name,
         description: description || undefined,
-        initial_capital: parseFloat(initialCapital) || 0,
         reference_currency: currency,
         category_id: categoryId,
       });
@@ -301,26 +321,23 @@ function PortfolioForm({ onSubmit, onDelete, onCancel, initialData, isEditMode, 
         />
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Capitale Iniziale</label>
-          <input
-            type="number"
-            step="0.01"
-            min="0"
-            value={initialCapital}
-            onChange={(e) => setInitialCapital(e.target.value)}
-            className="input"
-            placeholder="0"
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Valuta</label>
-          <select value={currency} onChange={(e) => setCurrency(e.target.value)} className="input">
-            <option value="EUR">EUR (€)</option>
-            <option value="USD">USD ($)</option>
-            <option value="GBP">GBP (£)</option>
-          </select>
+      <div>
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Valuta</label>
+        <div className="flex gap-2">
+          {[{ code: 'EUR', symbol: '€' }, { code: 'USD', symbol: '$' }, { code: 'GBP', symbol: '£' }, { code: 'CHF', symbol: 'Fr' }].map(c => (
+            <button
+              key={c.code}
+              type="button"
+              onClick={() => setCurrency(c.code)}
+              className={`flex-1 py-2 rounded-lg text-sm font-medium border-2 transition-colors ${
+                currency === c.code
+                  ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-300'
+                  : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400'
+              }`}
+            >
+              {c.symbol} {c.code}
+            </button>
+          ))}
         </div>
       </div>
 

@@ -506,26 +506,6 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
           </button>
         </div>
 
-        {/* Portafoglio */}
-        {allPortfolios.length > 0 && (
-          <div className="flex flex-wrap gap-2">
-            {allPortfolios.map(p => (
-              <button
-                key={p.id}
-                type="button"
-                onClick={() => setSelectedPortfolio(p)}
-                className={`px-3 py-1.5 rounded-lg text-sm border-2 transition-colors ${
-                  selectedPortfolio?.id === p.id
-                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300'
-                    : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400'
-                }`}
-              >
-                {p.name}
-              </button>
-            ))}
-          </div>
-        )}
-
         {/* Ticker + Quantità */}
         <div className="grid grid-cols-2 gap-3">
           <div>
