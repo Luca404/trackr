@@ -6,9 +6,16 @@ import Layout from '../components/layout/Layout';
 import Modal from '../components/common/Modal';
 import { SkeletonPortfolioCard } from '../components/common/SkeletonLoader';
 import { useSkeletonCount } from '../hooks/useSkeletonCount';
-import type { Portfolio, PortfolioFormData, Order, Category } from '../types';
+import type { Portfolio, PortfolioFormData, Order, OrderFormData, Category } from '../types';
 
 const PF_BACKEND_URL = import.meta.env.VITE_PF_BACKEND_URL || 'https://portfolio-tracker-production-3bd4.up.railway.app';
+
+interface InitialPosition {
+  symbol: string;
+  quantity: number;
+  price: number;
+  date: string;
+}
 
 interface PortfolioSummary {
   total_value: number;
@@ -110,13 +117,32 @@ export default function PortfoliosPage() {
     }
   };
 
-  const handleSubmit = async (data: PortfolioFormData) => {
+  const handleSubmit = async (data: PortfolioFormData, initialPositions?: InitialPosition[]) => {
     if (isEditMode && selectedPortfolio) {
       const updated = await apiService.updatePortfolio(selectedPortfolio.id, data);
       updatePortfolio(updated);
     } else {
       const created = await apiService.createPortfolio({ ...data, initial_capital: 0 });
       addPortfolio(created);
+      if (initialPositions && initialPositions.length > 0) {
+        const currency = data.reference_currency || 'EUR';
+        await Promise.allSettled(
+          initialPositions.map(pos =>
+            apiService.createOrder({
+              portfolio_id: created.id,
+              symbol: pos.symbol.trim().toUpperCase(),
+              currency,
+              quantity: pos.quantity,
+              price: pos.price,
+              commission: 0,
+              order_type: 'buy',
+              date: pos.date,
+            } as OrderFormData)
+          )
+        );
+        // Invalida cache summaries così al prossimo caricamento fa fetch fresco
+        localStorage.removeItem(SUMMARIES_CACHE_KEY);
+      }
     }
     setIsModalOpen(false);
   };
@@ -141,6 +167,11 @@ export default function PortfoliosPage() {
 
   const showSkeleton = isLoading || !isInitialized;
 
+  // Calcola totale investimenti sommando i summaries disponibili (per ora stesso reference_currency)
+  const totalInvestments = Object.values(summaries).reduce((acc, s) => acc + s.total_value, 0);
+  const totalPL = Object.values(summaries).reduce((acc, s) => acc + s.total_gain_loss, 0);
+  const hasSummaries = Object.keys(summaries).length > 0;
+
   return (
     <Layout>
       <div className="space-y-3">
@@ -148,6 +179,29 @@ export default function PortfoliosPage() {
           ? Array.from({ length: skeletonCount }).map((_, i) => <SkeletonPortfolioCard key={i} />)
           : (
             <>
+              {/* Banner Investimenti totali */}
+              {portfolios.length > 0 && (
+                <div className="sticky top-0 z-10 -mx-4 px-4 pt-1 pb-3 bg-gray-50 dark:bg-gray-900 relative">
+                  <div className="card py-5">
+                    <div className="text-sm text-gray-500 dark:text-gray-400 mb-1 text-center">Investimenti totali</div>
+                    <div className="text-4xl font-bold text-center">
+                      {loadingSummaries && !hasSummaries
+                        ? <span className="inline-block h-10 w-40 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
+                        : <span className={totalPL >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>
+                            {formatCurrency(totalInvestments)}
+                          </span>
+                      }
+                    </div>
+                    {hasSummaries && (
+                      <div className={`text-sm text-center mt-1 ${totalPL >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                        {totalPL >= 0 ? '+' : ''}{formatCurrency(totalPL)}
+                      </div>
+                    )}
+                  </div>
+                  <div className="absolute left-0 right-0 h-6 bg-gradient-to-b from-gray-50 dark:from-gray-900 to-transparent pointer-events-none" style={{ top: '100%' }} />
+                </div>
+              )}
+
               {portfolios.length === 0 && (
                 <div className="text-center py-16 text-gray-500 dark:text-gray-400">
                   <div className="text-5xl mb-4">📈</div>
@@ -254,7 +308,7 @@ export default function PortfoliosPage() {
 }
 
 interface PortfolioFormProps {
-  onSubmit: (data: PortfolioFormData) => Promise<void>;
+  onSubmit: (data: PortfolioFormData, initialPositions?: InitialPosition[]) => Promise<void>;
   onDelete?: () => Promise<void>;
   onCancel: () => void;
   initialData?: PortfolioFormData;
@@ -271,6 +325,8 @@ function PortfolioForm({ onSubmit, onDelete, onCancel, initialData, isEditMode, 
   const [categoryId, setCategoryId] = useState<number | undefined>(initialData?.category_id);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [initialPositions, setInitialPositions] = useState<InitialPosition[]>([]);
+  const [isPositionModalOpen, setIsPositionModalOpen] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -282,7 +338,7 @@ function PortfolioForm({ onSubmit, onDelete, onCancel, initialData, isEditMode, 
         description: description || undefined,
         reference_currency: currency,
         category_id: categoryId,
-      });
+      }, initialPositions.length > 0 ? initialPositions : undefined);
     } catch (err: any) {
       setError('Errore durante il salvataggio');
       setIsLoading(false);
@@ -294,7 +350,7 @@ function PortfolioForm({ onSubmit, onDelete, onCancel, initialData, isEditMode, 
     return `${symbols[curr] || curr} ${value.toFixed(2).replace('.', ',')}`;
   };
 
-  return (
+  return (<>
     <form onSubmit={handleSubmit} autoComplete="off" className="space-y-4">
       <div>
         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Nome</label>
@@ -377,6 +433,48 @@ function PortfolioForm({ onSubmit, onDelete, onCancel, initialData, isEditMode, 
         </div>
       )}
 
+      {/* Posizioni iniziali (solo create mode) */}
+      {!isEditMode && (
+        <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
+          <div className="flex items-center justify-between mb-2">
+            <div className="text-sm font-medium text-gray-700 dark:text-gray-300">
+              Posizioni iniziali {initialPositions.length > 0 && `(${initialPositions.length})`}
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsPositionModalOpen(true)}
+              className="text-sm text-primary-600 dark:text-primary-400 font-medium"
+            >
+              + Aggiungi
+            </button>
+          </div>
+          {initialPositions.length === 0 ? (
+            <div className="text-sm text-gray-400 dark:text-gray-500 text-center py-3">
+              Nessuna posizione — puoi aggiungerne dopo
+            </div>
+          ) : (
+            <div className="space-y-1 max-h-40 overflow-y-auto">
+              {initialPositions.map((pos, i) => (
+                <div key={i} className="flex items-center justify-between py-2 px-3 rounded-lg bg-gray-50 dark:bg-gray-800/50 text-sm">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="font-mono font-medium text-gray-900 dark:text-gray-100">{pos.symbol}</span>
+                    <span className="text-gray-500 dark:text-gray-400">{pos.quantity}×</span>
+                    <span className="text-gray-500 dark:text-gray-400">@ {pos.price.toFixed(2)}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setInitialPositions(prev => prev.filter((_, j) => j !== i))}
+                    className="text-red-400 dark:text-red-500 text-xs ml-2 shrink-0"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Ordini (solo edit mode) */}
       {isEditMode && (
         <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
@@ -438,6 +536,102 @@ function PortfolioForm({ onSubmit, onDelete, onCancel, initialData, isEditMode, 
           🗑️ Elimina portafoglio
         </button>
       )}
+    </form>
+
+    <Modal isOpen={isPositionModalOpen} onClose={() => setIsPositionModalOpen(false)} title="Nuova posizione">
+      <PositionForm
+        currency={currency}
+        onAdd={(pos) => {
+          setInitialPositions(prev => [...prev, pos]);
+          setIsPositionModalOpen(false);
+        }}
+        onCancel={() => setIsPositionModalOpen(false)}
+      />
+    </Modal>
+  </>);
+}
+
+interface PositionFormProps {
+  currency: string;
+  onAdd: (pos: InitialPosition) => void;
+  onCancel: () => void;
+}
+
+function PositionForm({ currency, onAdd, onCancel }: PositionFormProps) {
+  const today = new Date().toISOString().split('T')[0];
+  const [symbol, setSymbol] = useState('');
+  const [quantity, setQuantity] = useState('');
+  const [price, setPrice] = useState('');
+  const [date, setDate] = useState(today);
+  const symbols: Record<string, string> = { EUR: '€', USD: '$', GBP: '£', CHF: 'Fr' };
+  const currSymbol = symbols[currency] || currency;
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const qty = parseFloat(quantity);
+    const prc = parseFloat(price.replace(',', '.'));
+    if (!symbol.trim() || !qty || !prc) return;
+    onAdd({ symbol: symbol.trim().toUpperCase(), quantity: qty, price: prc, date });
+  };
+
+  return (
+    <form onSubmit={handleSubmit} autoComplete="off" className="space-y-4">
+      <div>
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Ticker</label>
+        <input
+          type="text"
+          value={symbol}
+          onChange={e => setSymbol(e.target.value)}
+          className="input font-mono uppercase"
+          placeholder="Es: VWCE, AAPL..."
+          autoComplete="off" autoCorrect="off" spellCheck={false}
+          required
+        />
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Quantità</label>
+          <input
+            type="number"
+            step="0.0001"
+            min="0.0001"
+            value={quantity}
+            onChange={e => setQuantity(e.target.value)}
+            className="input"
+            placeholder="0"
+            required
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            Prezzo medio ({currSymbol})
+          </label>
+          <input
+            type="text"
+            inputMode="decimal"
+            value={price}
+            onChange={e => setPrice(e.target.value)}
+            className="input"
+            placeholder="0,00"
+            required
+          />
+        </div>
+      </div>
+      <div>
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Data acquisto</label>
+        <input
+          type="date"
+          value={date}
+          onChange={e => setDate(e.target.value)}
+          className="input"
+          max={today}
+          required
+        />
+      </div>
+      <div className="flex gap-3 pt-1">
+        <button type="button" onClick={onCancel} className="flex-1 btn-secondary">Annulla</button>
+        <button type="submit" className="flex-1 btn-primary">Aggiungi</button>
+      </div>
     </form>
   );
 }
