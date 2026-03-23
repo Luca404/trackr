@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { apiService } from '../services/api';
 import { supabase } from '../services/supabase';
 import { useAuth } from '../contexts/AuthContext';
+import Modal from '../components/common/Modal';
+import KakeboImport from '../components/KakeboImport';
 
 function getTheme(): 'dark' | 'light' | 'system' {
   const saved = localStorage.getItem('theme');
@@ -40,6 +42,7 @@ export default function SettingsPage() {
   const [passwordLoading, setPasswordLoading] = useState(false);
 
   const [exportMessage, setExportMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [showKakeboImport, setShowKakeboImport] = useState(false);
 
   useEffect(() => { applyTheme(theme); }, [theme]);
 
@@ -217,6 +220,24 @@ export default function SettingsPage() {
           </div>
         </section>
 
+        {/* Import */}
+        <section className="card">
+          <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-4">Importa dati</h2>
+          <button
+            onClick={() => setShowKakeboImport(true)}
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-lg bg-gray-50 dark:bg-gray-700/50 text-gray-700 dark:text-gray-300 text-sm font-medium hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+          >
+            <span className="text-lg">📒</span>
+            <div className="text-left">
+              <div>Importa da Kakebo</div>
+              <div className="text-xs text-gray-400 dark:text-gray-500 font-normal">SQLite backup dall'app Kakebo</div>
+            </div>
+            <svg className="w-4 h-4 text-gray-400 ml-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
+        </section>
+
         {/* Backup */}
         <section className="card">
           <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-4">Backup</h2>
@@ -263,6 +284,10 @@ export default function SettingsPage() {
         </section>
 
       </div>
+
+      <Modal isOpen={showKakeboImport} onClose={() => setShowKakeboImport(false)} title="Importa da Kakebo">
+        <KakeboImport onClose={() => setShowKakeboImport(false)} />
+      </Modal>
     </div>
   );
 }
