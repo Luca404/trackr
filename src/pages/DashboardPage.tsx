@@ -6,6 +6,8 @@ import TransactionForm from '../components/transactions/TransactionForm';
 import { SkeletonValue, SkeletonRecentTransaction } from '../components/common/SkeletonLoader';
 import { useSkeletonCount } from '../hooks/useSkeletonCount';
 import type { Transaction, TransactionStats, TransactionFormData } from '../types';
+import { useTranslation } from 'react-i18next';
+import { useSettings } from '../contexts/SettingsContext';
 
 export default function DashboardPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -14,6 +16,8 @@ export default function DashboardPage() {
   const [isLoading, setIsLoading] = useState(true);
   const skeletonCount = useSkeletonCount('recentTransactions', transactions.length, isLoading, 4);
   const [period, setPeriod] = useState<'month' | 'year'>('month');
+  const { t } = useTranslation();
+  const { formatCurrency } = useSettings();
 
   useEffect(() => {
     loadData();
@@ -26,22 +30,20 @@ export default function DashboardPage() {
       const startDate = new Date();
 
       if (period === 'month') {
-        // Mese corrente
         startDate.setDate(1);
       } else {
-        // Ultimi 12 mesi
         startDate.setMonth(startDate.getMonth() - 11);
         startDate.setDate(1);
       }
 
       const [transactionsData, statsData] = await Promise.all([
-        apiService.getTransactions({}), // Prende tutte le transazioni (ordinate per data)
+        apiService.getTransactions({}),
         apiService.getTransactionStats({
           startDate: startDate.toISOString().split('T')[0],
           endDate: endDate.toISOString().split('T')[0],
         }),
       ]);
-      setTransactions(transactionsData.slice(0, 5)); // Ultime 5
+      setTransactions(transactionsData.slice(0, 5));
       setStats(statsData);
     } catch (error) {
       console.error('Errore caricamento dati:', error);
@@ -55,16 +57,8 @@ export default function DashboardPage() {
     await loadData();
   };
 
-  const formatCurrency = (amount: number) => {
-    const abs = Math.abs(amount);
-    const sign = amount < 0 ? '-' : '';
-    const [intStr, decStr] = abs.toFixed(2).split('.');
-    const intFormatted = intStr.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-    return `${sign}€ ${intFormatted},${decStr}`;
-  };
-
   const formatDate = (dateStr: string) => {
-    return new Date(dateStr).toLocaleDateString('it-IT', {
+    return new Date(dateStr).toLocaleDateString(undefined, {
       day: '2-digit',
       month: 'short',
     });
@@ -87,7 +81,7 @@ export default function DashboardPage() {
                   : 'text-gray-600 dark:text-gray-400'
               }`}
             >
-              Mese
+              {t('dashboard.currentMonth')}
             </button>
             <button
               onClick={() => setPeriod('year')}
@@ -97,7 +91,7 @@ export default function DashboardPage() {
                   : 'text-gray-600 dark:text-gray-400'
               }`}
             >
-              Anno
+              {t('dashboard.last12Months')}
             </button>
           </div>
         </div>
@@ -106,7 +100,7 @@ export default function DashboardPage() {
         <div className="grid grid-cols-2 gap-4">
           <div className="card bg-gradient-to-br from-red-50 to-red-100 dark:from-red-900/20 dark:to-red-800/20 border-2 border-red-200 dark:border-red-800">
             <div className="text-sm text-red-600 dark:text-red-400 font-medium mb-1">
-              Uscite
+              {t('stats.expenses')}
             </div>
             <div className="text-2xl font-bold text-red-700 dark:text-red-300">
               {isLoading ? <SkeletonValue /> : formatCurrency(stats?.totalExpenses || 0)}
@@ -115,7 +109,7 @@ export default function DashboardPage() {
 
           <div className="card bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20 border-2 border-green-200 dark:border-green-800">
             <div className="text-sm text-green-600 dark:text-green-400 font-medium mb-1">
-              Entrate
+              {t('stats.income')}
             </div>
             <div className="text-2xl font-bold text-green-700 dark:text-green-300">
               {isLoading ? <SkeletonValue /> : formatCurrency(stats?.totalIncome || 0)}
@@ -124,7 +118,7 @@ export default function DashboardPage() {
 
           <div className="card bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 border-2 border-blue-200 dark:border-blue-800">
             <div className="text-sm text-blue-600 dark:text-blue-400 font-medium mb-1">
-              Investimenti
+              {t('stats.investments')}
             </div>
             <div className="text-2xl font-bold text-blue-700 dark:text-blue-300">
               {isLoading ? <SkeletonValue /> : formatCurrency(stats?.totalInvestments || 0)}
@@ -133,7 +127,7 @@ export default function DashboardPage() {
 
           <div className="card bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-800/20 border-2 border-purple-200 dark:border-purple-800">
             <div className="text-sm text-purple-600 dark:text-purple-400 font-medium mb-1">
-              Bilancio
+              {t('stats.periodBalance')}
             </div>
             <div className={`text-2xl font-bold ${(stats?.balance || 0) >= 0 ? 'text-purple-700 dark:text-purple-300' : 'text-red-700 dark:text-red-300'}`}>
               {isLoading ? <SkeletonValue /> : formatCurrency(stats?.balance || 0)}
@@ -141,18 +135,18 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Trend ultimi 12 mesi */}
+        {/* Trend */}
         {stats?.monthlyTrend && stats.monthlyTrend.length > 0 && (
           <div className="card">
             <h2 className="text-lg font-semibold mb-4 text-gray-900 dark:text-gray-100">
-              {period === 'month' ? 'Mese Corrente' : 'Ultimi 12 Mesi'}
+              {period === 'month' ? t('dashboard.currentMonth') : t('dashboard.last12Months')}
             </h2>
             <div className="space-y-2">
               {stats.monthlyTrend.slice(-12).map((item) => {
                 const maxAmount = Math.max(...stats.monthlyTrend.map(m => Math.max(m.expenses, m.income)));
                 const expenseWidth = maxAmount > 0 ? (item.expenses / maxAmount * 100) : 0;
                 const incomeWidth = maxAmount > 0 ? (item.income / maxAmount * 100) : 0;
-                const monthName = new Date(item.month + '-01').toLocaleDateString('it-IT', { month: 'short', year: '2-digit' });
+                const monthName = new Date(item.month + '-01').toLocaleDateString(undefined, { month: 'short', year: '2-digit' });
 
                 return (
                   <div key={item.month}>
@@ -165,12 +159,12 @@ export default function DashboardPage() {
                           <div
                             className="bg-red-500 dark:bg-red-400 rounded transition-all"
                             style={{ width: `${expenseWidth}%` }}
-                            title={`Uscite: ${formatCurrency(item.expenses)}`}
+                            title={`${t('stats.expenses')}: ${formatCurrency(item.expenses)}`}
                           />
                           <div
                             className="bg-green-500 dark:bg-green-400 rounded transition-all"
                             style={{ width: `${incomeWidth}%` }}
-                            title={`Entrate: ${formatCurrency(item.income)}`}
+                            title={`${t('stats.income')}: ${formatCurrency(item.income)}`}
                           />
                         </div>
                       </div>
@@ -185,11 +179,11 @@ export default function DashboardPage() {
             <div className="flex gap-4 mt-4 pt-4 border-t border-gray-200 dark:border-gray-700 text-xs">
               <div className="flex items-center gap-2">
                 <div className="w-3 h-3 bg-red-500 dark:bg-red-400 rounded"></div>
-                <span className="text-gray-600 dark:text-gray-400">Uscite</span>
+                <span className="text-gray-600 dark:text-gray-400">{t('stats.expenses')}</span>
               </div>
               <div className="flex items-center gap-2">
                 <div className="w-3 h-3 bg-green-500 dark:bg-green-400 rounded"></div>
-                <span className="text-gray-600 dark:text-gray-400">Entrate</span>
+                <span className="text-gray-600 dark:text-gray-400">{t('stats.income')}</span>
               </div>
             </div>
           </div>
@@ -199,7 +193,7 @@ export default function DashboardPage() {
         {stats?.expensesByCategory && Object.keys(stats.expensesByCategory).length > 0 && (
           <div className="card">
             <h2 className="text-lg font-semibold mb-4 text-gray-900 dark:text-gray-100">
-              Spese per Categoria
+              {t('dashboard.expensesByCategory')}
             </h2>
             <div className="space-y-3">
               {Object.entries(stats.expensesByCategory)
@@ -232,13 +226,13 @@ export default function DashboardPage() {
         <div className="card">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-              Transazioni Recenti
+              {t('dashboard.recentTransactions')}
             </h2>
             <a
               href="/transactions"
               className="text-sm text-primary-600 dark:text-primary-400 font-medium"
             >
-              Vedi tutte
+              {t('dashboard.viewAll')}
             </a>
           </div>
 
@@ -292,7 +286,7 @@ export default function DashboardPage() {
       <Modal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        title="Nuova Transazione"
+        title={t('transactions.newTransaction')}
       >
         <TransactionForm
           onSubmit={handleCreateTransaction}

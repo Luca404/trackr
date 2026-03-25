@@ -11,30 +11,32 @@ import PeriodSelector from '../components/common/PeriodSelector';
 import DateRangePicker from '../components/common/DateRangePicker';
 import { usePeriod } from '../hooks/usePeriod';
 import type { CategoryWithStats, CategoryFormData, SubcategoryFormData } from '../types';
+import { useTranslation } from 'react-i18next';
+import { useSettings } from '../contexts/SettingsContext';
 
 type CategoryFilter = 'income' | 'expense' | 'investment';
 type PeriodType = 'day' | 'week' | 'month' | 'year' | 'all' | 'custom';
 
-const ICON_GROUPS: { label: string; icons: string[] }[] = [
-  { label: 'Cibo',              icons: ['🍔', '🍕', '🍝', '🌮', '🍜', '🍛', '🍣', '🥗', '🍗', '🌭', '🍟', '🥙', '🌯', '🍲', '🥟'] },
-  { label: 'Colazione',         icons: ['🥐', '🥖', '🍞', '🧀', '🥚', '🍳', '🥓'] },
-  { label: 'Dolci & Snack',     icons: ['🍰', '🎂', '🍫', '🍭', '🍬', '🍩', '🍪', '🍦', '🍿', '🌰', '🥜'] },
-  { label: 'Frutta & Verdura',  icons: ['🍎', '🍊', '🍋', '🍇', '🍓', '🥝', '🥑', '🥕', '🌽', '🥦'] },
-  { label: 'Bevande',           icons: ['☕', '🍺', '🍷', '🥤', '🍵', '🧃', '🍹', '🍸', '🍻', '🥂', '🥃', '🍾'] },
-  { label: 'Trasporti',         icons: ['🚌', '🚆', '🚇', '🚕', '🚗', '🚙', '✈️', '🏍️', '🚲', '🛵', '⛽'] },
-  { label: 'Casa & Utenze',     icons: ['🏠', '🏡', '🔑', '💡', '⚡', '🔥', '🚿', '🛋️', '🪴', '🧹', '🧺'] },
-  { label: 'Salute',            icons: ['🏥', '💊', '🩺', '💉', '🦷', '👓', '🧴', '💆', '🚑'] },
-  { label: 'Shopping',          icons: ['🛍️', '👕', '👗', '👠', '👟', '🧥', '👔', '👜', '🎒'] },
-  { label: 'Tecnologia',        icons: ['📱', '💻', '🖥️', '📺', '🎧', '📡', '🌐', '💾'] },
-  { label: 'Intrattenimento',   icons: ['🎬', '🎮', '🎵', '🎸', '🎭', '🎨', '🎤', '📚', '🎲', '🎯', '🎪'] },
-  { label: 'Sport & Fitness',   icons: ['🏋️', '⚽', '🏀', '🎾', '🏊', '🧘', '🏃', '🚴', '🥊', '⛷️', '🏂'] },
-  { label: 'Viaggi',            icons: ['🏖️', '🧳', '🏨', '🗺️', '🗼'] },
-  { label: 'Finanza',           icons: ['💰', '💵', '💳', '🏦', '💸', '📈', '💶'] },
-  { label: 'Istruzione',        icons: ['🎓', '✏️', '📖', '📝', '🖊️'] },
-  { label: 'Animali & Natura',  icons: ['🐶', '🐱', '🐾', '🌳', '🌿', '🌺'] },
-  { label: 'Bellezza & Cura',   icons: ['💄', '💅', '💇', '💈', '🪒', '🧖'] },
-  { label: 'Fumo & Vizi',       icons: ['🚬', '💨'] },
-  { label: 'Varie',             icons: ['🎁', '🎉', '🎀', '🤝', '🛡️', '🧾', '🏛️', '⚖️', '📸', '📌', '💼', '🔧', '🛠️', '🔒', '📞', '📻', '🎃'] },
+const ICON_GROUPS: { tKey: string; icons: string[] }[] = [
+  { tKey: 'categories.groups.food',          icons: ['🍔', '🍕', '🍝', '🌮', '🍜', '🍛', '🍣', '🥗', '🍗', '🌭', '🍟', '🥙', '🌯', '🍲', '🥟'] },
+  { tKey: 'categories.groups.breakfast',     icons: ['🥐', '🥖', '🍞', '🧀', '🥚', '🍳', '🥓'] },
+  { tKey: 'categories.groups.sweetsSnacks',  icons: ['🍰', '🎂', '🍫', '🍭', '🍬', '🍩', '🍪', '🍦', '🍿', '🌰', '🥜'] },
+  { tKey: 'categories.groups.fruitVeg',      icons: ['🍎', '🍊', '🍋', '🍇', '🍓', '🥝', '🥑', '🥕', '🌽', '🥦'] },
+  { tKey: 'categories.groups.drinks',        icons: ['☕', '🍺', '🍷', '🥤', '🍵', '🧃', '🍹', '🍸', '🍻', '🥂', '🥃', '🍾'] },
+  { tKey: 'categories.groups.transport',     icons: ['🚌', '🚆', '🚇', '🚕', '🚗', '🚙', '✈️', '🏍️', '🚲', '🛵', '⛽'] },
+  { tKey: 'categories.groups.homeUtilities', icons: ['🏠', '🏡', '🔑', '💡', '⚡', '🔥', '🚿', '🛋️', '🪴', '🧹', '🧺'] },
+  { tKey: 'categories.groups.health',        icons: ['🏥', '💊', '🩺', '💉', '🦷', '👓', '🧴', '💆', '🚑'] },
+  { tKey: 'categories.groups.shopping',      icons: ['🛍️', '👕', '👗', '👠', '👟', '🧥', '👔', '👜', '🎒'] },
+  { tKey: 'categories.groups.technology',    icons: ['📱', '💻', '🖥️', '📺', '🎧', '📡', '🌐', '💾'] },
+  { tKey: 'categories.groups.entertainment', icons: ['🎬', '🎮', '🎵', '🎸', '🎭', '🎨', '🎤', '📚', '🎲', '🎯', '🎪'] },
+  { tKey: 'categories.groups.sportFitness',  icons: ['🏋️', '⚽', '🏀', '🎾', '🏊', '🧘', '🏃', '🚴', '🥊', '⛷️', '🏂'] },
+  { tKey: 'categories.groups.travel',        icons: ['🏖️', '🧳', '🏨', '🗺️', '🗼'] },
+  { tKey: 'categories.groups.finance',       icons: ['💰', '💵', '💳', '🏦', '💸', '📈', '💶'] },
+  { tKey: 'categories.groups.education',     icons: ['🎓', '✏️', '📖', '📝', '🖊️'] },
+  { tKey: 'categories.groups.animalsNature', icons: ['🐶', '🐱', '🐾', '🌳', '🌿', '🌺'] },
+  { tKey: 'categories.groups.beautyCare',    icons: ['💄', '💅', '💇', '💈', '🪒', '🧖'] },
+  { tKey: 'categories.groups.smokingVices',  icons: ['🚬', '💨'] },
+  { tKey: 'categories.groups.misc',          icons: ['🎁', '🎉', '🎀', '🤝', '🛡️', '🧾', '🏛️', '⚖️', '📸', '📌', '💼', '🔧', '🛠️', '🔒', '📞', '📻', '🎃'] },
 ];
 
 
@@ -162,6 +164,8 @@ const getSuggestedIcons = (name: string): string[] => {
 };
 
 export default function CategoriesPage() {
+  const { t } = useTranslation();
+  const { formatCurrency } = useSettings();
   const { categories: baseCategories, transactions: allTransactions, isLoading, addCategory, updateCategory: updateCategoryCache, deleteCategory: deleteCategoryCache, refreshTransactions } = useData();
   const [filter, setFilter] = useState<CategoryFilter>('expense');
   const [selectedCategory, setSelectedCategory] = useState<CategoryWithStats | null>(null);
@@ -407,13 +411,6 @@ export default function CategoriesPage() {
     }
   };
 
-  const formatCurrency = (amount: number) => {
-    const abs = Math.abs(amount);
-    const sign = amount < 0 ? '-' : '';
-    const [intStr, decStr] = abs.toFixed(2).split('.');
-    const intFormatted = intStr.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-    return `${sign}€ ${intFormatted},${decStr}`;
-  };
 
   const filteredCategories = categories
     .filter(category => category.category_type === filter || (!category.category_type && filter === 'expense'))
@@ -744,8 +741,8 @@ export default function CategoriesPage() {
                         </div>
                       )}
                       {ICON_GROUPS.map(group => (
-                        <div key={group.label}>
-                          <div className="text-xs font-medium text-gray-400 dark:text-gray-500 mb-1">{group.label}</div>
+                        <div key={group.tKey}>
+                          <div className="text-xs font-medium text-gray-400 dark:text-gray-500 mb-1">{t(group.tKey)}</div>
                           {renderGrid(group.icons)}
                         </div>
                       ))}

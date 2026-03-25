@@ -7,10 +7,14 @@ import ConfirmDialog from '../components/common/ConfirmDialog';
 import { SkeletonAccountCard, SkeletonValue } from '../components/common/SkeletonLoader';
 import { useSkeletonCount } from '../hooks/useSkeletonCount';
 import type { Account, AccountFormData } from '../types';
+import { useTranslation } from 'react-i18next';
+import { useSettings } from '../contexts/SettingsContext';
 
 const ACCOUNT_ICONS = ['💳', '🏦', '💰', '💵', '💶', '💷', '💴', '🪙', '💸', '🏧', '📱', '💎'];
 
 export default function AccountsPage() {
+  const { t } = useTranslation();
+  const { formatCurrency } = useSettings();
   const { accounts, isLoading, addAccount, updateAccount: updateAccountCache, deleteAccount: deleteAccountCache, refreshAccounts } = useData();
   const skeletonCount = useSkeletonCount('accounts', accounts.length, isLoading, 3);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -204,17 +208,9 @@ export default function AccountsPage() {
     const negative = value.startsWith('-');
     const abs = negative ? value.slice(1) : value;
     const [intStr, decStr] = abs.split('.');
-    const intFormatted = (parseInt(intStr) || 0).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-    const result = decStr !== undefined ? `${intFormatted},${decStr}` : intFormatted;
+    const intFormatted = (parseInt(intStr) || 0).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    const result = decStr !== undefined ? `${intFormatted}.${decStr}` : intFormatted;
     return negative ? `-${result}` : result;
-  };
-
-  const formatCurrency = (amount: number) => {
-    const abs = Math.abs(amount);
-    const sign = amount < 0 ? '-' : '';
-    const [intStr, decStr] = abs.toFixed(2).split('.');
-    const intFormatted = intStr.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-    return `${sign}€ ${intFormatted},${decStr}`;
   };
 
   const totalLiquidity = accounts.reduce((sum, acc) => sum + (acc.current_balance ?? acc.initial_balance), 0);
@@ -226,7 +222,7 @@ export default function AccountsPage() {
         {(isLoading || accounts.length > 0) && (
           <div className="sticky top-0 z-10 -mx-4 px-4 pt-1 pb-3 bg-gray-50 dark:bg-gray-900 relative">
           <div className="card py-6">
-            <div className="text-sm text-gray-500 dark:text-gray-400 mb-1 text-center">Liquidità totale</div>
+            <div className="text-sm text-gray-500 dark:text-gray-400 mb-1 text-center">{t('accounts.totalLiquidity')}</div>
             <div className="flex items-center justify-center">
               <div className="flex-1" />
               <div className="text-4xl font-bold">
@@ -307,13 +303,13 @@ export default function AccountsPage() {
         <Modal
           isOpen={isModalOpen}
           onClose={handleCloseModal}
-          title={isEditMode ? 'Modifica Conto' : 'Nuovo Conto'}
+          title={isEditMode ? t('accounts.editAccount') : t('accounts.newAccount')}
         >
           <form onSubmit={handleSubmit} autoComplete="off" className="space-y-4">
             {/* Nome */}
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Nome
+                {t('accounts.name')}
               </label>
               <input
                 type="text"
@@ -330,7 +326,7 @@ export default function AccountsPage() {
                     ? 'border-red-500 dark:border-red-500'
                     : 'border-gray-300 dark:border-gray-600'
                 } bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 focus:border-transparent`}
-                placeholder="es. Conto Principale"
+                placeholder={t('accounts.namePlaceholder')}
                 required
               />
             </div>
@@ -338,7 +334,7 @@ export default function AccountsPage() {
             {/* Icona */}
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Icona
+                {t('accounts.icon')}
               </label>
               <div className="grid grid-cols-6 gap-2">
                 {ACCOUNT_ICONS.map((icon) => (
@@ -361,7 +357,7 @@ export default function AccountsPage() {
             {/* Saldo */}
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                {isEditMode ? 'Saldo Corrente' : 'Saldo Iniziale'}
+                {isEditMode ? t('accounts.currentBalance') : t('accounts.initialBalance')}
               </label>
               {/* Display dell'importo */}
               <div className="text-center mb-4">
@@ -458,14 +454,14 @@ export default function AccountsPage() {
             setDeleteError(null);
           }}
           onConfirm={handleDelete}
-          title={deleteError ? "Impossibile Eliminare" : "Elimina Conto"}
+          title={deleteError ? t('accounts.cannotDeleteTitle') : t('accounts.deleteTitle')}
           message={
             deleteError
               ? `Non puoi eliminare il conto "${selectedAccount?.name}" perché ci ${transactionCount === 1 ? 'è' : 'sono'} ${transactionCount} transazion${transactionCount === 1 ? 'e' : 'i'} collegat${transactionCount === 1 ? 'a' : 'e'} a questo conto.`
               : `Sei sicuro di voler eliminare il conto "${selectedAccount?.name}"? Questa azione non può essere annullata.`
           }
-          confirmText={deleteError ? "OK" : "Elimina"}
-          cancelText={deleteError ? undefined : "Annulla"}
+          confirmText={deleteError ? t('common.ok') : t('common.delete')}
+          cancelText={deleteError ? undefined : t('common.cancel')}
           isDestructive={!deleteError}
         />
       </div>

@@ -5,6 +5,8 @@ import { SkeletonValue } from '../components/common/SkeletonLoader';
 import PeriodSelector from '../components/common/PeriodSelector';
 import DateRangePicker from '../components/common/DateRangePicker';
 import { usePeriod } from '../hooks/usePeriod';
+import { useTranslation } from 'react-i18next';
+import { useSettings } from '../contexts/SettingsContext';
 
 type StatsFilter = 'expense' | 'income' | 'investment';
 type PeriodType = 'day' | 'week' | 'month' | 'year' | 'all' | 'custom';
@@ -18,6 +20,8 @@ interface CategoryStat {
 }
 
 export default function StatsPage() {
+  const { t } = useTranslation();
+  const { formatCurrency } = useSettings();
   const { transactions: allTransactions, categories, isLoading } = useData();
   const [filter, setFilter] = useState<StatsFilter>('expense');
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
@@ -38,14 +42,6 @@ export default function StatsPage() {
 
   const handleCustomPeriodConfirm = (start: Date, end: Date) => {
     setPeriod(start, end, 'custom');
-  };
-
-  const formatCurrency = (amount: number) => {
-    const abs = Math.abs(amount);
-    const sign = amount < 0 ? '-' : '';
-    const [intStr, decStr] = abs.toFixed(2).split('.');
-    const intFormatted = intStr.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-    return `${sign}€ ${intFormatted},${decStr}`;
   };
 
   const totalIncome = transactions.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
@@ -78,19 +74,19 @@ export default function StatsPage() {
 
     if (periodType === 'year') {
       while (current <= endDate) {
-        periods.push({ label: current.toLocaleDateString('it-IT', { month: 'short' }), date: new Date(current) });
+        periods.push({ label: current.toLocaleDateString(undefined, { month: 'short' }), date: new Date(current) });
         current.setMonth(current.getMonth() + 1);
       }
     } else if (periodType === 'all' || periodType === 'custom') {
       const monthStart = new Date(current.getFullYear(), current.getMonth(), 1);
       while (monthStart <= endDate) {
-        periods.push({ label: monthStart.toLocaleDateString('it-IT', { month: 'short', year: '2-digit' }), date: new Date(monthStart) });
+        periods.push({ label: monthStart.toLocaleDateString(undefined, { month: 'short', year: '2-digit' }), date: new Date(monthStart) });
         monthStart.setMonth(monthStart.getMonth() + 1);
       }
     } else {
       while (current <= endDate) {
         const label = periodType === 'week'
-          ? current.toLocaleDateString('it-IT', { weekday: 'short' })
+          ? current.toLocaleDateString(undefined, { weekday: 'short' })
           : current.getDate().toString();
         periods.push({ label, date: new Date(current) });
         current.setDate(current.getDate() + 1);
@@ -132,14 +128,14 @@ export default function StatsPage() {
   const getCategoryColor = (categoryName: string) => categoryColorMap.get(categoryName) || baseColors[0];
 
   const getSubcategoryStats = (categoryName: string) => {
-    const categoryTransactions = filteredTransactions.filter(t => t.category === categoryName);
-    const categoryTotal = categoryTransactions.reduce((sum, t) => sum + Math.abs(t.amount), 0);
+    const categoryTransactions = filteredTransactions.filter(tx => tx.category === categoryName);
+    const categoryTotal = categoryTransactions.reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
     const subcategoryMap = new Map<string, { amount: number; count: number }>();
-    categoryTransactions.forEach(t => {
-      const subName = t.subcategory || 'Altro';
+    categoryTransactions.forEach(tx => {
+      const subName = tx.subcategory || t('common.other');
       const existing = subcategoryMap.get(subName);
-      if (existing) { existing.amount += Math.abs(t.amount); existing.count += 1; }
-      else subcategoryMap.set(subName, { amount: Math.abs(t.amount), count: 1 });
+      if (existing) { existing.amount += Math.abs(tx.amount); existing.count += 1; }
+      else subcategoryMap.set(subName, { amount: Math.abs(tx.amount), count: 1 });
     });
     return Array.from(subcategoryMap.entries())
       .map(([name, data]) => ({ name, amount: data.amount, count: data.count, percentage: categoryTotal > 0 ? (data.amount / categoryTotal) * 100 : 0 }))
@@ -208,25 +204,25 @@ export default function StatsPage() {
         <div className="card">
           <div className="grid grid-cols-2 gap-x-6 gap-y-3">
             <div>
-              <div className="text-xs text-gray-500 dark:text-gray-400 mb-0.5">Entrate</div>
+              <div className="text-xs text-gray-500 dark:text-gray-400 mb-0.5">{t('stats.income')}</div>
               <div className="text-xl font-bold text-green-600 dark:text-green-400">
                 {isLoading ? <SkeletonValue /> : formatCurrency(totalIncome)}
               </div>
             </div>
             <div>
-              <div className="text-xs text-gray-500 dark:text-gray-400 mb-0.5">Uscite</div>
+              <div className="text-xs text-gray-500 dark:text-gray-400 mb-0.5">{t('stats.expenses')}</div>
               <div className="text-xl font-bold text-red-600 dark:text-red-400">
                 {isLoading ? <SkeletonValue /> : formatCurrency(totalExpense)}
               </div>
             </div>
             <div>
-              <div className="text-xs text-gray-500 dark:text-gray-400 mb-0.5">Investimenti</div>
+              <div className="text-xs text-gray-500 dark:text-gray-400 mb-0.5">{t('stats.investments')}</div>
               <div className="text-xl font-bold text-blue-600 dark:text-blue-400">
                 {isLoading ? <SkeletonValue /> : formatCurrency(totalInvestment)}
               </div>
             </div>
             <div>
-              <div className="text-xs text-gray-500 dark:text-gray-400 mb-0.5">Saldo periodo</div>
+              <div className="text-xs text-gray-500 dark:text-gray-400 mb-0.5">{t('stats.periodBalance')}</div>
               <div className={`text-xl font-bold ${periodBalance >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
                 {isLoading ? <SkeletonValue /> : formatCurrency(periodBalance)}
               </div>
@@ -238,7 +234,7 @@ export default function StatsPage() {
         {transactions.length > 0 && (
           <div className="card">
             <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
-              Andamento saldo
+              {t('stats.balanceTrend')}
             </h3>
             <div className="relative h-52">
               {/* Asse Y */}
@@ -353,7 +349,7 @@ export default function StatsPage() {
                   : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
               }`}
             >
-              {f === 'expense' ? '💸 Uscite' : f === 'income' ? '💰 Entrate' : '📈 Investimenti'}
+              {f === 'expense' ? `💸 ${t('stats.expenses')}` : f === 'income' ? `💰 ${t('stats.income')}` : `📈 ${t('stats.investments')}`}
             </button>
           ))}
         </div>
@@ -362,7 +358,7 @@ export default function StatsPage() {
         {filteredTransactions.length === 0 && (
           <div className="card text-center py-12">
             <div className="text-gray-500 dark:text-gray-400">
-              Nessuna transazione nel periodo
+              {t('stats.noTransactions')}
             </div>
           </div>
         )}
@@ -435,7 +431,7 @@ export default function StatsPage() {
                     </div>
                     <div className="text-right">
                       <div className="font-bold text-gray-900 dark:text-gray-100">{formatCurrency(stat.amount)}</div>
-                      <div className="text-xs text-gray-500 dark:text-gray-400">{stat.count} trans.</div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">{stat.count} {t('common.trans_abbr')}</div>
                     </div>
                   </div>
                   <div className="relative w-full h-8 bg-gray-100 dark:bg-gray-700 rounded-lg overflow-hidden">
@@ -455,7 +451,7 @@ export default function StatsPage() {
                             <span className="text-gray-700 dark:text-gray-300">{substat.name}</span>
                             <div className="text-right">
                               <span className="font-medium text-gray-900 dark:text-gray-100">{formatCurrency(substat.amount)}</span>
-                              <span className="text-xs text-gray-500 dark:text-gray-400 ml-2">({substat.count} trans.)</span>
+                              <span className="text-xs text-gray-500 dark:text-gray-400 ml-2">({substat.count} {t('common.trans_abbr')})</span>
                             </div>
                           </div>
                           <div className="relative w-full h-6 bg-gray-100 dark:bg-gray-800 rounded overflow-hidden">

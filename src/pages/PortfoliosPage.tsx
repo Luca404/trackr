@@ -7,6 +7,8 @@ import Modal from '../components/common/Modal';
 import { SkeletonPortfolioCard } from '../components/common/SkeletonLoader';
 import { useSkeletonCount } from '../hooks/useSkeletonCount';
 import type { Portfolio, PortfolioFormData, Order, OrderFormData, Category } from '../types';
+import { useTranslation } from 'react-i18next';
+import { useSettings } from '../contexts/SettingsContext';
 
 const PF_BACKEND_URL = import.meta.env.VITE_PF_BACKEND_URL || 'https://portfolio-tracker-production-3bd4.up.railway.app';
 
@@ -28,6 +30,8 @@ interface PortfolioSummary {
 }
 
 export default function PortfoliosPage() {
+  const { t } = useTranslation();
+  const { formatCurrency } = useSettings();
   const { portfolios, categories, isLoading, isInitialized, addPortfolio, updatePortfolio, deletePortfolio } = useData();
   const skeletonCount = useSkeletonCount('portfolios', portfolios.length, isLoading, 3);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -148,21 +152,11 @@ export default function PortfoliosPage() {
   };
 
   const handleDelete = async (id: number) => {
-    if (confirm('Sei sicuro di voler eliminare questo portafoglio?')) {
+    if (confirm(t('portfolios.deletePortfolio'))) {
       await apiService.deletePortfolio(id);
       deletePortfolio(id);
       setIsModalOpen(false);
     }
-  };
-
-  const formatCurrency = (value: number, currency: string = 'EUR') => {
-    const abs = Math.abs(value);
-    const sign = value < 0 ? '-' : '';
-    const [intStr, decStr] = abs.toFixed(2).split('.');
-    const intFormatted = intStr.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-    const symbols: Record<string, string> = { EUR: '€', USD: '$', GBP: '£', JPY: '¥', CHF: 'Fr' };
-    const symbol = symbols[currency] || currency;
-    return `${sign}${symbol} ${intFormatted},${decStr}`;
   };
 
   const showSkeleton = isLoading || !isInitialized;
@@ -183,7 +177,7 @@ export default function PortfoliosPage() {
               {portfolios.length > 0 && (
                 <div className="sticky top-0 z-10 -mx-4 px-4 pt-1 pb-3 bg-gray-50 dark:bg-gray-900 relative">
                   <div className="card py-5">
-                    <div className="text-sm text-gray-500 dark:text-gray-400 mb-1 text-center">Investimenti totali</div>
+                    <div className="text-sm text-gray-500 dark:text-gray-400 mb-1 text-center">{t('portfolios.totalInvestments')}</div>
                     <div className="text-4xl font-bold text-center">
                       {loadingSummaries && !hasSummaries
                         ? <span className="inline-block h-10 w-40 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
@@ -204,7 +198,7 @@ export default function PortfoliosPage() {
                       className="mt-4 flex items-center justify-center gap-2 w-full py-2.5 rounded-xl bg-primary-500 hover:bg-primary-600 active:bg-primary-700 text-white text-sm font-medium transition-colors"
                     >
                       <span>📊</span>
-                      <span>Analizza il tuo portafoglio</span>
+                      <span>{t('portfolios.analyzePortfolio')}</span>
                       <svg className="w-3.5 h-3.5 opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                       </svg>
@@ -217,8 +211,8 @@ export default function PortfoliosPage() {
               {portfolios.length === 0 && (
                 <div className="text-center py-16 text-gray-500 dark:text-gray-400">
                   <div className="text-5xl mb-4">📈</div>
-                  <div className="font-medium mb-1">Nessun portafoglio</div>
-                  <div className="text-sm">Aggiungi il tuo primo portafoglio di investimento</div>
+                  <div className="font-medium mb-1">{t('portfolios.noPortfolios')}</div>
+                  <div className="text-sm">{t('portfolios.noPortfoliosDesc')}</div>
                 </div>
               )}
 
@@ -255,13 +249,13 @@ export default function PortfoliosPage() {
                     return (
                       <div className="grid grid-cols-2 gap-4 pt-3 mt-2 border-t border-gray-200 dark:border-gray-700">
                         <div>
-                          <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">Valore Attuale</div>
+                          <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">{t('portfolios.currentValueLabel')}</div>
                           <div className="text-lg font-semibold text-gray-900 dark:text-gray-100">
                             {formatCurrency(sm.total_value, sm.reference_currency)}
                           </div>
                         </div>
                         <div>
-                          <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">P/L</div>
+                          <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">{t('portfolios.plLabel')}</div>
                           <div className={`text-lg font-semibold ${sm.total_gain_loss >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
                             {formatCurrency(sm.total_gain_loss, sm.reference_currency)}
                             <span className="text-sm ml-1">
@@ -270,7 +264,7 @@ export default function PortfoliosPage() {
                           </div>
                           {sm.xirr != null && (
                             <div className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
-                              XIRR: {sm.xirr >= 0 ? '+' : ''}{sm.xirr.toFixed(2)}%
+                              {t('portfolios.xirrLabel')}: {sm.xirr >= 0 ? '+' : ''}{sm.xirr.toFixed(2)}%
                             </div>
                           )}
                         </div>
@@ -295,7 +289,7 @@ export default function PortfoliosPage() {
         <Modal
           isOpen={isModalOpen}
           onClose={() => setIsModalOpen(false)}
-          title={isEditMode ? (selectedPortfolio?.name || 'Portafoglio') : 'Nuovo Portafoglio'}
+          title={isEditMode ? (selectedPortfolio?.name || t('portfolios.newPortfolio')) : t('portfolios.newPortfolio')}
         >
           <PortfolioForm
             onSubmit={handleSubmit}
@@ -331,6 +325,8 @@ interface PortfolioFormProps {
 }
 
 function PortfolioForm({ onSubmit, onDelete, onCancel, initialData, isEditMode, investmentCategories, orders, isLoadingOrders }: PortfolioFormProps) {
+  const { t } = useTranslation();
+  const { formatCurrency } = useSettings();
   const [name, setName] = useState(initialData?.name || '');
   const [description, setDescription] = useState(initialData?.description || '');
   const [currency, setCurrency] = useState(initialData?.reference_currency || 'EUR');
@@ -357,15 +353,10 @@ function PortfolioForm({ onSubmit, onDelete, onCancel, initialData, isEditMode, 
     }
   };
 
-  const formatCurrencySmall = (value: number, curr: string) => {
-    const symbols: Record<string, string> = { EUR: '€', USD: '$', GBP: '£' };
-    return `${symbols[curr] || curr} ${value.toFixed(2).replace('.', ',')}`;
-  };
-
   return (<>
     <form onSubmit={handleSubmit} autoComplete="off" className="space-y-4">
       <div>
-        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Nome</label>
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('portfolios.name')}</label>
         <input
           type="text"
           value={name}
@@ -378,7 +369,7 @@ function PortfolioForm({ onSubmit, onDelete, onCancel, initialData, isEditMode, 
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Descrizione (opzionale)</label>
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('portfolios.description')}</label>
         <input
           type="text"
           value={description}
@@ -390,7 +381,7 @@ function PortfolioForm({ onSubmit, onDelete, onCancel, initialData, isEditMode, 
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Valuta</label>
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{t('portfolios.currency')}</label>
         <div className="flex gap-2">
           {[{ code: 'EUR', symbol: '€' }, { code: 'USD', symbol: '$' }, { code: 'GBP', symbol: '£' }, { code: 'CHF', symbol: 'Fr' }].map(c => (
             <button
@@ -412,7 +403,7 @@ function PortfolioForm({ onSubmit, onDelete, onCancel, initialData, isEditMode, 
       {investmentCategories.length > 0 && (
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Categoria investimento (opzionale)
+            {t('portfolios.investmentCategory')}
           </label>
           <div className="flex flex-wrap gap-2">
             <button
@@ -424,7 +415,7 @@ function PortfolioForm({ onSubmit, onDelete, onCancel, initialData, isEditMode, 
                   : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400'
               }`}
             >
-              Nessuna
+              {t('portfolios.noCategory')}
             </button>
             {investmentCategories.map(cat => (
               <button
@@ -450,19 +441,19 @@ function PortfolioForm({ onSubmit, onDelete, onCancel, initialData, isEditMode, 
         <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
           <div className="flex items-center justify-between mb-2">
             <div className="text-sm font-medium text-gray-700 dark:text-gray-300">
-              Posizioni iniziali {initialPositions.length > 0 && `(${initialPositions.length})`}
+              {t('portfolios.initialPositions')} {initialPositions.length > 0 && `(${initialPositions.length})`}
             </div>
             <button
               type="button"
               onClick={() => setIsPositionModalOpen(true)}
               className="text-sm text-primary-600 dark:text-primary-400 font-medium"
             >
-              + Aggiungi
+              {t('portfolios.addPosition')}
             </button>
           </div>
           {initialPositions.length === 0 ? (
             <div className="text-sm text-gray-400 dark:text-gray-500 text-center py-3">
-              Nessuna posizione — puoi aggiungerne dopo
+              {t('portfolios.noPositions')}
             </div>
           ) : (
             <div className="space-y-1 max-h-40 overflow-y-auto">
@@ -491,12 +482,12 @@ function PortfolioForm({ onSubmit, onDelete, onCancel, initialData, isEditMode, 
       {isEditMode && (
         <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
           <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-            Ordini ({isLoadingOrders ? '...' : orders.length})
+            {t('portfolios.orders')} ({isLoadingOrders ? '...' : orders.length})
           </div>
           {isLoadingOrders ? (
-            <div className="text-sm text-gray-400 dark:text-gray-500 text-center py-3">Caricamento...</div>
+            <div className="text-sm text-gray-400 dark:text-gray-500 text-center py-3">{t('common.loading')}</div>
           ) : orders.length === 0 ? (
-            <div className="text-sm text-gray-400 dark:text-gray-500 text-center py-3">Nessun ordine</div>
+            <div className="text-sm text-gray-400 dark:text-gray-500 text-center py-3">{t('portfolios.noOrders')}</div>
           ) : (
             <div className="space-y-1 max-h-48 overflow-y-auto">
               {orders.map(order => (
@@ -513,7 +504,7 @@ function PortfolioForm({ onSubmit, onDelete, onCancel, initialData, isEditMode, 
                     <span className="text-gray-500 dark:text-gray-400 shrink-0">{order.quantity}×</span>
                   </div>
                   <div className="text-right shrink-0 ml-2">
-                    <div className="text-gray-700 dark:text-gray-300">{formatCurrencySmall(order.price, order.currency)}</div>
+                    <div className="text-gray-700 dark:text-gray-300">{formatCurrency(order.price, order.currency)}</div>
                     <div className="text-xs text-gray-400 dark:text-gray-500">{order.date}</div>
                   </div>
                 </div>
@@ -531,10 +522,10 @@ function PortfolioForm({ onSubmit, onDelete, onCancel, initialData, isEditMode, 
 
       <div className="flex gap-3 pt-2">
         <button type="button" onClick={onCancel} className="flex-1 btn-secondary" disabled={isLoading}>
-          Annulla
+          {t('common.cancel')}
         </button>
         <button type="submit" className="flex-1 btn-primary" disabled={isLoading}>
-          {isLoading ? '...' : isEditMode ? 'Salva' : 'Crea'}
+          {isLoading ? '...' : isEditMode ? t('common.save') : t('common.create')}
         </button>
       </div>
 
@@ -545,12 +536,12 @@ function PortfolioForm({ onSubmit, onDelete, onCancel, initialData, isEditMode, 
           className="w-full px-4 py-3 rounded-lg bg-red-500 text-white hover:bg-red-600 transition-colors font-medium text-sm"
           disabled={isLoading}
         >
-          🗑️ Elimina portafoglio
+          {t('portfolios.deletePortfolio')}
         </button>
       )}
     </form>
 
-    <Modal isOpen={isPositionModalOpen} onClose={() => setIsPositionModalOpen(false)} title="Nuova posizione">
+    <Modal isOpen={isPositionModalOpen} onClose={() => setIsPositionModalOpen(false)} title={t('portfolios.newPosition')}>
       <PositionForm
         currency={currency}
         onAdd={(pos) => {
@@ -570,6 +561,7 @@ interface PositionFormProps {
 }
 
 function PositionForm({ currency, onAdd, onCancel }: PositionFormProps) {
+  const { t } = useTranslation();
   const today = new Date().toISOString().split('T')[0];
   const [symbol, setSymbol] = useState('');
   const [quantity, setQuantity] = useState('');
@@ -598,7 +590,7 @@ function PositionForm({ currency, onAdd, onCancel }: PositionFormProps) {
 
       {/* Ticker */}
       <div>
-        <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">Ticker</div>
+        <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">{t('portfolios.ticker')}</div>
         <input
           type="text"
           value={symbol}
@@ -614,7 +606,7 @@ function PositionForm({ currency, onAdd, onCancel }: PositionFormProps) {
       {/* Quantità e Prezzo */}
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">Quantità</div>
+          <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">{t('portfolios.quantity')}</div>
           <input
             type="text"
             inputMode="decimal"
@@ -627,7 +619,7 @@ function PositionForm({ currency, onAdd, onCancel }: PositionFormProps) {
         </div>
         <div>
           <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
-            Prezzo ({currSymbol})
+            {t('portfolios.price')} ({currSymbol})
           </div>
           <input
             type="text"
@@ -643,7 +635,7 @@ function PositionForm({ currency, onAdd, onCancel }: PositionFormProps) {
 
       {/* Data */}
       <div>
-        <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">Data acquisto</div>
+        <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">{t('portfolios.purchaseDate')}</div>
         <button
           type="button"
           onClick={() => dateRef.current?.showPicker()}
@@ -666,8 +658,8 @@ function PositionForm({ currency, onAdd, onCancel }: PositionFormProps) {
       </div>
 
       <div className="flex gap-3 pt-1">
-        <button type="button" onClick={onCancel} className="flex-1 btn-secondary">Annulla</button>
-        <button type="submit" className="flex-1 btn-primary">Aggiungi</button>
+        <button type="button" onClick={onCancel} className="flex-1 btn-secondary">{t('common.cancel')}</button>
+        <button type="submit" className="flex-1 btn-primary">{t('common.add')}</button>
       </div>
     </form>
   );

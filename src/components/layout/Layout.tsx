@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useData } from '../../contexts/DataContext';
 import { useSwipeNavigation } from '../../hooks/useSwipeNavigation';
+import { useTranslation } from 'react-i18next';
 
 interface LayoutProps {
   children: ReactNode;
@@ -14,6 +15,7 @@ export default function Layout({ children }: LayoutProps) {
   const { user } = useAuth();
   const { refreshAll } = useData();
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const { t } = useTranslation();
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
@@ -23,11 +25,11 @@ export default function Layout({ children }: LayoutProps) {
   };
 
   const navItems = [
-    { path: '/accounts', label: 'Conti', icon: '🏦' },
-    { path: '/categories', label: 'Categorie', icon: '🏷️' },
-    { path: '/transactions', label: 'Transazioni', icon: '💰' },
-    { path: '/stats', label: 'Recap', icon: '📊' },
-    { path: '/portfolios', label: 'Investimenti', icon: '📈' },
+    { path: '/accounts', label: t('nav.accounts'), icon: '🏦' },
+    { path: '/categories', label: t('nav.categories'), icon: '🏷️' },
+    { path: '/transactions', label: t('nav.transactions'), icon: '💰' },
+    { path: '/stats', label: t('nav.stats'), icon: '📊' },
+    { path: '/portfolios', label: t('nav.portfolios'), icon: '📈' },
   ];
 
   const routes = navItems.map(item => item.path);
@@ -60,7 +62,7 @@ export default function Layout({ children }: LayoutProps) {
             <button
               onClick={handleRefresh}
               className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 transition-colors"
-              title="Aggiorna"
+              title="Refresh"
             >
               <svg className={`w-6 h-6 ${isRefreshing ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -69,7 +71,7 @@ export default function Layout({ children }: LayoutProps) {
             <button
               onClick={() => navigate('/settings')}
               className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 transition-colors"
-              title="Impostazioni"
+              title={t('settings.title')}
             >
               <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
@@ -84,7 +86,7 @@ export default function Layout({ children }: LayoutProps) {
       <main
         className="flex-1 max-w-7xl w-full mx-auto px-4 py-3 overflow-y-auto overscroll-y-none"
         style={{
-          paddingBottom: '6rem', // Spazio per navbar (64px) + margine extra
+          paddingBottom: '6rem',
           transition: isSwipingHorizontally ? 'none' : 'transform 0.3s ease-out, opacity 0.3s ease-out',
           transform: `translateX(${Math.max(-30, Math.min(30, swipeOffset * 0.2))}px)`,
           opacity: isSwipingHorizontally ? Math.max(0.7, 1 - Math.abs(swipeOffset) / 800) : 1
