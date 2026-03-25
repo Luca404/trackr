@@ -152,11 +152,12 @@ export default function StatsPage() {
     let runningBalance = 0;
     return periods.map(period => {
       const periodTransactions = transactions.filter(t => isSamePeriod(new Date(t.date), period.date));
+      let dayNet = 0;
       periodTransactions.forEach(t => {
-        if (t.type === 'income') runningBalance += t.amount;
-        else if (t.type === 'expense') runningBalance -= Math.abs(t.amount);
+        if (t.type === 'income') { runningBalance += t.amount; dayNet += t.amount; }
+        else if (t.type === 'expense') { runningBalance -= Math.abs(t.amount); dayNet -= Math.abs(t.amount); }
       });
-      return { label: period.label, balance: runningBalance, hasTransactions: periodTransactions.length > 0, date: period.date };
+      return { label: period.label, balance: runningBalance, dayNet, hasTransactions: periodTransactions.length > 0, date: period.date };
     });
   }, [transactions, periods.length, periodType]);
 
@@ -303,7 +304,7 @@ export default function StatsPage() {
                     return (
                       <div
                         key={index}
-                        className="absolute w-2.5 h-2.5 rounded-full bg-white border-2 border-primary-500 shadow-sm z-20"
+                        className={`absolute w-2.5 h-2.5 rounded-full border-2 shadow-sm z-20 ${point.dayNet >= 0 ? 'bg-green-400 border-green-600' : 'bg-red-400 border-red-600'}`}
                         style={{
                           left: `calc(${x}% - 5px)`,
                           top: `calc(${y}% - 5px)`,
