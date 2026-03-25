@@ -15,128 +15,166 @@ type CategoryFilter = 'income' | 'expense' | 'investment';
 type PeriodType = 'day' | 'week' | 'month' | 'year' | 'all' | 'custom';
 
 const CATEGORY_ICONS = [
-  '🍔', '🚌', '⚡', '🎮', '🏥', '🛍️', '💰', '💵', '📌',
-  '🎬', '📚', '🎵', '🏋️', '☕', '🍕', '💊', '👕', '🎁',
-  '💳', '🎓', '🐶', '🌳', '🔧', '🖥️', '📸', '🎨', '⚽', '🍷',
-  '🏠', '🔑', '🚰', '💡', '📱', '🌐', '✈️', '🏖️', '🎭', '🎪',
-  '🎯', '🎲', '🎰', '🎸', '🎹', '🎺', '🎻', '🥁', '🎤', '🎧',
-  '📺', '📻', '📞', '☎️', '📠', '💻', '⌨️', '🖱️', '🖨️', '💾',
-  '🍎', '🍊', '🍋', '🍌', '🍉', '🍇', '🍓', '🍒', '🍑', '🥝',
-  '🥑', '🍆', '🥒', '🥕', '🌽', '🥔', '🧅', '🧄', '🥖', '🥐',
-  '🍞', '🥨', '🧀', '🥚', '🍳', '🥓', '🥩', '🍗', '🍖', '🌭',
-  '🍟', '🌮', '🌯', '🥙', '🥗', '🍝', '🍜', '🍲',
-  '🍛', '🍣', '🍱', '🥟', '🍤', '🍙', '🍚', '🍘', '🍥', '🥠',
-  '🍢', '🍡', '🍧', '🍨', '🍦', '🥧', '🍰', '🎂', '🍮', '🍭',
-  '🍬', '🍫', '🍿', '🍩', '🍪', '🌰', '🥜', '🍯', '🥛', '🍼',
-  '🍵', '🧃', '🥤', '🍶', '🍺', '🍻', '🥂', '🥃',
-  '🍸', '🍹', '🍾', '🧉', '🏀', '🏈', '⚾', '🥎', '🎾',
-  '🏐', '🏉', '🥏', '🎱', '🏓', '🏸', '🏒', '🏑', '🥍', '🏏',
-  '⛳', '🏹', '🎣', '🥊', '🥋', '🎽', '⛸️', '🥌', '🛷', '🎿',
-  '⛷️', '🏂', '🤼', '🤸', '🤾', '🧗', '🚴', '🚵', '🧘',
-  '🏃', '🚶', '💃', '🕺', '🤺', '🏇', '🏊', '🤽', '🚣', '🧜',
-  '🚆', '🚇', '🚕', '🏍️', '🚲', '🚗', '🚙', '🚐', '🚛', '🚚',
+  // Cibo principale
+  '🍔', '🍕', '🍝', '🌮', '🍜', '🍛', '🍣', '🥗', '🍗', '🌭', '🍟', '🥙', '🌯', '🍲', '🥟',
+  // Colazione e pane
+  '🥐', '🥖', '🍞', '🧀', '🥚', '🍳', '🥓',
+  // Dolci e snack
+  '🍰', '🎂', '🍫', '🍭', '🍬', '🍩', '🍪', '🍦', '🍿', '🌰', '🥜',
+  // Frutta e verdura
+  '🍎', '🍊', '🍋', '🍇', '🍓', '🥝', '🥑', '🥕', '🌽', '🥦',
+  // Bevande
+  '☕', '🍺', '🍷', '🥤', '🍵', '🧃', '🍹', '🍸', '🍻', '🥂', '🥃', '🍾',
+  // Trasporti
+  '🚌', '🚆', '🚇', '🚕', '🚗', '🚙', '✈️', '🏍️', '🚲', '🛵', '⛽',
+  // Casa e utenze
+  '🏠', '🏡', '🔑', '💡', '⚡', '🔥', '🚿', '🛋️', '🪴', '🧹', '🧺',
+  // Salute e benessere
+  '🏥', '💊', '🩺', '💉', '🦷', '👓', '🧴', '💆', '🚑',
+  // Shopping e abbigliamento
+  '🛍️', '👕', '👗', '👠', '👟', '🧥', '👔', '👜', '🎒',
+  // Tecnologia
+  '📱', '💻', '🖥️', '📺', '🎧', '📡', '🌐', '💾',
+  // Intrattenimento e cultura
+  '🎬', '🎮', '🎵', '🎸', '🎭', '🎨', '🎤', '📚', '🎲', '🎯', '🎪',
+  // Sport e fitness
+  '🏋️', '⚽', '🏀', '🎾', '🏊', '🧘', '🏃', '🚴', '🥊', '⛷️', '🏂',
+  // Viaggi
+  '🏖️', '🧳', '🏨', '🗺️', '🗼',
+  // Finanza
+  '💰', '💵', '💳', '🏦', '💸', '📈', '💶',
+  // Istruzione
+  '🎓', '✏️', '📖', '📝', '🖊️',
+  // Animali e natura
+  '🐶', '🐱', '🐾', '🌳', '🌿', '🌺',
+  // Bellezza e cura persona
+  '💄', '💅', '💇', '💈', '🪒', '🧖',
+  // Vizio / fumo
+  '🚬', '💨',
+  // Varie
+  '🎁', '🎉', '🎀', '🤝', '🛡️', '🧾', '🏛️', '⚖️',
+  '📸', '📌', '💼', '🔧', '🛠️', '🔒', '📞', '📻', '🎃',
 ];
 
 // Mappa parole chiave -> icone suggerite
-const ICON_SUGGESTIONS: Record<string, string[]> = {
-  'cibo|food|mangiare|alimentari|ristorante|pranzo|cena|colazione|spuntino|snack|hamburger|pizza|pasta|sushi|insalata|taco|ramen|curry': ['🍔', '🍕', '🍝', '🍱', '🥗', '🌮', '🍜', '🍛', '🍗', '🍖', '🌭', '🍟', '🌯', '🥙', '🍲', '🍣', '🥟', '🍤'],
-  'bevande|drink|bar|caffe|caffè|birra|vino|cocktail|bibita|te|tè|succo|acqua|bevanda': ['☕', '🍺', '🍷', '🥤', '🧃', '🍵', '🍹', '🍸', '🍶', '🍻', '🥂', '🥃', '🍾', '🧉'],
-  'trasporti|auto|macchina|car|bus|metro|treno|viaggio|benzina|carburante|taxi|moto|bici|aereo|nave': ['🚌', '🚆', '🚇', '🚕', '🏍️', '🚲', '✈️', '🚗', '🚙', '🚐', '🚛', '🚚'],
-  'casa|home|affitto|mutuo|bollette|acqua|luce|gas|riscaldamento|elettricità|immobiliare': ['🏠', '🔑', '💡', '🚰', '⚡', '🌡️'],
-  'salute|medico|farmacia|ospedale|dottore|medicina|visita|analisi|dentista|oculista': ['🏥', '💊', '🩺', '💉', '🧬', '🧪'],
-  'shopping|acquisti|negozio|abbigliamento|vestiti|moda|scarpe|accessori|abbigliamento|clothes': ['🛍️', '👕', '👗', '👠', '🎽', '🧥'],
-  'intrattenimento|film|cinema|teatro|spettacolo|concerti|eventi|show|arte|cultura': ['🎬', '🎭', '🎪', '🎨', '🎤', '🎧'],
-  'sport|palestra|fitness|allenamento|gym|calcio|basket|tennis|nuoto|corsa|yoga|ciclismo': ['🏋️', '⚽', '🏀', '🎾', '🏊', '🚴', '🧘', '🏈', '⚾', '🥎', '🏐', '🏉', '🏓', '🏸', '🏒'],
-  'educazione|scuola|università|studio|libri|corso|formazione|learning|istruzione|lezioni': ['🎓', '📚', '✏️', '📖', '🎒', '📝'],
-  'tecnologia|tech|computer|telefono|elettronica|pc|smartphone|tablet|software|hardware|internet|web': ['💻', '📱', '🖥️', '⌨️', '🖱️', '📡', '🖨️', '💾', '📞', '☎️', '📠'],
-  'giochi|gaming|videogiochi|game|console|playstation|xbox|nintendo|gioco|scommesse|lotteria': ['🎮', '🎯', '🎲', '🎰', '🃏', '🎱'],
-  'viaggi|viaggio|vacanza|aereo|hotel|turismo|volo|destinazione|weekend|ferie': ['✈️', '🏖️', '🗺️', '🧳', '🏨', '🎒'],
-  'musica|music|concerti|strumenti|chitarra|piano|batteria|canzoni|spotify|artista': ['🎵', '🎸', '🎹', '🎤', '🎧', '🎺', '🥁', '🎻'],
-  'animali|pet|cane|gatto|dog|cat|veterinario|animale|domestico|cucciolo': ['🐶', '🐱', '🐭', '🐹', '🐰', '🦊', '🐻'],
-  'natura|piante|giardino|garden|fiori|verde|parco|ambiente|outdoor': ['🌳', '🌲', '🌿', '🍀', '🌻', '🌺', '🌸'],
-  'lavoro|work|ufficio|office|business|riunione|meeting|progetto|stipendio|azienda': ['💼', '👔', '🏢', '📊', '📈', '💻', '📞'],
-  'regali|gift|compleanno|birthday|festa|party|celebrazione|anniversario|presente': ['🎁', '🎈', '🎂', '🎉', '🎊', '🎀'],
-  'bellezza|beauty|parrucchiere|estetica|makeup|trucco|cura|spa|benessere|massaggio': ['💄', '💅', '💇', '🧖', '💆', '🧴'],
-  'pulizia|cleaning|detersivi|lavanderia|casa|igiene|sapone|lavatrice': ['🧹', '🧺', '🧼', '🧽', '🧴', '🚿'],
-  'soldi|denaro|money|cash|banca|bank|finanza|risparmio|investimenti|portafoglio|euro|dollaro': ['💰', '💵', '💳', '🏦', '💸', '💶', '💷'],
-  'frutta|fruit|mela|banana|arancia|limone|fragola|uva|kiwi|pesca': ['🍎', '🍊', '🍋', '🍌', '🍉', '🍇', '🍓', '🍒', '🍑', '🥝'],
-  'verdura|vegetable|insalata|pomodoro|carota|patata|melanzana|cipolla|aglio': ['🥑', '🍆', '🥒', '🥕', '🌽', '🥔', '🧅', '🧄'],
-  'dolci|dessert|torta|gelato|cioccolato|biscotti|caramelle|sweet': ['🍰', '🎂', '🍮', '🍭', '🍬', '🍫', '🍿', '🍩', '🍪', '🍧', '🍨', '🍦', '🥧'],
-  'colazione|breakfast|pane|cornetto|brioche|croissant|cereali|latte': ['🥖', '🥐', '🍞', '🥨', '🧀', '🥚', '🍳', '🥓', '🥛', '🍼'],
-  'energia|elettricità|power|corrente|batteria': ['⚡', '💡', '🔋'],
-  'comunicazione|telefono|chiamata|messaggio|email|posta': ['📱', '📞', '☎️', '📠', '📺', '📻'],
-  'foto|fotografia|camera|foto|immagine|picture': ['📸', '📷'],
-  'strumenti|tools|attrezzi|riparazione|manutenzione': ['🔧', '🔨', '🛠️'],
-  'divertimento|fun|gioco|entertainment': ['🎮', '🎯', '🎲', '🎰', '🎪'],
-  'abbonamenti|abbonamento|subscription|mensile|annuale|netflix|spotify|prime|streaming': ['📱', '💻', '📺', '🎵', '🎬', '📡', '🌐', '💳'],
-};
+// Ogni entry: array di keyword italiane/inglesi -> icone in ordine di rilevanza
+const ICON_SUGGESTIONS: Array<[string[], string[]]> = [
+  [['cibo', 'food', 'mangiare', 'spesa', 'alimentari', 'supermercato', 'mercato', 'spese'], ['🛍️', '🍔', '🍕', '🥗', '🍝', '🥦']],
+  [['ristorante', 'pranzo', 'cena', 'trattoria', 'osteria', 'pizzeria'], ['🍕', '🍝', '🍗', '🌮', '🍣', '🥗']],
+  [['bar', 'caffe', 'caffè', 'cornetto', 'colazione', 'brioche', 'cappuccino'], ['☕', '🥐', '🥖', '🍳']],
+  [['pizza', 'pizzeria'], ['🍕']],
+  [['pasta', 'spaghetti', 'ramen', 'noodle'], ['🍝', '🍜']],
+  [['sushi', 'giapponese', 'cinese', 'asiatico'], ['🍣', '🥟', '🍜']],
+  [['hamburger', 'burger', 'fast food', 'fastfood', 'mcdonald', 'kebab'], ['🍔', '🌭', '🍟']],
+  [['birra', 'pub', 'aperitivo', 'aperitivi'], ['🍺', '🍻', '🥂']],
+  [['vino', 'cantina', 'enoteca'], ['🍷', '🍾', '🥂']],
+  [['cocktail', 'drink', 'bevanda', 'bevande'], ['🍹', '🍸', '🥃']],
+  [['dolci', 'dessert', 'gelateria', 'gelato', 'pasticceria', 'torta', 'dolce'], ['🍰', '🎂', '🍦', '🍫', '🍩']],
+  [['cioccolato', 'cacao'], ['🍫', '🍩']],
+  [['frutta', 'verdura', 'ortaggi', 'mercato', 'biologico'], ['🍎', '🥦', '🥕', '🍇', '🥑']],
+  [['benzina', 'carburante', 'gasolio', 'rifornimento', 'distributore'], ['⛽', '🚗']],
+  [['auto', 'macchina', 'car', 'veicolo', 'automobile'], ['🚗', '🚙', '⛽']],
+  [['moto', 'motocicletta', 'scooter'], ['🏍️', '🛵']],
+  [['bici', 'bicicletta', 'ciclismo', 'monopattino'], ['🚲', '🛵']],
+  [['treno', 'metro', 'metropolitana', 'atm', 'tram', 'bus', 'autobus', 'trasporto pubblico', 'abbonamento trasporti'], ['🚆', '🚇', '🚌']],
+  [['taxi', 'uber', 'ncc', 'navetta'], ['🚕']],
+  [['aereo', 'volo', 'aeroport'], ['✈️', '🏖️', '🧳']],
+  [['vacanza', 'viaggio', 'viaggi', 'ferie', 'weekend', 'turismo', 'hotel', 'alloggio', 'airbnb', 'hostel'], ['🏖️', '🧳', '🏨', '🗺️', '✈️']],
+  [['parcheggio', 'garage', 'autosilo', 'sosta'], ['🚗', '🔑']],
+  [['pedaggio', 'autostrada', 'casello', 'telepass'], ['🚙', '🛣️']],
+  [['affitto', 'mutuo', 'canone', 'rata'], ['🏠', '🔑', '🏦']],
+  [['casa', 'home', 'immobiliare', 'condominio'], ['🏠', '🏡', '🔑']],
+  [['luce', 'elettricità', 'corrente', 'enel', 'eni'], ['⚡', '💡']],
+  [['gas', 'riscaldamento', 'caldaia'], ['🔥', '💡']],
+  [['acqua', 'bolletta', 'bollette', 'utenze', 'utenza'], ['💡', '🚿', '⚡']],
+  [['pulizie', 'pulizia', 'lavanderia', 'lavatrice', 'bucato', 'detersivi', 'cleaning'], ['🧹', '🧺', '🧼']],
+  [['medico', 'dottore', 'visita', 'analisi', 'esami', 'clinica', 'ospedale'], ['🩺', '🏥', '💉']],
+  [['farmacia', 'farmaco', 'medicina', 'medicinale', 'pillole', 'integratori'], ['💊', '🧴']],
+  [['dentista', 'ortodontista', 'ortodonzia'], ['🦷']],
+  [['oculista', 'ottico', 'occhiali', 'lenti'], ['👓']],
+  [['palestra', 'gym', 'fitness', 'allenamento', 'crossfit', 'piscina'], ['🏋️', '🏊', '🧘', '🚴']],
+  [['sport', 'calcio', 'basket', 'tennis', 'nuoto', 'corsa', 'running'], ['⚽', '🏀', '🎾', '🏃', '🏊']],
+  [['yoga', 'meditazione', 'pilates'], ['🧘']],
+  [['abbigliamento', 'vestiti', 'vestito', 'clothes', 'moda', 'fashion'], ['👕', '👗', '👔', '🧥']],
+  [['scarpe', 'sneakers', 'stivali', 'calzature'], ['👟', '👠']],
+  [['shopping', 'acquisti', 'negozio', 'shop'], ['🛍️', '👜']],
+  [['telefono', 'smartphone', 'cellulare', 'ricarica'], ['📱', '☎️']],
+  [['computer', 'pc', 'laptop', 'notebook', 'mac'], ['💻', '🖥️']],
+  [['internet', 'wifi', 'fibra', 'adsl', 'connessione', 'web'], ['🌐', '📡']],
+  [['streaming', 'netflix', 'prime', 'disney', 'hbo', 'youtube'], ['📺', '🎬', '💻']],
+  [['spotify', 'music', 'musica', 'apple music', 'tidal'], ['🎵', '🎧']],
+  [['abbonamento', 'abbonamenti', 'subscription', 'mensile', 'annuale'], ['💳', '📱', '💻']],
+  [['giochi', 'videogiochi', 'gaming', 'game', 'console', 'playstation', 'xbox', 'nintendo', 'steam'], ['🎮', '🕹️']],
+  [['cinema', 'film', 'movie'], ['🎬', '🎭']],
+  [['teatro', 'concerto', 'spettacolo', 'evento', 'biglietto'], ['🎭', '🎤', '🎟️']],
+  [['libri', 'libro', 'ebook', 'audible', 'kindle', 'fumetti'], ['📚', '📖']],
+  [['scuola', 'università', 'corso', 'formazione', 'istruzione', 'master', 'lezioni', 'ripetizioni'], ['🎓', '✏️', '📝']],
+  [['animali', 'cane', 'gatto', 'pet', 'veterinario', 'dog', 'cat', 'cucciolo'], ['🐶', '🐱', '🐾']],
+  [['parrucchiere', 'barbiere', 'barber', 'taglio', 'capelli'], ['💈', '💇']],
+  [['estetica', 'nail', 'unghie', 'manicure', 'pedicure'], ['💅', '💄']],
+  [['spa', 'massaggio', 'benessere', 'beauty', 'bellezza'], ['🧖', '💆']],
+  [['sigarette', 'sigaretta', 'tabacchi', 'tabaccheria', 'tabacco', 'sigaro', 'fumo'], ['🚬']],
+  [['svapo', 'vaping', 'vape', 'sigaretta elettronica'], ['💨', '🚬']],
+  [['alcol', 'alcolici', 'superalcolici', 'liquori'], ['🥃', '🍷', '🍺']],
+  [['regali', 'regalo', 'gift', 'compleanno', 'natale', 'presente'], ['🎁', '🎉', '🎀']],
+  [['feste', 'festa', 'party', 'anniversario', 'matrimonio', 'cerimonia'], ['🎉', '🎂', '🥂']],
+  [['banca', 'bank', 'risparmio', 'investimento', 'investimenti', 'finanza', 'borsa'], ['🏦', '📈', '💰']],
+  [['commissioni', 'spese bancarie', 'canone bancario'], ['🏦', '💳']],
+  [['tasse', 'imposte', 'tributi', 'irpef', 'imu', 'bollo', 'f24', 'pagopa', 'fisco'], ['🏛️', '🧾', '⚖️']],
+  [['assicurazione', 'polizza', 'rc auto', 'infortuni'], ['🛡️']],
+  [['riparazione', 'manutenzione', 'meccanico', 'idraulico', 'elettricista', 'imbianchino'], ['🔧', '🛠️']],
+  [['foto', 'fotografia', 'fotografo'], ['📸']],
+  [['musica', 'strumento', 'chitarra', 'pianoforte', 'lezioni di musica'], ['🎸', '🎹', '🎵']],
+  [['giardino', 'piante', 'fiori', 'orto', 'giardinaggio'], ['🪴', '🌿', '🌺']],
+  [['lavoro', 'ufficio', 'business', 'professionale'], ['💼', '📊']],
+  [['donazione', 'beneficenza', 'volontariato', 'charity'], ['🤝', '❤️']],
+];
 
 const getSuggestedIcons = (name: string): string[] => {
-  if (!name || name.trim().length === 0) {
-    return CATEGORY_ICONS;
-  }
+  if (!name || name.trim().length < 2) return CATEGORY_ICONS;
 
   const nameLower = name.toLowerCase().trim();
+  // Dividi il nome in parole per matchare anche nomi composti (es. "spese mediche")
+  const nameWords = nameLower.split(/\s+/).filter(w => w.length >= 2);
 
-  // Se il nome è troppo corto (< 2 caratteri), mostra tutte le icone
-  if (nameLower.length < 2) {
-    return CATEGORY_ICONS;
-  }
+  const matches: { icons: string[]; score: number }[] = [];
 
-  // Array per memorizzare le corrispondenze con punteggio
-  const matches: { keywords: string; icons: string[]; score: number }[] = [];
-
-  for (const [keywords, icons] of Object.entries(ICON_SUGGESTIONS)) {
-    const keywordList = keywords.split('|');
+  for (const [keywords, icons] of ICON_SUGGESTIONS) {
     let bestScore = 0;
 
-    for (const keyword of keywordList) {
-      const keywordLower = keyword.toLowerCase();
+    for (const keyword of keywords) {
+      const kw = keyword.toLowerCase();
 
-      // Corrispondenza esatta: punteggio massimo
-      if (nameLower === keywordLower) {
-        bestScore = Math.max(bestScore, 100);
+      for (const word of nameWords) {
+        let score = 0;
+        if (word === kw)                          score = 100; // esatto
+        else if (word.startsWith(kw))             score = 85;  // "benz" → "benzina"
+        else if (kw.startsWith(word))             score = 75;  // "sigar" → "sigarette"
+        else if (kw.includes(word) && word.length >= 3) score = 55; // "pub" in "pubblico"
+        else if (word.includes(kw) && kw.length >= 3)   score = 50; // kw dentro la parola
+        bestScore = Math.max(bestScore, score);
       }
-      // Il nome inizia con la keyword: punteggio alto
-      else if (nameLower.startsWith(keywordLower)) {
-        bestScore = Math.max(bestScore, 80);
-      }
-      // La keyword inizia con il nome (almeno 2 caratteri): punteggio medio-alto
-      else if (keywordLower.startsWith(nameLower) && nameLower.length >= 2) {
-        bestScore = Math.max(bestScore, 70);
-      }
-      // Il nome contiene la keyword all'inizio di una parola
-      else if (nameLower.includes(' ' + keywordLower) || nameLower.includes('-' + keywordLower)) {
-        bestScore = Math.max(bestScore, 50);
+
+      // Match anche sul nome intero (per keyword multi-parola come "fast food")
+      if (kw.includes(' ')) {
+        if (nameLower === kw)              bestScore = Math.max(bestScore, 100);
+        else if (nameLower.startsWith(kw)) bestScore = Math.max(bestScore, 85);
+        else if (kw.startsWith(nameLower)) bestScore = Math.max(bestScore, 75);
+        else if (nameLower.includes(kw))  bestScore = Math.max(bestScore, 60);
       }
     }
 
-    if (bestScore > 0) {
-      matches.push({ keywords, icons, score: bestScore });
-    }
+    if (bestScore >= 50) matches.push({ icons, score: bestScore });
   }
 
-  // Se non ci sono corrispondenze abbastanza forti, mostra tutte le icone nell'ordine originale
-  if (matches.length === 0 || matches[0].score < 50) {
-    return CATEGORY_ICONS;
-  }
+  if (matches.length === 0) return CATEGORY_ICONS;
 
-  // Ordina per punteggio decrescente
   matches.sort((a, b) => b.score - a.score);
 
-  // Prendi solo le corrispondenze con punteggio >= 50
-  const bestMatches = matches.filter(m => m.score >= 50);
-
-  // Raccogli tutte le icone suggerite rimuovendo duplicati
   const suggestedIcons = new Set<string>();
-  bestMatches.forEach(match => {
-    match.icons.forEach(icon => suggestedIcons.add(icon));
-  });
+  matches.forEach(m => m.icons.forEach(icon => suggestedIcons.add(icon)));
 
-  // Aggiungi le restanti icone alla fine
   const remainingIcons = CATEGORY_ICONS.filter(icon => !suggestedIcons.has(icon));
-
-  // Restituisci prima le icone suggerite, poi tutte le altre
   return [...Array.from(suggestedIcons), ...remainingIcons];
 };
 
