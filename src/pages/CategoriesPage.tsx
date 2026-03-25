@@ -18,24 +18,20 @@ type CategoryFilter = 'income' | 'expense' | 'investment';
 type PeriodType = 'day' | 'week' | 'month' | 'year' | 'all' | 'custom';
 
 const ICON_GROUPS: { tKey: string; icons: string[] }[] = [
-  { tKey: 'categories.groups.food',          icons: ['🍔', '🍕', '🍝', '🌮', '🍜', '🍛', '🍣', '🥗', '🍗', '🌭', '🍟', '🥙', '🌯', '🍲', '🥟'] },
-  { tKey: 'categories.groups.breakfast',     icons: ['🥐', '🥖', '🍞', '🧀', '🥚', '🍳', '🥓'] },
-  { tKey: 'categories.groups.sweetsSnacks',  icons: ['🍰', '🎂', '🍫', '🍭', '🍬', '🍩', '🍪', '🍦', '🍿', '🌰', '🥜'] },
-  { tKey: 'categories.groups.fruitVeg',      icons: ['🍎', '🍊', '🍋', '🍇', '🍓', '🥝', '🥑', '🥕', '🌽', '🥦'] },
-  { tKey: 'categories.groups.drinks',        icons: ['☕', '🍺', '🍷', '🥤', '🍵', '🧃', '🍹', '🍸', '🍻', '🥂', '🥃', '🍾'] },
+  { tKey: 'categories.groups.food',          icons: ['🍔', '🍕', '🍝', '🌮', '🍣', '🥗', '🍗', '🍜', '🥐', '☕', '🍳', '🍫', '🍰', '🍺', '🍷', '🥤', '🍵', '🛍️'] },
   { tKey: 'categories.groups.transport',     icons: ['🚌', '🚆', '🚇', '🚕', '🚗', '🚙', '✈️', '🏍️', '🚲', '🛵', '⛽'] },
   { tKey: 'categories.groups.homeUtilities', icons: ['🏠', '🏡', '🔑', '💡', '⚡', '🔥', '🚿', '🛋️', '🪴', '🧹', '🧺'] },
   { tKey: 'categories.groups.health',        icons: ['🏥', '💊', '🩺', '💉', '🦷', '👓', '🧴', '💆', '🚑'] },
-  { tKey: 'categories.groups.shopping',      icons: ['🛍️', '👕', '👗', '👠', '👟', '🧥', '👔', '👜', '🎒'] },
+  { tKey: 'categories.groups.shopping',      icons: ['🛒', '👕', '👗', '👠', '👟', '🧥', '👔', '👜', '🎒'] },
   { tKey: 'categories.groups.technology',    icons: ['📱', '💻', '🖥️', '📺', '🎧', '📡', '🌐', '💾'] },
   { tKey: 'categories.groups.entertainment', icons: ['🎬', '🎮', '🎵', '🎸', '🎭', '🎨', '🎤', '📚', '🎲', '🎯', '🎪'] },
   { tKey: 'categories.groups.sportFitness',  icons: ['🏋️', '⚽', '🏀', '🎾', '🏊', '🧘', '🏃', '🚴', '🥊', '⛷️', '🏂'] },
-  { tKey: 'categories.groups.travel',        icons: ['🏖️', '🧳', '🏨', '🗺️', '🗼'] },
-  { tKey: 'categories.groups.finance',       icons: ['💰', '💵', '💳', '🏦', '💸', '📈', '💶'] },
+  { tKey: 'categories.groups.travel',        icons: ['🏖️', '🧳', '🏨', '🗺️', '🗼', '🌍', '🚢', '🏔️', '🏰', '🏝️', '🌅', '🎡'] },
+  { tKey: 'categories.groups.finance',       icons: ['💰', '💵', '💳', '🏦', '💸', '📈', '💶', '📉', '🪙', '🏧', '💹', '📊'] },
   { tKey: 'categories.groups.education',     icons: ['🎓', '✏️', '📖', '📝', '🖊️'] },
   { tKey: 'categories.groups.animalsNature', icons: ['🐶', '🐱', '🐾', '🌳', '🌿', '🌺'] },
   { tKey: 'categories.groups.beautyCare',    icons: ['💄', '💅', '💇', '💈', '🪒', '🧖'] },
-  { tKey: 'categories.groups.smokingVices',  icons: ['🚬', '💨'] },
+  { tKey: 'categories.groups.smokingVices',  icons: ['🚬', '💨', '🍾', '🥃', '🎰', '🃏', '🎲'] },
   { tKey: 'categories.groups.misc',          icons: ['🎁', '🎉', '🎀', '🤝', '🛡️', '🧾', '🏛️', '⚖️', '📸', '📌', '💼', '🔧', '🛠️', '🔒', '📞', '📻', '🎃'] },
 ];
 
