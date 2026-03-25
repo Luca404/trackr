@@ -549,48 +549,78 @@ export default function CategoriesPage() {
         >
           <div className="space-y-4">
             {/* Lista sottocategorie */}
-            {selectedCategory && selectedCategory.subcategories && selectedCategory.subcategories.length > 0 && (
-              <div>
-                <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Sottocategorie
-                </h4>
-                <div className="space-y-2">
-                  {selectedCategory.subcategories.map((sub) => (
-                    <div
-                      key={sub.id}
-                      className="flex items-center justify-between p-3 rounded-lg bg-gray-50 dark:bg-gray-700"
-                    >
-                      {editingSubcategoryId === sub.id ? (
-                        <input
-                          autoFocus
-                          className="flex-1 text-sm bg-transparent border-b border-primary-500 outline-none text-gray-900 dark:text-gray-100 mr-2"
-                          value={editingSubcategoryName}
-                          onChange={e => setEditingSubcategoryName(e.target.value)}
-                          onBlur={() => setEditingSubcategoryId(null)}
-                          onKeyDown={e => {
-                            if (e.key === 'Enter') { e.preventDefault(); handleSubcategoryRename(sub.id); }
-                            if (e.key === 'Escape') setEditingSubcategoryId(null);
-                          }}
-                        />
-                      ) : (
-                        <span
-                          className="flex-1 text-sm text-gray-900 dark:text-gray-100 cursor-pointer"
-                          onClick={() => { setEditingSubcategoryId(sub.id); setEditingSubcategoryName(sub.name); }}
-                        >
-                          {sub.name}
-                        </span>
-                      )}
-                      <button
-                        onClick={() => handleDeleteSubcategory(sub.id)}
-                        className="text-red-500 hover:text-red-700 text-sm shrink-0"
-                      >
-                        🗑️
-                      </button>
-                    </div>
-                  ))}
+            {selectedCategory && selectedCategory.subcategories && selectedCategory.subcategories.length > 0 && (() => {
+              const baseColors = ['#ef4444','#fb923c','#fbbf24','#84cc16','#10b981','#14b8a6','#06b6d4','#3b82f6','#8b5cf6','#d946ef','#ec4899','#be123c'];
+              const sortedCatsOfType = [...categories]
+                .filter(c => c.category_type === selectedCategory.category_type)
+                .sort((a, b) => (b.total_amount || 0) - (a.total_amount || 0));
+              const catColorIdx = sortedCatsOfType.findIndex(c => c.id === selectedCategory.id);
+              const catColor = baseColors[Math.max(0, catColorIdx) % baseColors.length];
+              const catTotal = selectedCategory.total_amount || 0;
+              return (
+                <div>
+                  <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Sottocategorie
+                  </h4>
+                  <div className="space-y-3">
+                    {selectedCategory.subcategories.map((sub) => {
+                      const subAmount = sub.total_amount || 0;
+                      const pct = catTotal > 0 ? (subAmount / catTotal) * 100 : 0;
+                      return (
+                        <div key={sub.id}>
+                          <div className="flex items-center justify-between mb-1">
+                            {editingSubcategoryId === sub.id ? (
+                              <input
+                                autoFocus
+                                className="flex-1 text-sm bg-transparent border-b border-primary-500 outline-none text-gray-900 dark:text-gray-100 mr-2"
+                                value={editingSubcategoryName}
+                                onChange={e => setEditingSubcategoryName(e.target.value)}
+                                onBlur={() => setEditingSubcategoryId(null)}
+                                onKeyDown={e => {
+                                  if (e.key === 'Enter') { e.preventDefault(); handleSubcategoryRename(sub.id); }
+                                  if (e.key === 'Escape') setEditingSubcategoryId(null);
+                                }}
+                              />
+                            ) : (
+                              <span
+                                className="text-sm text-gray-900 dark:text-gray-100 cursor-pointer flex-1 min-w-0 truncate"
+                                onClick={() => { setEditingSubcategoryId(sub.id); setEditingSubcategoryName(sub.name); }}
+                              >
+                                {sub.name}
+                              </span>
+                            )}
+                            <div className="flex items-center gap-2 shrink-0 ml-2">
+                              {subAmount > 0 && (
+                                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                  {formatCurrency(subAmount)}
+                                </span>
+                              )}
+                              <button
+                                onClick={() => handleDeleteSubcategory(sub.id)}
+                                className="text-red-400 hover:text-red-600 text-sm"
+                              >
+                                🗑️
+                              </button>
+                            </div>
+                          </div>
+                          <div className="relative w-full h-5 bg-gray-100 dark:bg-gray-700 rounded overflow-hidden">
+                            <div
+                              className="h-full transition-all duration-500"
+                              style={{ width: `${pct}%`, backgroundColor: catColor, opacity: 0.75 }}
+                            />
+                            <div className="absolute inset-0 flex items-center justify-end pr-2">
+                              <span className="text-xs font-bold text-gray-800 dark:text-gray-100">
+                                {catTotal > 0 ? `${pct.toFixed(1)}%` : '—'}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
-            )}
+              );
+            })()}
 
             {/* Form nuova sottocategoria */}
             {!showSubcategoryForm ? (
