@@ -297,6 +297,17 @@ class ApiService {
     return mapSubcategory(data);
   }
 
+  async updateSubcategory(subcategoryId: number, name: string): Promise<Subcategory> {
+    const { data, error } = await supabase
+      .from('subcategories')
+      .update({ name })
+      .eq('id', subcategoryId)
+      .select()
+      .single();
+    if (error) throw error;
+    return mapSubcategory(data);
+  }
+
   async deleteSubcategory(_categoryId: number, subcategoryId: number): Promise<void> {
     const { error } = await supabase.from('subcategories').delete().eq('id', subcategoryId);
     if (error) throw error;

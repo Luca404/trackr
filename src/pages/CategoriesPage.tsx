@@ -257,6 +257,8 @@ export default function CategoriesPage() {
   });
 
   const [showSubcategoryForm, setShowSubcategoryForm] = useState(false);
+  const [editingSubcategoryId, setEditingSubcategoryId] = useState<number | null>(null);
+  const [editingSubcategoryName, setEditingSubcategoryName] = useState('');
 
   // Confirm dialog states
   const [isDeleteCategoryDialogOpen, setIsDeleteCategoryDialogOpen] = useState(false);
@@ -358,6 +360,21 @@ export default function CategoriesPage() {
     } catch (error) {
       console.error('Errore creazione sottocategoria:', error);
     }
+  };
+
+  const handleSubcategoryRename = async (subcategoryId: number) => {
+    const trimmed = editingSubcategoryName.trim();
+    if (!trimmed || !selectedCategory) { setEditingSubcategoryId(null); return; }
+    const original = selectedCategory.subcategories?.find(s => s.id === subcategoryId)?.name;
+    if (trimmed === original) { setEditingSubcategoryId(null); return; }
+    try {
+      const updated = await apiService.updateSubcategory(subcategoryId, trimmed);
+      const updateSubs = (subs: any[]) => subs.map(s => s.id === subcategoryId ? { ...s, name: updated.name } : s);
+      const categoryFromCache = baseCategories.find(c => c.id === selectedCategory.id);
+      if (categoryFromCache) updateCategoryCache({ ...categoryFromCache, subcategories: updateSubs(categoryFromCache.subcategories || []) });
+      setSelectedCategory(prev => prev ? { ...prev, subcategories: updateSubs(prev.subcategories || []) } : prev);
+    } catch (e) { console.error(e); }
+    setEditingSubcategoryId(null);
   };
 
   const handleDeleteSubcategory = (subcategoryId: number) => {
@@ -531,10 +548,29 @@ export default function CategoriesPage() {
                       key={sub.id}
                       className="flex items-center justify-between p-3 rounded-lg bg-gray-50 dark:bg-gray-700"
                     >
-                      <span className="text-sm text-gray-900 dark:text-gray-100">{sub.name}</span>
+                      {editingSubcategoryId === sub.id ? (
+                        <input
+                          autoFocus
+                          className="flex-1 text-sm bg-transparent border-b border-primary-500 outline-none text-gray-900 dark:text-gray-100 mr-2"
+                          value={editingSubcategoryName}
+                          onChange={e => setEditingSubcategoryName(e.target.value)}
+                          onBlur={() => handleSubcategoryRename(sub.id)}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter') { e.preventDefault(); handleSubcategoryRename(sub.id); }
+                            if (e.key === 'Escape') setEditingSubcategoryId(null);
+                          }}
+                        />
+                      ) : (
+                        <span
+                          className="flex-1 text-sm text-gray-900 dark:text-gray-100 cursor-pointer"
+                          onClick={() => { setEditingSubcategoryId(sub.id); setEditingSubcategoryName(sub.name); }}
+                        >
+                          {sub.name}
+                        </span>
+                      )}
                       <button
                         onClick={() => handleDeleteSubcategory(sub.id)}
-                        className="text-red-500 hover:text-red-700 text-sm"
+                        className="text-red-500 hover:text-red-700 text-sm shrink-0"
                       >
                         🗑️
                       </button>
