@@ -197,6 +197,18 @@ export default function PortfoliosPage() {
                         {totalPL >= 0 ? '+' : ''}{formatCurrency(totalPL)}
                       </div>
                     )}
+                    <a
+                      href="https://portfolio-tracker-one-tau.vercel.app/"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-4 flex items-center justify-center gap-2 w-full py-2.5 rounded-xl bg-primary-500 hover:bg-primary-600 active:bg-primary-700 text-white text-sm font-medium transition-colors"
+                    >
+                      <span>📊</span>
+                      <span>Analizza il tuo portafoglio</span>
+                      <svg className="w-3.5 h-3.5 opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                      </svg>
+                    </a>
                   </div>
                   <div className="absolute left-0 right-0 h-6 bg-gradient-to-b from-gray-50 dark:from-gray-900 to-transparent pointer-events-none" style={{ top: '100%' }} />
                 </div>
