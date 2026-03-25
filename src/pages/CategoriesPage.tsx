@@ -519,6 +519,7 @@ export default function CategoriesPage() {
             setIsSubcategoryModalOpen(false);
             setShowSubcategoryForm(false);
             setSubcategoryFormData({ name: '' });
+            setEditingSubcategoryId(null);
           }}
           title={
             <div className="flex items-center justify-between w-full">
@@ -554,7 +555,7 @@ export default function CategoriesPage() {
                           className="flex-1 text-sm bg-transparent border-b border-primary-500 outline-none text-gray-900 dark:text-gray-100 mr-2"
                           value={editingSubcategoryName}
                           onChange={e => setEditingSubcategoryName(e.target.value)}
-                          onBlur={() => handleSubcategoryRename(sub.id)}
+                          onBlur={() => setEditingSubcategoryId(null)}
                           onKeyDown={e => {
                             if (e.key === 'Enter') { e.preventDefault(); handleSubcategoryRename(sub.id); }
                             if (e.key === 'Escape') setEditingSubcategoryId(null);
