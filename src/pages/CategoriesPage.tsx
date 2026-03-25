@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { apiService } from '../services/api';
+import { supabase } from '../services/supabase';
 import { useData } from '../contexts/DataContext';
 import Layout from '../components/layout/Layout';
 import Modal from '../components/common/Modal';
@@ -179,7 +180,7 @@ const getSuggestedIcons = (name: string): string[] => {
 };
 
 export default function CategoriesPage() {
-  const { categories: baseCategories, transactions: allTransactions, isLoading, addCategory, updateCategory: updateCategoryCache, deleteCategory: deleteCategoryCache } = useData();
+  const { categories: baseCategories, transactions: allTransactions, isLoading, addCategory, updateCategory: updateCategoryCache, deleteCategory: deleteCategoryCache, refreshTransactions } = useData();
   const [filter, setFilter] = useState<CategoryFilter>('expense');
   const [selectedCategory, setSelectedCategory] = useState<CategoryWithStats | null>(null);
   const [isSubcategoryModalOpen, setIsSubcategoryModalOpen] = useState(false);
@@ -316,9 +317,14 @@ export default function CategoriesPage() {
     e.preventDefault();
     try {
       if (isEditMode && selectedCategory) {
+        const oldName = selectedCategory.name;
         const updated = await apiService.updateCategory(selectedCategory.id, categoryFormData);
         updateCategoryCache(updated);
         setSelectedCategory(prev => prev ? { ...prev, name: updated.name, icon: updated.icon, category_type: updated.category_type } : prev);
+        if (updated.name !== oldName) {
+          await supabase.from('transactions').update({ category: updated.name }).eq('category', oldName);
+          await refreshTransactions();
+        }
       } else {
         const newCategory = await apiService.createCategory(categoryFormData);
         addCategory(newCategory);
@@ -373,6 +379,11 @@ export default function CategoriesPage() {
       const categoryFromCache = baseCategories.find(c => c.id === selectedCategory.id);
       if (categoryFromCache) updateCategoryCache({ ...categoryFromCache, subcategories: updateSubs(categoryFromCache.subcategories || []) });
       setSelectedCategory(prev => prev ? { ...prev, subcategories: updateSubs(prev.subcategories || []) } : prev);
+      await supabase.from('transactions')
+        .update({ subcategory: updated.name })
+        .eq('subcategory', original!)
+        .eq('category', selectedCategory.name);
+      await refreshTransactions();
     } catch (e) { console.error(e); }
     setEditingSubcategoryId(null);
   };
