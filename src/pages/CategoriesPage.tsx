@@ -15,47 +15,28 @@ import type { CategoryWithStats, CategoryFormData, SubcategoryFormData } from '.
 type CategoryFilter = 'income' | 'expense' | 'investment';
 type PeriodType = 'day' | 'week' | 'month' | 'year' | 'all' | 'custom';
 
-const CATEGORY_ICONS = [
-  // Cibo principale
-  '🍔', '🍕', '🍝', '🌮', '🍜', '🍛', '🍣', '🥗', '🍗', '🌭', '🍟', '🥙', '🌯', '🍲', '🥟',
-  // Colazione e pane
-  '🥐', '🥖', '🍞', '🧀', '🥚', '🍳', '🥓',
-  // Dolci e snack
-  '🍰', '🎂', '🍫', '🍭', '🍬', '🍩', '🍪', '🍦', '🍿', '🌰', '🥜',
-  // Frutta e verdura
-  '🍎', '🍊', '🍋', '🍇', '🍓', '🥝', '🥑', '🥕', '🌽', '🥦',
-  // Bevande
-  '☕', '🍺', '🍷', '🥤', '🍵', '🧃', '🍹', '🍸', '🍻', '🥂', '🥃', '🍾',
-  // Trasporti
-  '🚌', '🚆', '🚇', '🚕', '🚗', '🚙', '✈️', '🏍️', '🚲', '🛵', '⛽',
-  // Casa e utenze
-  '🏠', '🏡', '🔑', '💡', '⚡', '🔥', '🚿', '🛋️', '🪴', '🧹', '🧺',
-  // Salute e benessere
-  '🏥', '💊', '🩺', '💉', '🦷', '👓', '🧴', '💆', '🚑',
-  // Shopping e abbigliamento
-  '🛍️', '👕', '👗', '👠', '👟', '🧥', '👔', '👜', '🎒',
-  // Tecnologia
-  '📱', '💻', '🖥️', '📺', '🎧', '📡', '🌐', '💾',
-  // Intrattenimento e cultura
-  '🎬', '🎮', '🎵', '🎸', '🎭', '🎨', '🎤', '📚', '🎲', '🎯', '🎪',
-  // Sport e fitness
-  '🏋️', '⚽', '🏀', '🎾', '🏊', '🧘', '🏃', '🚴', '🥊', '⛷️', '🏂',
-  // Viaggi
-  '🏖️', '🧳', '🏨', '🗺️', '🗼',
-  // Finanza
-  '💰', '💵', '💳', '🏦', '💸', '📈', '💶',
-  // Istruzione
-  '🎓', '✏️', '📖', '📝', '🖊️',
-  // Animali e natura
-  '🐶', '🐱', '🐾', '🌳', '🌿', '🌺',
-  // Bellezza e cura persona
-  '💄', '💅', '💇', '💈', '🪒', '🧖',
-  // Vizio / fumo
-  '🚬', '💨',
-  // Varie
-  '🎁', '🎉', '🎀', '🤝', '🛡️', '🧾', '🏛️', '⚖️',
-  '📸', '📌', '💼', '🔧', '🛠️', '🔒', '📞', '📻', '🎃',
+const ICON_GROUPS: { label: string; icons: string[] }[] = [
+  { label: 'Cibo',              icons: ['🍔', '🍕', '🍝', '🌮', '🍜', '🍛', '🍣', '🥗', '🍗', '🌭', '🍟', '🥙', '🌯', '🍲', '🥟'] },
+  { label: 'Colazione',         icons: ['🥐', '🥖', '🍞', '🧀', '🥚', '🍳', '🥓'] },
+  { label: 'Dolci & Snack',     icons: ['🍰', '🎂', '🍫', '🍭', '🍬', '🍩', '🍪', '🍦', '🍿', '🌰', '🥜'] },
+  { label: 'Frutta & Verdura',  icons: ['🍎', '🍊', '🍋', '🍇', '🍓', '🥝', '🥑', '🥕', '🌽', '🥦'] },
+  { label: 'Bevande',           icons: ['☕', '🍺', '🍷', '🥤', '🍵', '🧃', '🍹', '🍸', '🍻', '🥂', '🥃', '🍾'] },
+  { label: 'Trasporti',         icons: ['🚌', '🚆', '🚇', '🚕', '🚗', '🚙', '✈️', '🏍️', '🚲', '🛵', '⛽'] },
+  { label: 'Casa & Utenze',     icons: ['🏠', '🏡', '🔑', '💡', '⚡', '🔥', '🚿', '🛋️', '🪴', '🧹', '🧺'] },
+  { label: 'Salute',            icons: ['🏥', '💊', '🩺', '💉', '🦷', '👓', '🧴', '💆', '🚑'] },
+  { label: 'Shopping',          icons: ['🛍️', '👕', '👗', '👠', '👟', '🧥', '👔', '👜', '🎒'] },
+  { label: 'Tecnologia',        icons: ['📱', '💻', '🖥️', '📺', '🎧', '📡', '🌐', '💾'] },
+  { label: 'Intrattenimento',   icons: ['🎬', '🎮', '🎵', '🎸', '🎭', '🎨', '🎤', '📚', '🎲', '🎯', '🎪'] },
+  { label: 'Sport & Fitness',   icons: ['🏋️', '⚽', '🏀', '🎾', '🏊', '🧘', '🏃', '🚴', '🥊', '⛷️', '🏂'] },
+  { label: 'Viaggi',            icons: ['🏖️', '🧳', '🏨', '🗺️', '🗼'] },
+  { label: 'Finanza',           icons: ['💰', '💵', '💳', '🏦', '💸', '📈', '💶'] },
+  { label: 'Istruzione',        icons: ['🎓', '✏️', '📖', '📝', '🖊️'] },
+  { label: 'Animali & Natura',  icons: ['🐶', '🐱', '🐾', '🌳', '🌿', '🌺'] },
+  { label: 'Bellezza & Cura',   icons: ['💄', '💅', '💇', '💈', '🪒', '🧖'] },
+  { label: 'Fumo & Vizi',       icons: ['🚬', '💨'] },
+  { label: 'Varie',             icons: ['🎁', '🎉', '🎀', '🤝', '🛡️', '🧾', '🏛️', '⚖️', '📸', '📌', '💼', '🔧', '🛠️', '🔒', '📞', '📻', '🎃'] },
 ];
+
 
 // Mappa parole chiave -> icone suggerite
 // Ogni entry: array di keyword italiane/inglesi -> icone in ordine di rilevanza
@@ -131,11 +112,11 @@ const ICON_SUGGESTIONS: Array<[string[], string[]]> = [
   [['donazione', 'beneficenza', 'volontariato', 'charity'], ['🤝', '❤️']],
 ];
 
+// Restituisce le icone suggerite per il nome dato (array vuoto = nessun suggerimento)
 const getSuggestedIcons = (name: string): string[] => {
-  if (!name || name.trim().length < 2) return CATEGORY_ICONS;
+  if (!name || name.trim().length < 2) return [];
 
   const nameLower = name.toLowerCase().trim();
-  // Dividi il nome in parole per matchare anche nomi composti (es. "spese mediche")
   const nameWords = nameLower.split(/\s+/).filter(w => w.length >= 2);
 
   const matches: { icons: string[]; score: number }[] = [];
@@ -145,38 +126,31 @@ const getSuggestedIcons = (name: string): string[] => {
 
     for (const keyword of keywords) {
       const kw = keyword.toLowerCase();
-
       for (const word of nameWords) {
         let score = 0;
-        if (word === kw)                          score = 100; // esatto
-        else if (word.startsWith(kw))             score = 85;  // "benz" → "benzina"
-        else if (kw.startsWith(word))             score = 75;  // "sigar" → "sigarette"
-        else if (kw.includes(word) && word.length >= 3) score = 55; // "pub" in "pubblico"
-        else if (word.includes(kw) && kw.length >= 3)   score = 50; // kw dentro la parola
+        if (word === kw)                               score = 100;
+        else if (word.startsWith(kw))                  score = 85;
+        else if (kw.startsWith(word))                  score = 75;
+        else if (kw.includes(word) && word.length >= 3) score = 55;
+        else if (word.includes(kw) && kw.length >= 3)  score = 50;
         bestScore = Math.max(bestScore, score);
       }
-
-      // Match anche sul nome intero (per keyword multi-parola come "fast food")
       if (kw.includes(' ')) {
-        if (nameLower === kw)              bestScore = Math.max(bestScore, 100);
-        else if (nameLower.startsWith(kw)) bestScore = Math.max(bestScore, 85);
-        else if (kw.startsWith(nameLower)) bestScore = Math.max(bestScore, 75);
-        else if (nameLower.includes(kw))  bestScore = Math.max(bestScore, 60);
+        if (nameLower === kw)               bestScore = Math.max(bestScore, 100);
+        else if (nameLower.startsWith(kw))  bestScore = Math.max(bestScore, 85);
+        else if (kw.startsWith(nameLower))  bestScore = Math.max(bestScore, 75);
+        else if (nameLower.includes(kw))    bestScore = Math.max(bestScore, 60);
       }
     }
-
     if (bestScore >= 50) matches.push({ icons, score: bestScore });
   }
 
-  if (matches.length === 0) return CATEGORY_ICONS;
-
+  if (matches.length === 0) return [];
   matches.sort((a, b) => b.score - a.score);
 
-  const suggestedIcons = new Set<string>();
-  matches.forEach(m => m.icons.forEach(icon => suggestedIcons.add(icon)));
-
-  const remainingIcons = CATEGORY_ICONS.filter(icon => !suggestedIcons.has(icon));
-  return [...Array.from(suggestedIcons), ...remainingIcons];
+  const seen = new Set<string>();
+  matches.forEach(m => m.icons.forEach(icon => seen.add(icon)));
+  return Array.from(seen);
 };
 
 export default function CategoriesPage() {
@@ -697,21 +671,46 @@ export default function CategoriesPage() {
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Icona
               </label>
-              <div className="grid grid-cols-6 gap-2 max-h-64 overflow-y-auto">
-                {getSuggestedIcons(categoryFormData.name).map((icon) => (
-                  <button
-                    key={icon}
-                    type="button"
-                    onClick={() => setCategoryFormData({ ...categoryFormData, icon })}
-                    className={`p-3 text-2xl rounded-lg border-2 transition-colors ${
-                      categoryFormData.icon === icon
-                        ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20'
-                        : 'border-gray-200 dark:border-gray-700'
-                    }`}
-                  >
-                    {icon}
-                  </button>
-                ))}
+              <div className="max-h-64 overflow-y-auto space-y-3 pr-1">
+                {(() => {
+                  const suggested = getSuggestedIcons(categoryFormData.name);
+
+                  const renderGrid = (icons: string[]) => (
+                    <div className="grid grid-cols-7 gap-1.5">
+                      {icons.map(icon => (
+                        <button
+                          key={icon}
+                          type="button"
+                          onClick={() => setCategoryFormData({ ...categoryFormData, icon })}
+                          className={`p-2 text-xl rounded-lg border-2 transition-colors ${
+                            categoryFormData.icon === icon
+                              ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20'
+                              : 'border-transparent hover:border-gray-300 dark:hover:border-gray-600'
+                          }`}
+                        >
+                          {icon}
+                        </button>
+                      ))}
+                    </div>
+                  );
+
+                  return (
+                    <>
+                      {suggested.length > 0 && (
+                        <div>
+                          <div className="text-xs font-medium text-primary-500 dark:text-primary-400 mb-1">✨ Suggeriti</div>
+                          {renderGrid(suggested)}
+                        </div>
+                      )}
+                      {ICON_GROUPS.map(group => (
+                        <div key={group.label}>
+                          <div className="text-xs font-medium text-gray-400 dark:text-gray-500 mb-1">{group.label}</div>
+                          {renderGrid(group.icons)}
+                        </div>
+                      ))}
+                    </>
+                  );
+                })()}
               </div>
             </div>
 
