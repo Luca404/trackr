@@ -125,6 +125,7 @@ export interface Category {
   user_id: number;
   name: string;
   icon: string;
+  color?: string | null;          // hex color, e.g. '#3b82f6'
   category_type?: string | null;  // 'expense', 'income', 'investment', 'transfer', or null for all
   created_at: string;
   updated_at: string;
@@ -140,6 +141,7 @@ export interface CategoryWithStats extends Category {
 export interface CategoryFormData {
   name: string;
   icon: string;
+  color?: string | null;
   category_type?: string | null;
 }
 

@@ -125,7 +125,10 @@ export default function StatsPage() {
 
   const baseColors = ['#ef4444','#fb923c','#fbbf24','#84cc16','#10b981','#14b8a6','#06b6d4','#3b82f6','#8b5cf6','#d946ef','#ec4899','#be123c'];
   const categoryColorMap = new Map<string, string>();
-  categoryStats.forEach((cat, index) => { categoryColorMap.set(cat.name, baseColors[index % baseColors.length]); });
+  categoryStats.forEach((cat, index) => {
+    const catObj = categories.find(c => c.name === cat.name);
+    categoryColorMap.set(cat.name, catObj?.color || baseColors[index % baseColors.length]);
+  });
   const getCategoryColor = (categoryName: string) => categoryColorMap.get(categoryName) || baseColors[0];
 
   const getSubcategoryStats = (categoryName: string) => {

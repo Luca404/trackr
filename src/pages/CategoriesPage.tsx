@@ -38,6 +38,14 @@ const ICON_GROUPS: { label: string; icons: string[] }[] = [
 ];
 
 
+const PRESET_COLORS = [
+  '#ef4444', '#f97316', '#f59e0b', '#eab308',
+  '#84cc16', '#22c55e', '#10b981', '#14b8a6',
+  '#06b6d4', '#3b82f6', '#6366f1', '#8b5cf6',
+  '#a855f7', '#d946ef', '#ec4899', '#64748b',
+];
+const randomPresetColor = () => PRESET_COLORS[Math.floor(Math.random() * PRESET_COLORS.length)];
+
 // Mappa parole chiave -> icone suggerite
 // Ogni entry: array di keyword italiane/inglesi -> icone in ordine di rilevanza
 const ICON_SUGGESTIONS: Array<[string[], string[]]> = [
@@ -224,6 +232,7 @@ export default function CategoriesPage() {
   const [categoryFormData, setCategoryFormData] = useState<CategoryFormData>({
     name: '',
     icon: '📌',
+    color: randomPresetColor(),
     category_type: 'expense',
   });
 
@@ -261,6 +270,7 @@ export default function CategoriesPage() {
     setCategoryFormData({
       name: category.name,
       icon: category.icon,
+      color: category.color || randomPresetColor(),
       category_type: category.category_type,
     });
     setIsCategoryModalOpen(true);
@@ -465,7 +475,12 @@ export default function CategoriesPage() {
                 onClick={() => handleCategoryClick(category)}
                 className="flex flex-col items-center p-3 rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:border-primary-500 dark:hover:border-primary-500 hover:shadow-md transition-all"
               >
-                <div className="text-3xl mb-1">{category.icon}</div>
+                <div className="relative">
+                  <div className="text-3xl mb-1">{category.icon}</div>
+                  {category.color && (
+                    <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border border-white dark:border-gray-800" style={{ backgroundColor: category.color }} />
+                  )}
+                </div>
                 <div className="text-xs font-medium text-gray-900 dark:text-gray-100 text-center line-clamp-1 w-full">
                   {category.name}
                 </div>
@@ -487,7 +502,7 @@ export default function CategoriesPage() {
           {!isLoading && <button
             onClick={() => {
               setIsEditMode(false);
-              setCategoryFormData({ name: '', icon: '📌', category_type: filter });
+              setCategoryFormData({ name: '', icon: '📌', color: randomPresetColor(), category_type: filter });
               setIsCategoryModalOpen(true);
             }}
             className="flex flex-col items-center justify-center p-3 rounded-lg border-2 border-dashed border-gray-200 dark:border-gray-700 outline-none focus:outline-none select-none min-h-[7.75rem]"
@@ -529,7 +544,7 @@ export default function CategoriesPage() {
                 .filter(c => c.category_type === selectedCategory.category_type)
                 .sort((a, b) => (b.total_amount || 0) - (a.total_amount || 0));
               const catColorIdx = sortedCatsOfType.findIndex(c => c.id === selectedCategory.id);
-              const catColor = baseColors[Math.max(0, catColorIdx) % baseColors.length];
+              const catColor = selectedCategory.color || baseColors[Math.max(0, catColorIdx) % baseColors.length];
               const catTotal = selectedCategory.total_amount || 0;
               return (
                 <div>
@@ -665,6 +680,32 @@ export default function CategoriesPage() {
                 autoComplete="off" autoCorrect="off" spellCheck={false}
                 required
               />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Colore
+              </label>
+              <div className="flex items-center gap-3">
+                <div className="grid grid-cols-8 gap-1.5 flex-1">
+                  {PRESET_COLORS.map(c => (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => setCategoryFormData(prev => ({ ...prev, color: c }))}
+                      className={`w-7 h-7 rounded-full transition-transform ${categoryFormData.color === c ? 'scale-125 ring-2 ring-offset-1 ring-gray-400 dark:ring-gray-500' : 'hover:scale-110'}`}
+                      style={{ backgroundColor: c }}
+                    />
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setCategoryFormData(prev => ({ ...prev, color: randomPresetColor() }))}
+                  className="shrink-0 text-xs text-gray-500 dark:text-gray-400 hover:text-primary-500 dark:hover:text-primary-400 border border-gray-300 dark:border-gray-600 rounded-lg px-2 py-1"
+                >
+                  🎲 Random
+                </button>
+              </div>
             </div>
 
             <div>

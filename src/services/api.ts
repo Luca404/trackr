@@ -58,6 +58,7 @@ function mapCategory(row: any): CategoryWithStats {
     user_id: row.user_id,
     name: row.name,
     icon: row.icon,
+    color: row.color || null,
     category_type: row.category_type,
     created_at: row.created_at,
     updated_at: row.updated_at,
