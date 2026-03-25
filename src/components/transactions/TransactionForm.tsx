@@ -1,4 +1,6 @@
-import { useState, useEffect, useMemo, useRef, type FormEvent } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback, type FormEvent } from 'react';
+
+const PF_BACKEND_URL = import.meta.env.VITE_PF_BACKEND_URL || 'https://portfolio-tracker-production-3bd4.up.railway.app';
 import type { TransactionFormData, TransactionType, Category, Subcategory, Account, Portfolio, RecurringFrequency } from '../../types';
 import { useData } from '../../contexts/DataContext';
 import ConfirmDialog from '../common/ConfirmDialog';
@@ -48,6 +50,19 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
     }
     return '';
   });
+
+  // Symbol search
+  const [instrumentType, setInstrumentType] = useState<'etf' | 'stock'>('etf');
+  const [ucitsCache, setUcitsCache] = useState<any[]>([]);
+  const [symbolOptions, setSymbolOptions] = useState<any[]>([]);
+  const [symbolLoading, setSymbolLoading] = useState(false);
+  const [symbolSearchOpen, setSymbolSearchOpen] = useState(false);
+  const [symbolSearchCompleted, setSymbolSearchCompleted] = useState(false);
+  const [selectedSymbolInfo, setSelectedSymbolInfo] = useState<{ name: string; exchange: string; currency: string; ter: string; isin: string } | null>(null);
+  const [skipSymbolSearch, setSkipSymbolSearch] = useState(false);
+  const [isinLookupLoading, setIsinLookupLoading] = useState(false);
+  const [isinLookupError, setIsinLookupError] = useState(false);
+  const ucitsLoadedRef = useRef(false);
 
   const [selectedPortfolio, setSelectedPortfolio] = useState<Portfolio | null>(null);
 
@@ -124,6 +139,92 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
       setSelectedPortfolio(linked ?? allPortfolios[0] ?? null);
     }
   }, [selectedCategory, currentType, allPortfolios]);
+
+  // Carica ETF UCITS cache (sessionStorage → API)
+  useEffect(() => {
+    if (ucitsLoadedRef.current || ucitsCache.length > 0 || currentType !== 'investment') return;
+    const cached = sessionStorage.getItem('ucits_etf_list');
+    if (cached) {
+      try { setUcitsCache(JSON.parse(cached)); ucitsLoadedRef.current = true; return; } catch {}
+    }
+    ucitsLoadedRef.current = true;
+    fetch(`${PF_BACKEND_URL}/symbols/ucits`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data?.results) {
+          setUcitsCache(data.results);
+          try { sessionStorage.setItem('ucits_etf_list', JSON.stringify(data.results)); } catch {}
+        }
+      })
+      .catch(() => { ucitsLoadedRef.current = false; });
+  }, [currentType, ucitsCache.length]);
+
+  // Ricerca simboli con debounce
+  const isIsinStr = useCallback((s: string) => /^[A-Z]{2}[A-Z0-9]{10}$/.test(s), []);
+  useEffect(() => {
+    if (skipSymbolSearch) { setSkipSymbolSearch(false); return; }
+    if (!ticker || ticker.length < 2) {
+      setSymbolOptions([]);
+      setSymbolSearchCompleted(false);
+      setSymbolSearchOpen(false);
+      return;
+    }
+    setSymbolSearchCompleted(false);
+    const controller = new AbortController();
+
+    const run = async () => {
+      setSymbolLoading(true);
+      if (instrumentType === 'etf') {
+        await new Promise(r => setTimeout(r, 100));
+        if (controller.signal.aborted) return;
+        const q = ticker.toUpperCase();
+        const filtered = ucitsCache.filter(item => {
+          const t = (item.symbol || '').toUpperCase();
+          const isin = (item.isin || '').toUpperCase();
+          return t.startsWith(q) || (isIsinStr(q) && isin === q);
+        }).slice(0, 25);
+        setSymbolOptions(filtered);
+        setSymbolSearchOpen(true);
+        setSymbolLoading(false);
+        setSymbolSearchCompleted(true);
+        return;
+      }
+      try {
+        const res = await fetch(
+          `${PF_BACKEND_URL}/symbols/search?q=${encodeURIComponent(ticker)}&instrument_type=stock`,
+          { signal: controller.signal }
+        );
+        if (res.ok) { const data = await res.json(); setSymbolOptions(data.results || []); setSymbolSearchOpen(true); }
+      } catch (err: any) {
+        if (err.name !== 'AbortError') console.error('Symbol search error:', err);
+      } finally {
+        if (!controller.signal.aborted) { setSymbolLoading(false); setSymbolSearchCompleted(true); }
+      }
+    };
+    const timer = setTimeout(run, 250);
+    return () => { clearTimeout(timer); controller.abort(); };
+  }, [ticker, instrumentType, skipSymbolSearch, ucitsCache, isIsinStr]);
+
+  const handleIsinLookup = async () => {
+    setIsinLookupLoading(true);
+    setIsinLookupError(false);
+    try {
+      const res = await fetch(`${PF_BACKEND_URL}/symbols/isin-lookup?isin=${ticker}`);
+      if (!res.ok) throw new Error('not found');
+      const data = await res.json();
+      const entries = data.listings.map((l: any) => ({
+        symbol: l.ticker, isin: ticker, name: l.name, exchange: l.exchange, currency: l.currency, ter: l.ter,
+      }));
+      setUcitsCache(prev => [...prev, ...entries]);
+      setSymbolOptions(entries);
+      setSymbolSearchOpen(true);
+      setSymbolSearchCompleted(true);
+    } catch {
+      setIsinLookupError(true);
+    } finally {
+      setIsinLookupLoading(false);
+    }
+  };
 
   const handleNumberClick = (num: string) => {
     if (num === '.' && amount.includes('.')) return;
@@ -506,19 +607,108 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
           </button>
         </div>
 
+        {/* ETF / Stock toggle */}
+        <div className="flex rounded-lg overflow-hidden border border-gray-300 dark:border-gray-600">
+          {(['etf', 'stock'] as const).map(t => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => { setInstrumentType(t); setTicker(''); setSelectedSymbolInfo(null); setSymbolOptions([]); setSymbolSearchCompleted(false); }}
+              className={`flex-1 py-2 text-sm font-medium transition-colors ${instrumentType === t ? 'bg-blue-500 text-white' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
+            >
+              {t === 'etf' ? 'ETF' : 'Stock'}
+            </button>
+          ))}
+        </div>
+
         {/* Ticker + Quantità */}
         <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className={labelClass}>Ticker</label>
-            <input
-              type="text"
-              value={ticker}
-              onChange={(e) => setTicker(e.target.value.toUpperCase())}
-              placeholder="es. AAPL"
-              className={inputClass + " uppercase tracking-wider font-mono"}
-              {...noFill}
-            />
+          <div className="relative">
+            <label className={labelClass}>{instrumentType === 'etf' ? 'Ticker o ISIN' : 'Ticker o Nome'}</label>
+            <div className="relative">
+              <input
+                type="text"
+                value={ticker}
+                onChange={(e) => { setTicker(e.target.value.toUpperCase()); setSelectedSymbolInfo(null); setIsinLookupError(false); }}
+                placeholder={instrumentType === 'etf' ? 'Es. VWCE, SWDA' : 'Es. AAPL, MSFT'}
+                className={inputClass + ' uppercase tracking-wider font-mono' + (symbolLoading ? ' pr-8' : '')}
+                onFocus={() => { if (symbolOptions.length > 0) setSymbolSearchOpen(true); }}
+                onBlur={() => setTimeout(() => setSymbolSearchOpen(false), 150)}
+                {...noFill}
+              />
+              {symbolLoading && (
+                <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                  <svg className="animate-spin h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                  </svg>
+                </div>
+              )}
+            </div>
+
+            {/* Dropdown risultati */}
+            {symbolSearchOpen && ticker.length >= 2 && !symbolLoading && symbolSearchCompleted && (
+              <div className="absolute z-20 mt-1 w-64 border border-gray-200 dark:border-gray-700 rounded-lg max-h-52 overflow-auto bg-white dark:bg-gray-900 shadow-xl">
+                {symbolOptions.length > 0 ? symbolOptions.map((opt: any) => (
+                  <button
+                    key={`${opt.symbol}-${opt.exchange || ''}`}
+                    type="button"
+                    onMouseDown={() => {
+                      setTicker(opt.symbol);
+                      setSelectedSymbolInfo({ name: opt.name || '', exchange: opt.exchange || '', currency: opt.currency || '', ter: opt.ter || '', isin: opt.isin || '' });
+                      setSymbolOptions([]);
+                      setSymbolSearchOpen(false);
+                      setSkipSymbolSearch(true);
+                    }}
+                    className="w-full flex items-center justify-between px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-800 text-left border-b border-gray-100 dark:border-gray-800 last:border-0"
+                  >
+                    <div className="min-w-0">
+                      <span className="font-mono font-bold text-sm text-gray-900 dark:text-gray-100">{opt.symbol}</span>
+                      {opt.name && <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{opt.name}</p>}
+                    </div>
+                    <div className="flex flex-col items-end gap-0.5 ml-2 shrink-0 text-xs text-gray-400">
+                      {opt.exchange && <span>{opt.exchange}</span>}
+                      {opt.currency && <span className="font-medium">{opt.currency}</span>}
+                    </div>
+                  </button>
+                )) : (
+                  <div className="px-3 py-3 text-center text-xs text-gray-500 dark:text-gray-400">
+                    {isIsinStr(ticker) ? (
+                      <div className="flex flex-col items-center gap-2">
+                        <span>ISIN non in cache locale</span>
+                        {isinLookupError && <span className="text-red-500">Non trovato su JustETF</span>}
+                        <button
+                          type="button"
+                          onMouseDown={handleIsinLookup}
+                          disabled={isinLookupLoading}
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-60 transition text-xs"
+                        >
+                          {isinLookupLoading && (
+                            <svg className="animate-spin h-3 w-3" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                            </svg>
+                          )}
+                          {isinLookupLoading ? 'Ricerca...' : 'Cerca su JustETF'}
+                        </button>
+                      </div>
+                    ) : 'Nessun risultato'}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Info asset selezionato */}
+            {selectedSymbolInfo?.name && (
+              <div className="mt-1 text-xs text-gray-500 dark:text-gray-400 truncate">
+                {selectedSymbolInfo.name}
+                {selectedSymbolInfo.exchange && ` · ${selectedSymbolInfo.exchange}`}
+                {selectedSymbolInfo.currency && ` · ${selectedSymbolInfo.currency}`}
+                {selectedSymbolInfo.ter && ` · TER ${selectedSymbolInfo.ter}%`}
+              </div>
+            )}
           </div>
+
           <div>
             <label className={labelClass}>Quantità</label>
             <input
@@ -538,7 +728,7 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
         {/* Prezzo + Commissioni */}
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className={labelClass}>Prezzo per unità (€)</label>
+            <label className={labelClass}>Prezzo per unità ({selectedSymbolInfo?.currency ? getCurrencySymbol(selectedSymbolInfo.currency) : '€'})</label>
             <input
               type="number"
               inputMode="decimal"
