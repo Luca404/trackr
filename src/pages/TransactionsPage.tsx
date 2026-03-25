@@ -10,6 +10,8 @@ import PeriodSelector from '../components/common/PeriodSelector';
 import DateRangePicker from '../components/common/DateRangePicker';
 import { usePeriod } from '../hooks/usePeriod';
 import type { Transaction, Transfer, TransactionFormData } from '../types';
+import { useTranslation } from 'react-i18next';
+import { useSettings } from '../contexts/SettingsContext';
 
 type PeriodType = 'day' | 'week' | 'month' | 'year' | 'all' | 'custom';
 
@@ -18,6 +20,8 @@ type ListItem =
   | { kind: 'transfer'; data: Transfer };
 
 export default function TransactionsPage() {
+  const { t } = useTranslation();
+  const { formatCurrency } = useSettings();
   const {
     transactions: allTransactions,
     transfers: allTransfers,
@@ -190,16 +194,8 @@ export default function TransactionsPage() {
     setIsModalOpen(true);
   };
 
-  const formatCurrency = (amount: number) => {
-    const abs = Math.abs(amount);
-    const sign = amount < 0 ? '-' : '';
-    const [intStr, decStr] = abs.toFixed(2).split('.');
-    const intFormatted = intStr.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-    return `${sign}€ ${intFormatted},${decStr}`;
-  };
-
   const formatDate = (dateStr: string) => {
-    return new Date(dateStr).toLocaleDateString('it-IT', {
+    return new Date(dateStr).toLocaleDateString(undefined, {
       day: '2-digit',
       month: 'short',
     });
@@ -261,31 +257,31 @@ export default function TransactionsPage() {
             ? Array.from({ length: skeletonCount }).map((_, i) => <SkeletonTransactionRow key={i} />)
             : listItems.map((item) => {
                 if (item.kind === 'transfer') {
-                  const t = item.data;
+                  const tr = item.data;
                   return (
                     <div
-                      key={`transfer-${t.id}`}
+                      key={`transfer-${tr.id}`}
                       className="card flex items-center justify-between hover:shadow-md transition-shadow cursor-pointer"
                       onClick={() => handleItemClick(item)}
                     >
                       <div className="flex items-center gap-3 flex-1">
                         <span className="text-2xl">🔄</span>
                         <div className="flex-1">
-                          <div className="font-medium text-gray-900 dark:text-gray-100">Trasferimento</div>
-                          {t.description && (
-                            <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">{t.description}</div>
+                          <div className="font-medium text-gray-900 dark:text-gray-100">{t('transactions.transfer')}</div>
+                          {tr.description && (
+                            <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">{tr.description}</div>
                           )}
                         </div>
                       </div>
                       <div className="text-right ml-4">
                         <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">
-                          {getAccountName(t.from_account_id)} → {getAccountName(t.to_account_id)}
+                          {getAccountName(tr.from_account_id)} → {getAccountName(tr.to_account_id)}
                         </div>
                         <div className="font-bold text-lg text-gray-900 dark:text-gray-100">
-                          {formatCurrency(t.amount)}
+                          {formatCurrency(tr.amount)}
                         </div>
                         <div className="text-xs text-gray-500 dark:text-gray-400">
-                          {formatDate(t.date)}
+                          {formatDate(tr.date)}
                         </div>
                       </div>
                     </div>
@@ -350,7 +346,7 @@ export default function TransactionsPage() {
         <Modal
           isOpen={isModalOpen}
           onClose={closeModal}
-          title={isEditMode ? "Modifica" : "Nuova Transazione"}
+          title={isEditMode ? t('transactions.editTransaction') : t('transactions.newTransaction')}
         >
           <TransactionForm
             onSubmit={isEditMode ? handleUpdateTransaction : handleCreateTransaction}

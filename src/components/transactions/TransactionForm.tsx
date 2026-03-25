@@ -1,4 +1,6 @@
 import { useState, useEffect, useMemo, useRef, useCallback, type FormEvent } from 'react';
+import { useTranslation } from 'react-i18next';
+import { useSettings } from '../../contexts/SettingsContext';
 
 const PF_BACKEND_URL = import.meta.env.VITE_PF_BACKEND_URL || 'https://portfolio-tracker-production-3bd4.up.railway.app';
 import type { TransactionFormData, TransactionType, Category, Subcategory, Account, Portfolio, RecurringFrequency } from '../../types';
@@ -17,6 +19,8 @@ interface TransactionFormProps {
 }
 
 export default function TransactionForm({ onSubmit, onCancel, initialData, isEditMode, onDelete, isRecurring, onDeleteRecurringRule }: TransactionFormProps) {
+  const { t } = useTranslation();
+  const { formatCurrency, numberFormat } = useSettings();
   const { categories: allCategories, accounts: allAccounts, portfolios: allPortfolios } = useData();
   const [currentType, setCurrentType] = useState<TransactionType>(initialData?.type || 'expense');
 
@@ -239,17 +243,11 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
     const negative = value.startsWith('-');
     const abs = negative ? value.slice(1) : value;
     const [intStr, decStr] = abs.split('.');
-    const intFormatted = (parseInt(intStr) || 0).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-    const result = decStr !== undefined ? `${intFormatted},${decStr}` : intFormatted;
+    const thousandsSep = numberFormat === 'dot' ? ',' : '.';
+    const decimalSep = numberFormat === 'dot' ? '.' : ',';
+    const intFormatted = (parseInt(intStr) || 0).toString().replace(/\B(?=(\d{3})+(?!\d))/g, thousandsSep);
+    const result = decStr !== undefined ? `${intFormatted}${decimalSep}${decStr}` : intFormatted;
     return negative ? `-${result}` : result;
-  };
-
-  const formatCurrency = (n: number) => {
-    const abs = Math.abs(n);
-    const sign = n < 0 ? '-' : '';
-    const [intStr, decStr] = abs.toFixed(2).split('.');
-    const intFormatted = intStr.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-    return `${sign}€ ${intFormatted},${decStr}`;
   };
 
   const getCurrencySymbol = (curr: string) => {
@@ -263,7 +261,7 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
     try {
       await onDelete();
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Errore durante l\'eliminazione');
+      setError(err.response?.data?.message || t('transactions.errorDeleting'));
       setIsLoading(false);
     }
   };
@@ -274,7 +272,7 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
     try {
       await onDeleteRecurringRule();
     } catch (err: any) {
-      setError('Errore durante l\'eliminazione della regola');
+      setError(t('transactions.errorDeletingRule'));
       setIsLoading(false);
     }
   };
@@ -282,15 +280,15 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
 
-    if (!selectedAccount) { setError('Seleziona un conto'); return; }
+    if (!selectedAccount) { setError(t('transactions.errorSelectAccount')); return; }
 
     let submitData: TransactionFormData;
 
     if (currentType === 'transfer') {
-      if (!selectedToAccount) { setError('Seleziona il conto di destinazione'); return; }
-      if (selectedToAccount.id === selectedAccount.id) { setError('I conti devono essere diversi'); return; }
+      if (!selectedToAccount) { setError(t('transactions.errorSelectDestination')); return; }
+      if (selectedToAccount.id === selectedAccount.id) { setError(t('transactions.errorDifferentAccounts')); return; }
       const amountNum = parseFloat(amount) || 0;
-      if (amountNum <= 0) { setError('Inserisci un importo valido'); return; }
+      if (amountNum <= 0) { setError(t('transactions.errorInvalidAmount')); return; }
       submitData = {
         type: 'transfer',
         category: 'Trasferimento',
@@ -306,7 +304,7 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
         await onSubmit(submitData);
         onCancel();
       } catch (err: any) {
-        setError(err.response?.data?.message || 'Errore durante il salvataggio');
+        setError(err.response?.data?.message || t('transactions.errorSaving'));
       } finally {
         setIsLoading(false);
       }
@@ -318,8 +316,8 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
       const price = parseFloat(investPrice) || 0;
       const commission = parseFloat(investCommission) || 0;
       const total = qty * price + commission;
-      if (total <= 0) { setError('Inserisci quantità e prezzo'); return; }
-      if (!selectedCategory) { setError('Seleziona una categoria'); return; }
+      if (total <= 0) { setError(t('transactions.errorQtyPrice')); return; }
+      if (!selectedCategory) { setError(t('transactions.errorSelectCategory')); return; }
       submitData = {
         type: currentType,
         category: selectedCategory.name,
@@ -333,9 +331,9 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
         portfolio_id: selectedPortfolio?.id,
       };
     } else {
-      if (!selectedCategory) { setError('Seleziona una categoria'); return; }
+      if (!selectedCategory) { setError(t('transactions.errorSelectCategory')); return; }
       const amountNum = parseFloat(amount) || 0;
-      if (amountNum <= 0) { setError('Inserisci un importo valido'); return; }
+      if (amountNum <= 0) { setError(t('transactions.errorInvalidAmount')); return; }
       submitData = {
         type: currentType,
         category: selectedCategory.name,
@@ -354,7 +352,7 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
       await onSubmit(submitData);
       onCancel();
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Errore durante il salvataggio');
+      setError(err.response?.data?.message || t('transactions.errorSaving'));
     } finally {
       setIsLoading(false);
     }
@@ -362,14 +360,14 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
 
   const formatDate = (dateStr: string) => {
     const d = new Date(dateStr);
-    return d.toLocaleDateString('it-IT', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+    return d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
   };
 
   const typeButtons = [
-    { type: 'expense' as TransactionType, label: 'Uscita', icon: '💸', color: 'red' },
-    { type: 'income' as TransactionType, label: 'Entrata', icon: '💰', color: 'green' },
-    { type: 'investment' as TransactionType, label: 'Investimento', icon: '📈', color: 'blue' },
-    { type: 'transfer' as TransactionType, label: 'Trasferimento', icon: '🔄', color: 'purple' },
+    { type: 'expense' as TransactionType, label: t('transactions.expense'), icon: '💸', color: 'red' },
+    { type: 'income' as TransactionType, label: t('transactions.income'), icon: '💰', color: 'green' },
+    { type: 'investment' as TransactionType, label: t('transactions.investment'), icon: '📈', color: 'blue' },
+    { type: 'transfer' as TransactionType, label: t('transactions.transfer'), icon: '🔄', color: 'purple' },
   ];
 
   const tabSelector = (
@@ -425,7 +423,7 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
   const sharedModals = (
     <>
       {/* Modal cambio categoria */}
-      <Modal isOpen={showCategoryPicker} onClose={() => setShowCategoryPicker(false)} title="Cambia Categoria">
+      <Modal isOpen={showCategoryPicker} onClose={() => setShowCategoryPicker(false)} title={t('transactions.changeCategory')}>
         <div className="grid grid-cols-3 gap-3">
           {categories.map((category) => (
             <button
@@ -442,7 +440,7 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
       </Modal>
 
       {/* Modal cambio conto */}
-      <Modal isOpen={showAccountPicker} onClose={() => setShowAccountPicker(false)} title="Seleziona Conto">
+      <Modal isOpen={showAccountPicker} onClose={() => setShowAccountPicker(false)} title={t('transactions.selectAccount')}>
         <div className="space-y-2">
           {allAccounts.map((account) => (
             <button
@@ -463,7 +461,7 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
       </Modal>
 
       {/* Modal conto destinazione (trasferimento) */}
-      <Modal isOpen={showToAccountPicker} onClose={() => setShowToAccountPicker(false)} title="Conto di destinazione">
+      <Modal isOpen={showToAccountPicker} onClose={() => setShowToAccountPicker(false)} title={t('transactions.toAccount')}>
         <div className="space-y-2">
           {allAccounts.filter(a => a.id !== selectedAccount?.id).map((account) => (
             <button
@@ -484,27 +482,27 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
       </Modal>
 
       {/* Modal selettore data */}
-      <Modal isOpen={showDateSelector} onClose={() => setShowDateSelector(false)} title="Seleziona Data">
+      <Modal isOpen={showDateSelector} onClose={() => setShowDateSelector(false)} title={t('transactions.selectDate')}>
         <div className="space-y-2">
           <button type="button" onClick={() => handleDateQuickSelect('today')} className="w-full flex items-center gap-3 p-4 rounded-lg border-2 border-gray-200 dark:border-gray-700 hover:border-primary-500 transition-colors">
             <span className="text-2xl">📅</span>
             <div className="flex-1 text-left">
-              <div className="font-medium text-gray-900 dark:text-gray-100">Oggi</div>
-              <div className="text-sm text-gray-500 dark:text-gray-400">{new Date().toLocaleDateString('it-IT', { day: 'numeric', month: 'short', year: 'numeric' })}</div>
+              <div className="font-medium text-gray-900 dark:text-gray-100">{t('transactions.today')}</div>
+              <div className="text-sm text-gray-500 dark:text-gray-400">{new Date().toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}</div>
             </div>
           </button>
           <button type="button" onClick={() => handleDateQuickSelect('yesterday')} className="w-full flex items-center gap-3 p-4 rounded-lg border-2 border-gray-200 dark:border-gray-700 hover:border-primary-500 transition-colors">
             <span className="text-2xl">⏮️</span>
             <div className="flex-1 text-left">
-              <div className="font-medium text-gray-900 dark:text-gray-100">Ieri</div>
-              <div className="text-sm text-gray-500 dark:text-gray-400">{(() => { const y = new Date(); y.setDate(y.getDate() - 1); return y.toLocaleDateString('it-IT', { day: 'numeric', month: 'short', year: 'numeric' }); })()}</div>
+              <div className="font-medium text-gray-900 dark:text-gray-100">{t('transactions.yesterday')}</div>
+              <div className="text-sm text-gray-500 dark:text-gray-400">{(() => { const y = new Date(); y.setDate(y.getDate() - 1); return y.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }); })()}</div>
             </div>
           </button>
           <button type="button" onClick={() => { setTimeout(() => dateInputRef.current?.showPicker?.(), 0); }} className="w-full flex items-center gap-3 p-4 rounded-lg border-2 border-gray-200 dark:border-gray-700 hover:border-primary-500 transition-colors">
             <span className="text-2xl">🗓️</span>
             <div className="flex-1 text-left">
-              <div className="font-medium text-gray-900 dark:text-gray-100">Seleziona giorno</div>
-              <div className="text-sm text-gray-500 dark:text-gray-400">Scegli una data specifica</div>
+              <div className="font-medium text-gray-900 dark:text-gray-100">{t('transactions.date')}</div>
+              <div className="text-sm text-gray-500 dark:text-gray-400">{t('transactions.chooseDate')}</div>
             </div>
           </button>
           <input
@@ -516,10 +514,10 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
           />
           {!isEditMode && (
             <div className="pt-3 border-t border-gray-200 dark:border-gray-700">
-              <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">🔄 Ripeti</div>
+              <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{t('transactions.repeat')}</div>
               <div className="grid grid-cols-4 gap-2">
                 {([null, 'weekly', 'monthly', 'yearly'] as const).map((freq) => {
-                  const labels = { null: 'Mai', weekly: 'Sett.', monthly: 'Mens.', yearly: 'Ann.' };
+                  const labels = { null: t('transactions.never'), weekly: t('transactions.weeklyAbbr'), monthly: t('transactions.monthlyAbbr'), yearly: t('transactions.yearlyAbbr') };
                   const key = freq ?? 'null';
                   return (
                     <button key={key} type="button" onClick={() => setRecurrence(freq)}
@@ -539,31 +537,31 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
         isOpen={isDeleteDialogOpen}
         onClose={() => setIsDeleteDialogOpen(false)}
         onConfirm={handleDeleteConfirm}
-        title="Elimina Transazione"
-        message="Sei sicuro di voler eliminare questa transazione?"
-        confirmText="Elimina"
-        cancelText="Annulla"
+        title={t('transactions.deleteTransaction')}
+        message={t('transactions.deleteTransactionMsg')}
+        confirmText={t('common.delete')}
+        cancelText={t('common.cancel')}
         isDestructive={true}
       />
 
       {/* Modal eliminazione ricorrente */}
-      <Modal isOpen={showRecurringDeleteModal} onClose={() => setShowRecurringDeleteModal(false)} title="Elimina Transazione Ricorrente">
+      <Modal isOpen={showRecurringDeleteModal} onClose={() => setShowRecurringDeleteModal(false)} title={t('transactions.deleteRecurring')}>
         <div className="space-y-3">
-          <p className="text-sm text-gray-600 dark:text-gray-400">Cosa vuoi eliminare?</p>
+          <p className="text-sm text-gray-600 dark:text-gray-400">{t('transactions.deleteWhat')}</p>
           <button type="button" onClick={async () => { setShowRecurringDeleteModal(false); await handleDeleteConfirm(); }}
             className="w-full flex items-center gap-3 p-4 rounded-lg border-2 border-red-200 dark:border-red-800 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors text-left" disabled={isLoading}>
             <span className="text-2xl">🗑️</span>
             <div>
-              <div className="font-medium text-gray-900 dark:text-gray-100">Solo questa</div>
-              <div className="text-sm text-gray-500 dark:text-gray-400">Elimina solo questa transazione</div>
+              <div className="font-medium text-gray-900 dark:text-gray-100">{t('transactions.deleteOnlyThis')}</div>
+              <div className="text-sm text-gray-500 dark:text-gray-400">{t('transactions.deleteOnlyThisDesc')}</div>
             </div>
           </button>
           <button type="button" onClick={async () => { setShowRecurringDeleteModal(false); await handleDeleteRuleConfirm(); }}
             className="w-full flex items-center gap-3 p-4 rounded-lg border-2 border-orange-200 dark:border-orange-800 hover:bg-orange-50 dark:hover:bg-orange-900/20 transition-colors text-left" disabled={isLoading}>
             <span className="text-2xl">🔄</span>
             <div>
-              <div className="font-medium text-gray-900 dark:text-gray-100">Elimina regola</div>
-              <div className="text-sm text-gray-500 dark:text-gray-400">Interrompe le transazioni future ricorrenti</div>
+              <div className="font-medium text-gray-900 dark:text-gray-100">{t('transactions.deleteRule')}</div>
+              <div className="text-sm text-gray-500 dark:text-gray-400">{t('transactions.deleteRuleDesc')}</div>
             </div>
           </button>
         </div>
@@ -591,7 +589,7 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
             className="flex-1 flex items-center gap-2 p-3 rounded-lg border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 hover:border-primary-500 transition-colors">
             <span className="text-2xl">{selectedCategory?.icon || '📈'}</span>
             <div className="flex-1 text-left">
-              <div className="text-xs text-gray-500 dark:text-gray-400">Categoria</div>
+              <div className="text-xs text-gray-500 dark:text-gray-400">{t('transactions.category')}</div>
               <div className="font-medium text-gray-900 dark:text-gray-100">{selectedCategory?.name || '...'}</div>
             </div>
             <span className="text-gray-400">›</span>
@@ -600,8 +598,8 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
             className="flex-1 flex items-center gap-2 p-3 rounded-lg border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 hover:border-primary-500 transition-colors">
             <span className="text-2xl">{selectedAccount?.icon || '💳'}</span>
             <div className="flex-1 text-left">
-              <div className="text-xs text-gray-500 dark:text-gray-400">Conto</div>
-              <div className="font-medium text-gray-900 dark:text-gray-100">{selectedAccount?.name || 'Seleziona'}</div>
+              <div className="text-xs text-gray-500 dark:text-gray-400">{t('transactions.account')}</div>
+              <div className="font-medium text-gray-900 dark:text-gray-100">{selectedAccount?.name || t('transactions.select')}</div>
             </div>
             <span className="text-gray-400">›</span>
           </button>
@@ -624,7 +622,7 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
         {/* Ticker + Quantità */}
         <div className="grid grid-cols-2 gap-3">
           <div className="relative">
-            <label className={labelClass}>{instrumentType === 'etf' ? 'Ticker o ISIN' : 'Ticker o Nome'}</label>
+            <label className={labelClass}>{instrumentType === 'etf' ? t('transactions.tickerOrIsin') : t('transactions.tickerOrName')}</label>
             <div className="relative">
               <input
                 type="text"
@@ -675,8 +673,8 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
                   <div className="px-3 py-3 text-center text-xs text-gray-500 dark:text-gray-400">
                     {isIsinStr(ticker) ? (
                       <div className="flex flex-col items-center gap-2">
-                        <span>ISIN non in cache locale</span>
-                        {isinLookupError && <span className="text-red-500">Non trovato su JustETF</span>}
+                        <span>{t('transactions.isinNotCached')}</span>
+                        {isinLookupError && <span className="text-red-500">{t('transactions.isinNotFound')}</span>}
                         <button
                           type="button"
                           onMouseDown={handleIsinLookup}
@@ -689,10 +687,10 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
                               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
                             </svg>
                           )}
-                          {isinLookupLoading ? 'Ricerca...' : 'Cerca su JustETF'}
+                          {isinLookupLoading ? t('transactions.searching') : t('transactions.searchJustEtf')}
                         </button>
                       </div>
-                    ) : 'Nessun risultato'}
+                    ) : t('transactions.noResults')}
                   </div>
                 )}
               </div>
@@ -710,7 +708,7 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
           </div>
 
           <div>
-            <label className={labelClass}>Quantità</label>
+            <label className={labelClass}>{t('transactions.quantity')}</label>
             <input
               type="number"
               inputMode="decimal"
@@ -728,7 +726,7 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
         {/* Prezzo + Commissioni */}
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className={labelClass}>Prezzo per unità ({selectedSymbolInfo?.currency ? getCurrencySymbol(selectedSymbolInfo.currency) : '€'})</label>
+            <label className={labelClass}>{t('transactions.pricePerUnit')} ({selectedSymbolInfo?.currency ? getCurrencySymbol(selectedSymbolInfo.currency) : '€'})</label>
             <input
               type="number"
               inputMode="decimal"
@@ -742,7 +740,7 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
             />
           </div>
           <div>
-            <label className={labelClass}>Commissioni (€)</label>
+            <label className={labelClass}>{t('transactions.commission')}</label>
             <input
               type="number"
               inputMode="decimal"
@@ -759,13 +757,13 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
 
         {/* Totale calcolato */}
         <div className="text-center py-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl">
-          <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">Totale</div>
+          <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">{t('transactions.total')}</div>
           <div className={`text-4xl font-bold ${total > 0 ? 'text-blue-600 dark:text-blue-400' : 'text-gray-400 dark:text-gray-500'}`}>
             {formatCurrency(total)}
           </div>
           {qty > 0 && price > 0 && commission > 0 && (
             <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-              {qty} × {formatCurrency(price)} + {formatCurrency(commission)} commissioni
+              {qty} × {formatCurrency(price)} + {formatCurrency(commission)} {t('transactions.commissions')}
             </div>
           )}
         </div>
@@ -785,7 +783,7 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
           type="text"
           value={description}
           onChange={(e) => setDescription(e.target.value)}
-          placeholder="Descrizione (opzionale)"
+          placeholder={t('transactions.description')}
           className={inputClass}
           {...noFill}
         />
@@ -801,7 +799,7 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
           disabled={isLoading || total <= 0 || !selectedAccount}
           className="w-full py-4 rounded-xl bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-bold text-lg transition-colors"
         >
-          {isLoading ? 'Salvataggio...' : isEditMode ? 'Salva modifiche' : 'Aggiungi investimento'}
+          {isLoading ? t('transactions.saving') : isEditMode ? t('transactions.saveChanges') : t('transactions.addInvestment')}
         </button>
 
         {isEditMode && onDelete && (
@@ -811,7 +809,7 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
             className="w-full px-4 py-3 rounded-lg bg-red-500 text-white hover:bg-red-600 transition-colors font-medium"
             disabled={isLoading}
           >
-            🗑️ Elimina
+            🗑️ {t('common.delete')}
           </button>
         )}
 
@@ -835,8 +833,8 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
           >
             <span className="text-2xl">{selectedAccount?.icon || '💳'}</span>
             <div className="flex-1 text-left">
-              <div className="text-xs text-gray-500 dark:text-gray-400">Da</div>
-              <div className="font-medium text-gray-900 dark:text-gray-100">{selectedAccount?.name || 'Seleziona'}</div>
+              <div className="text-xs text-gray-500 dark:text-gray-400">{t('transactions.from')}</div>
+              <div className="font-medium text-gray-900 dark:text-gray-100">{selectedAccount?.name || t('transactions.select')}</div>
               {selectedAccount?.current_balance !== undefined && (
                 <div className="text-xs text-gray-400 dark:text-gray-500">{formatCurrency(selectedAccount.current_balance)}</div>
               )}
@@ -853,9 +851,9 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
           >
             <span className="text-2xl">{selectedToAccount?.icon || '💳'}</span>
             <div className="flex-1 text-left">
-              <div className="text-xs text-gray-500 dark:text-gray-400">A</div>
+              <div className="text-xs text-gray-500 dark:text-gray-400">{t('transactions.to')}</div>
               <div className={`font-medium ${selectedToAccount ? 'text-gray-900 dark:text-gray-100' : 'text-gray-400 dark:text-gray-500'}`}>
-                {selectedToAccount?.name || 'Seleziona'}
+                {selectedToAccount?.name || t('transactions.select')}
               </div>
               {selectedToAccount?.current_balance !== undefined && (
                 <div className="text-xs text-gray-400 dark:text-gray-500">{formatCurrency(selectedToAccount.current_balance)}</div>
@@ -905,7 +903,7 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
 
         {/* Descrizione */}
         <input type="text" value={description} onChange={(e) => setDescription(e.target.value)}
-          placeholder="Descrizione (opzionale)"
+          placeholder={t('transactions.description')}
           autoComplete="off" autoCorrect="off" spellCheck={false}
           className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-sm" />
 
@@ -920,7 +918,7 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
             className="w-full px-4 py-3 rounded-lg bg-red-500 text-white hover:bg-red-600 transition-colors font-medium"
             disabled={isLoading}
           >
-            🗑️ Elimina
+            🗑️ {t('common.delete')}
           </button>
         )}
 
@@ -935,7 +933,7 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
       <div onTouchStart={handleCategorySwipeStart} onTouchEnd={handleCategorySwipeEnd} className="space-y-4">
         {tabSelector}
         <div>
-          <div className="text-sm text-gray-600 dark:text-gray-400 mb-3">Seleziona categoria</div>
+          <div className="text-sm text-gray-600 dark:text-gray-400 mb-3">{t('transactions.selectCategory')}</div>
           <div className="grid grid-cols-3 gap-3 max-h-[60vh] overflow-y-auto">
             {categories.map((category) => (
               <button
@@ -963,7 +961,7 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
           className="flex-1 flex items-center gap-2 p-3 rounded-lg border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 hover:border-primary-500 transition-colors">
           <span className="text-2xl">{selectedCategory.icon}</span>
           <div className="flex-1 text-left">
-            <div className="text-xs text-gray-500 dark:text-gray-400">Categoria</div>
+            <div className="text-xs text-gray-500 dark:text-gray-400">{t('transactions.category')}</div>
             <div className="font-medium text-gray-900 dark:text-gray-100">{selectedCategory.name}</div>
           </div>
           <span className="text-gray-400">›</span>
@@ -972,8 +970,8 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
           className="flex-1 flex items-center gap-2 p-3 rounded-lg border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 hover:border-primary-500 transition-colors">
           <span className="text-2xl">{selectedAccount?.icon || '💳'}</span>
           <div className="flex-1 text-left">
-            <div className="text-xs text-gray-500 dark:text-gray-400">Conto</div>
-            <div className="font-medium text-gray-900 dark:text-gray-100">{selectedAccount?.name || 'Seleziona'}</div>
+            <div className="text-xs text-gray-500 dark:text-gray-400">{t('transactions.account')}</div>
+            <div className="font-medium text-gray-900 dark:text-gray-100">{selectedAccount?.name || t('transactions.select')}</div>
           </div>
           <span className="text-gray-400">›</span>
         </button>
@@ -1030,7 +1028,7 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
         {formatDate(date)}
         {!isEditMode && recurrence && (
           <span className="ml-2 inline-flex items-center gap-1 text-primary-600 dark:text-primary-400">
-            🔄 {{ weekly: 'Settimanale', monthly: 'Mensile', yearly: 'Annuale' }[recurrence]}
+            🔄 {{ weekly: t('transactions.weeklyAbbr'), monthly: t('transactions.monthlyAbbr'), yearly: t('transactions.yearlyAbbr') }[recurrence]}
           </span>
         )}
         {isEditMode && isRecurring && <span className="ml-2 text-primary-600 dark:text-primary-400">🔄</span>}
@@ -1038,7 +1036,7 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
 
       {/* Descrizione */}
       <input type="text" value={description} onChange={(e) => setDescription(e.target.value)}
-        placeholder="Descrizione (opzionale)"
+        placeholder={t('transactions.description')}
         autoComplete="off" autoCorrect="off" spellCheck={false}
         className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-sm" />
 
@@ -1051,26 +1049,26 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
           onClick={() => isRecurring ? setShowRecurringDeleteModal(true) : setIsDeleteDialogOpen(true)}
           className="w-full px-4 py-3 rounded-lg bg-red-500 text-white hover:bg-red-600 transition-colors font-medium"
           disabled={isLoading}>
-          🗑️ Elimina
+          🗑️ {t('common.delete')}
         </button>
       )}
 
       {/* Modal valuta */}
-      <Modal isOpen={showCurrencyPicker} onClose={() => setShowCurrencyPicker(false)} title="Seleziona Valuta">
+      <Modal isOpen={showCurrencyPicker} onClose={() => setShowCurrencyPicker(false)} title={t('transactions.selectCurrency')}>
         <div className="space-y-2">
           {[
-            { code: 'EUR', name: 'Euro', symbol: '€' },
-            { code: 'USD', name: 'Dollaro USA', symbol: '$' },
-            { code: 'GBP', name: 'Sterlina Britannica', symbol: '£' },
-            { code: 'JPY', name: 'Yen Giapponese', symbol: '¥' },
-            { code: 'CHF', name: 'Franco Svizzero', symbol: 'Fr' },
+            { code: 'EUR', symbol: '€' },
+            { code: 'USD', symbol: '$' },
+            { code: 'GBP', symbol: '£' },
+            { code: 'JPY', symbol: '¥' },
+            { code: 'CHF', symbol: 'Fr' },
           ].map((curr) => (
             <button key={curr.code} type="button"
               onClick={() => { setCurrency(curr.code); setShowCurrencyPicker(false); }}
               className={`w-full flex items-center gap-3 p-3 rounded-lg border-2 transition-colors ${currency === curr.code ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20' : 'border-gray-200 dark:border-gray-700 hover:border-primary-500'}`}>
               <span className="text-2xl font-bold w-12">{curr.symbol}</span>
               <div className="flex-1 text-left">
-                <div className="font-medium text-gray-900 dark:text-gray-100">{curr.name}</div>
+                <div className="font-medium text-gray-900 dark:text-gray-100">{t(`transactions.currencies.${curr.code}`)}</div>
                 <div className="text-sm text-gray-500 dark:text-gray-400">{curr.code}</div>
               </div>
             </button>
