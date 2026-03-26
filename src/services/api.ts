@@ -152,7 +152,7 @@ function mapPortfolio(row: any): Portfolio {
 
 // ==================== DEFAULT DATA ====================
 
-type Lang = 'en' | 'it';
+type Lang = 'en' | 'it' | 'es';
 
 const DEFAULT_CATEGORIES: Record<Lang, { name: string; icon: string; color: string; category_type: string | null }[]> = {
   it: [
@@ -179,6 +179,18 @@ const DEFAULT_CATEGORIES: Record<Lang, { name: string; icon: string; color: stri
     { name: 'Bonus',         icon: '🎁', color: '#10b981', category_type: 'income' },
     { name: 'Other',         icon: '📌', color: '#64748b', category_type: null },
   ],
+  es: [
+    { name: 'Alimentación',  icon: '🍔', color: '#f97316', category_type: 'expense' },
+    { name: 'Transporte',    icon: '🚗', color: '#3b82f6', category_type: 'expense' },
+    { name: 'Suministros',   icon: '⚡', color: '#eab308', category_type: 'expense' },
+    { name: 'Ocio',          icon: '🎮', color: '#a855f7', category_type: 'expense' },
+    { name: 'Salud',         icon: '🏥', color: '#ef4444', category_type: 'expense' },
+    { name: 'Compras',       icon: '🛍️', color: '#ec4899', category_type: 'expense' },
+    { name: 'Inversión',     icon: '📈', color: '#14b8a6', category_type: 'investment' },
+    { name: 'Sueldo',        icon: '💵', color: '#22c55e', category_type: 'income' },
+    { name: 'Bonus',         icon: '🎁', color: '#10b981', category_type: 'income' },
+    { name: 'Otro',          icon: '📌', color: '#64748b', category_type: null },
+  ],
 };
 
 const DEFAULT_ACCOUNTS: Record<Lang, { name: string; icon: string; initial_balance: number; is_favorite: boolean }[]> = {
@@ -189,6 +201,10 @@ const DEFAULT_ACCOUNTS: Record<Lang, { name: string; icon: string; initial_balan
   en: [
     { name: 'Checking Account', icon: '🏦', initial_balance: 0, is_favorite: true },
     { name: 'Cash', icon: '💵', initial_balance: 0, is_favorite: false },
+  ],
+  es: [
+    { name: 'Cuenta corriente', icon: '🏦', initial_balance: 0, is_favorite: true },
+    { name: 'Efectivo', icon: '💵', initial_balance: 0, is_favorite: false },
   ],
 };
 

@@ -39,7 +39,10 @@ export default function SettingsPage() {
   const { t } = useTranslation();
   const { numberFormat, setNumberFormat } = useSettings();
   const [theme, setTheme] = useState<'dark' | 'light' | 'system'>(getTheme);
-  const [currentLang, setCurrentLang] = useState<string>(i18n.language?.startsWith('it') ? 'it' : 'en');
+  const [currentLang, setCurrentLang] = useState<string>(() => {
+    const l = i18n.language?.slice(0, 2);
+    return ['it', 'es'].includes(l) ? l : 'en';
+  });
 
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [newPassword, setNewPassword] = useState('');
@@ -225,31 +228,26 @@ export default function SettingsPage() {
           {/* Lingua */}
           <div className="mb-4">
             <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{t('settings.language')}</div>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => handleLanguageChange('en')}
-                className={`py-3 rounded-xl text-sm font-medium flex flex-col items-center gap-1 border-2 transition-colors ${
-                  currentLang === 'en'
-                    ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-300'
-                    : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400'
-                }`}
-              >
-                <span className="text-xl">🇬🇧</span>
-                <span>English</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => handleLanguageChange('it')}
-                className={`py-3 rounded-xl text-sm font-medium flex flex-col items-center gap-1 border-2 transition-colors ${
-                  currentLang === 'it'
-                    ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-300'
-                    : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400'
-                }`}
-              >
-                <span className="text-xl">🇮🇹</span>
-                <span>Italiano</span>
-              </button>
+            <div className="grid grid-cols-3 gap-2">
+              {([
+                { code: 'en', flag: '🇬🇧', label: 'English' },
+                { code: 'it', flag: '🇮🇹', label: 'Italiano' },
+                { code: 'es', flag: '🇪🇸', label: 'Español' },
+              ] as const).map(({ code, flag, label }) => (
+                <button
+                  key={code}
+                  type="button"
+                  onClick={() => handleLanguageChange(code)}
+                  className={`py-3 rounded-xl text-sm font-medium flex flex-col items-center gap-1 border-2 transition-colors ${
+                    currentLang === code
+                      ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-300'
+                      : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400'
+                  }`}
+                >
+                  <span className="text-xl">{flag}</span>
+                  <span>{label}</span>
+                </button>
+              ))}
             </div>
           </div>
 

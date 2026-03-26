@@ -141,7 +141,8 @@ export function DataProvider({ children }: DataProviderProps) {
       ]);
       // Controllo rigido: crea default se mancanti
       let finalAccounts = accountsData;
-      const lang = i18n.language?.startsWith('it') ? 'it' : 'en';
+      const l = i18n.language?.slice(0, 2);
+      const lang = (['it', 'es'] as const).includes(l as 'it' | 'es') ? (l as 'it' | 'es') : 'en';
       if (accountsData.length === 0) {
         finalAccounts = await apiService.createDefaultAccounts(lang);
       }
