@@ -154,30 +154,30 @@ function mapPortfolio(row: any): Portfolio {
 
 type Lang = 'en' | 'it';
 
-const DEFAULT_CATEGORIES: Record<Lang, { name: string; icon: string; category_type: string | null }[]> = {
+const DEFAULT_CATEGORIES: Record<Lang, { name: string; icon: string; color: string; category_type: string | null }[]> = {
   it: [
-    { name: 'Alimentari', icon: '🍔', category_type: 'expense' },
-    { name: 'Trasporti', icon: '🚗', category_type: 'expense' },
-    { name: 'Utenze', icon: '⚡', category_type: 'expense' },
-    { name: 'Svago', icon: '🎮', category_type: 'expense' },
-    { name: 'Salute', icon: '🏥', category_type: 'expense' },
-    { name: 'Shopping', icon: '🛍️', category_type: 'expense' },
-    { name: 'Investimento', icon: '📈', category_type: 'investment' },
-    { name: 'Stipendio', icon: '💵', category_type: 'income' },
-    { name: 'Bonus', icon: '🎁', category_type: 'income' },
-    { name: 'Altro', icon: '📌', category_type: null },
+    { name: 'Alimentari',  icon: '🍔', color: '#f97316', category_type: 'expense' },
+    { name: 'Trasporti',   icon: '🚗', color: '#3b82f6', category_type: 'expense' },
+    { name: 'Utenze',      icon: '⚡', color: '#eab308', category_type: 'expense' },
+    { name: 'Svago',       icon: '🎮', color: '#a855f7', category_type: 'expense' },
+    { name: 'Salute',      icon: '🏥', color: '#ef4444', category_type: 'expense' },
+    { name: 'Shopping',    icon: '🛍️', color: '#ec4899', category_type: 'expense' },
+    { name: 'Investimento',icon: '📈', color: '#14b8a6', category_type: 'investment' },
+    { name: 'Stipendio',   icon: '💵', color: '#22c55e', category_type: 'income' },
+    { name: 'Bonus',       icon: '🎁', color: '#10b981', category_type: 'income' },
+    { name: 'Altro',       icon: '📌', color: '#64748b', category_type: null },
   ],
   en: [
-    { name: 'Groceries', icon: '🍔', category_type: 'expense' },
-    { name: 'Transport', icon: '🚗', category_type: 'expense' },
-    { name: 'Utilities', icon: '⚡', category_type: 'expense' },
-    { name: 'Entertainment', icon: '🎮', category_type: 'expense' },
-    { name: 'Health', icon: '🏥', category_type: 'expense' },
-    { name: 'Shopping', icon: '🛍️', category_type: 'expense' },
-    { name: 'Investment', icon: '📈', category_type: 'investment' },
-    { name: 'Salary', icon: '💵', category_type: 'income' },
-    { name: 'Bonus', icon: '🎁', category_type: 'income' },
-    { name: 'Other', icon: '📌', category_type: null },
+    { name: 'Groceries',     icon: '🍔', color: '#f97316', category_type: 'expense' },
+    { name: 'Transport',     icon: '🚗', color: '#3b82f6', category_type: 'expense' },
+    { name: 'Utilities',     icon: '⚡', color: '#eab308', category_type: 'expense' },
+    { name: 'Entertainment', icon: '🎮', color: '#a855f7', category_type: 'expense' },
+    { name: 'Health',        icon: '🏥', color: '#ef4444', category_type: 'expense' },
+    { name: 'Shopping',      icon: '🛍️', color: '#ec4899', category_type: 'expense' },
+    { name: 'Investment',    icon: '📈', color: '#14b8a6', category_type: 'investment' },
+    { name: 'Salary',        icon: '💵', color: '#22c55e', category_type: 'income' },
+    { name: 'Bonus',         icon: '🎁', color: '#10b981', category_type: 'income' },
+    { name: 'Other',         icon: '📌', color: '#64748b', category_type: null },
   ],
 };
 
