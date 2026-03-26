@@ -542,7 +542,7 @@ export default function CategoriesPage() {
               return (
                 <div>
                   <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Sottocategorie
+                    {t('common.subcategories')}
                   </h4>
                   <div className="space-y-3">
                     {selectedCategory.subcategories.map((sub) => {
