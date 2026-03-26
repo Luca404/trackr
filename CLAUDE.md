@@ -172,6 +172,7 @@ Tabelle: `profiles`, `accounts`, `categories`, `subcategories`, `transactions`, 
 - **Mobile-first**: layout pensato per touch, bottoni grandi, bottom nav
 - **Dark mode**: tutte le classi usano `dark:` prefix di Tailwind
 - **Card**: classe utility `.card` definita in `index.css`
+- **Input**: usare sempre la classe utility `.input-field` definita in `index.css` — **mai** `input` da solo (non esiste come utility). Per input inline in layout flex usare le stesse classi Tailwind ma con `flex-1` al posto di `w-full`.
 - **Aggiunta elementi**: no FAB — ogni lista ha una riga/tile con cerchio "+" in fondo
 - **Icone categorie**: emoji, con suggerimento automatico basato su keyword italiane (vedi `CategoriesPage.tsx`)
 - **Swipe navigazione**: `useSwipeNavigation` gestisce lo swipe orizzontale tra pagine. Lo swipe cambia sempre pagina (non ci sono più tab-swipe). Ai bordi (prima/ultima pagina) non mostra l'animazione di trascinamento e non naviga in quella direzione.
