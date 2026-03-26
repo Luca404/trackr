@@ -74,20 +74,23 @@ export default function StatsPage() {
 
     if (periodType === 'year') {
       while (current <= endDate) {
-        periods.push({ label: current.toLocaleDateString(undefined, { month: 'short' }), date: new Date(current) });
+        const raw = current.toLocaleDateString(undefined, { month: 'short' });
+        periods.push({ label: raw[0].toUpperCase() + raw.slice(1), date: new Date(current) });
         current.setMonth(current.getMonth() + 1);
       }
     } else if (periodType === 'all' || periodType === 'custom') {
       const monthStart = new Date(current.getFullYear(), current.getMonth(), 1);
       while (monthStart <= endDate) {
-        periods.push({ label: monthStart.toLocaleDateString(undefined, { month: 'short', year: '2-digit' }), date: new Date(monthStart) });
+        const rawM = monthStart.toLocaleDateString(undefined, { month: 'short', year: '2-digit' });
+        periods.push({ label: rawM[0].toUpperCase() + rawM.slice(1), date: new Date(monthStart) });
         monthStart.setMonth(monthStart.getMonth() + 1);
       }
     } else {
       while (current <= endDate) {
-        const label = periodType === 'week'
+        const rawL = periodType === 'week'
           ? current.toLocaleDateString(undefined, { weekday: 'short' })
           : current.getDate().toString();
+        const label = rawL[0].toUpperCase() + rawL.slice(1);
         periods.push({ label, date: new Date(current) });
         current.setDate(current.getDate() + 1);
       }

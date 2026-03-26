@@ -146,7 +146,8 @@ export default function DashboardPage() {
                 const maxAmount = Math.max(...stats.monthlyTrend.map(m => Math.max(m.expenses, m.income)));
                 const expenseWidth = maxAmount > 0 ? (item.expenses / maxAmount * 100) : 0;
                 const incomeWidth = maxAmount > 0 ? (item.income / maxAmount * 100) : 0;
-                const monthName = new Date(item.month + '-01').toLocaleDateString(undefined, { month: 'short', year: '2-digit' });
+                const rawMn = new Date(item.month + '-01').toLocaleDateString(undefined, { month: 'short', year: '2-digit' });
+                const monthName = rawMn[0].toUpperCase() + rawMn.slice(1);
 
                 return (
                   <div key={item.month}>

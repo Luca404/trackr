@@ -54,19 +54,21 @@ function PeriodSelector({
     }
   }, [startDate, endDate]);
 
+  const cap = (s: string) => s ? s[0].toUpperCase() + s.slice(1) : s;
+
   const formatDateRange = (start: Date, end: Date, type: PeriodType) => {
     if (type === 'day') {
-      return start.toLocaleDateString(locale, { day: 'numeric', month: 'short', year: 'numeric' });
+      return cap(start.toLocaleDateString(locale, { day: 'numeric', month: 'short', year: 'numeric' }));
     }
-    const startStr = start.toLocaleDateString(locale, { day: 'numeric', month: 'short', year: 'numeric' });
-    const endStr = end.toLocaleDateString(locale, { day: 'numeric', month: 'short', year: 'numeric' });
+    const startStr = cap(start.toLocaleDateString(locale, { day: 'numeric', month: 'short', year: 'numeric' }));
+    const endStr = cap(end.toLocaleDateString(locale, { day: 'numeric', month: 'short', year: 'numeric' }));
     return `${startStr} - ${endStr}`;
   };
 
   const getPeriodLabel = () => {
     if (currentType === 'month') {
-      return new Date(startDate.getFullYear(), startDate.getMonth(), 1)
-        .toLocaleDateString(locale, { month: 'long', year: 'numeric' });
+      return cap(new Date(startDate.getFullYear(), startDate.getMonth(), 1)
+        .toLocaleDateString(locale, { month: 'long', year: 'numeric' }));
     } else if (currentType === 'year') {
       return `${startDate.getFullYear()}`;
     } else if (currentType === 'week') {

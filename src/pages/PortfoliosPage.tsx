@@ -375,7 +375,7 @@ function PortfolioForm({ onSubmit, onDelete, onCancel, initialData, isEditMode, 
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           className="input-field"
-          placeholder="Breve descrizione..."
+          placeholder={t('portfolios.description')}
           autoComplete="off" autoCorrect="off" spellCheck={false}
         />
       </div>
