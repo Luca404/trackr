@@ -183,7 +183,8 @@ export default function PortfoliosPage() {
                 <div className="sticky top-0 z-10 -mx-4 px-4 pt-1 pb-3 bg-gray-50 dark:bg-gray-900 relative">
                   <div className="card py-5">
                     <div className="text-sm text-gray-500 dark:text-gray-400 mb-1 text-center">{t('portfolios.totalInvestments')}</div>
-                    <div className="flex items-center justify-center gap-3">
+                    <div className="flex items-center justify-center">
+                      <div className="flex-1" />
                       <div className="text-4xl font-bold">
                         {loadingSummaries && !hasSummaries
                           ? <span className="inline-block h-10 w-40 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
@@ -192,13 +193,15 @@ export default function PortfoliosPage() {
                             </span>
                         }
                       </div>
-                      <button
-                        onClick={toggleHideBalances}
-                        className="text-gray-400 dark:text-gray-500 text-xl outline-none focus:outline-none select-none"
-                        style={{ WebkitTapHighlightColor: 'transparent' }}
-                      >
-                        {hideBalances ? '🙈' : '👁️'}
-                      </button>
+                      <div className="flex-1 flex justify-end pr-2">
+                        <button
+                          onClick={toggleHideBalances}
+                          className="text-gray-400 dark:text-gray-500 text-xl outline-none focus:outline-none select-none"
+                          style={{ WebkitTapHighlightColor: 'transparent' }}
+                        >
+                          {hideBalances ? '🙈' : '👁️'}
+                        </button>
+                      </div>
                     </div>
                     {hasSummaries && (
                       <div className={`text-sm text-center mt-1 ${totalPL >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
