@@ -205,7 +205,7 @@ export default function SettingsPage() {
               <div key={profile.id} className={`flex items-center gap-2 px-3 py-2.5 rounded-lg border-2 transition-colors ${activeProfile?.id === profile.id ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20' : 'border-gray-200 dark:border-gray-700'}`}>
                 {editingProfileId === profile.id ? (
                   <input
-                    className="input flex-1 text-sm py-1"
+                    className="flex-1 px-3 py-1.5 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                     value={editingProfileName}
                     onChange={e => setEditingProfileName(e.target.value)}
                     onKeyDown={e => { if (e.key === 'Enter') handleSaveProfileName(profile.id); if (e.key === 'Escape') setEditingProfileId(null); }}
@@ -256,7 +256,7 @@ export default function SettingsPage() {
             {showAddProfile ? (
               <div className="flex gap-2 mt-1">
                 <input
-                  className="input flex-1 text-sm"
+                  className="flex-1 px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                   placeholder={t('settings.profileNamePlaceholder')}
                   value={newProfileName}
                   onChange={e => setNewProfileName(e.target.value)}
@@ -312,7 +312,7 @@ export default function SettingsPage() {
                     type="password"
                     value={currentPassword}
                     onChange={e => setCurrentPassword(e.target.value)}
-                    className="input"
+                    className="input-field"
                     placeholder={t('settings.passwordPlaceholder')}
                     autoComplete="current-password"
                     required
@@ -324,7 +324,7 @@ export default function SettingsPage() {
                     type="password"
                     value={newPassword}
                     onChange={e => setNewPassword(e.target.value)}
-                    className="input"
+                    className="input-field"
                     placeholder={t('settings.passwordPlaceholder')}
                     autoComplete="new-password"
                     required
@@ -336,7 +336,7 @@ export default function SettingsPage() {
                     type="password"
                     value={confirmPassword}
                     onChange={e => setConfirmPassword(e.target.value)}
-                    className="input"
+                    className="input-field"
                     placeholder={t('settings.passwordPlaceholder')}
                     autoComplete="new-password"
                     required
