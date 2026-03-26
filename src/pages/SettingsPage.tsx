@@ -39,7 +39,7 @@ export default function SettingsPage() {
   const { t } = useTranslation();
   const { numberFormat, setNumberFormat } = useSettings();
   const [theme, setTheme] = useState<'dark' | 'light' | 'system'>(getTheme);
-  const [currentLang, setCurrentLang] = useState<string>(localStorage.getItem('lang') || 'en');
+  const [currentLang, setCurrentLang] = useState<string>(i18n.language?.startsWith('it') ? 'it' : 'en');
 
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [newPassword, setNewPassword] = useState('');
