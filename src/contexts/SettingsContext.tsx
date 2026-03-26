@@ -22,17 +22,14 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   };
 
   const formatCurrency = (amount: number, currency: string = 'EUR'): string => {
-    const locale = numberFormat === 'comma' ? 'it-IT' : 'en-US';
     const symbols: Record<string, string> = { EUR: '€', USD: '$', GBP: '£', JPY: '¥', CHF: 'Fr' };
     const symbol = symbols[currency] || currency;
-
-    const formatted = new Intl.NumberFormat(locale, {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(Math.abs(amount));
-
+    const thousandsSep = numberFormat === 'comma' ? '.' : ',';
+    const decimalSep = numberFormat === 'comma' ? ',' : '.';
     const sign = amount < 0 ? '-' : '';
-    return `${sign}${symbol} ${formatted}`;
+    const [intPart, decPart] = Math.abs(amount).toFixed(2).split('.');
+    const intFormatted = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, thousandsSep);
+    return `${sign}${symbol} ${intFormatted}${decimalSep}${decPart}`;
   };
 
   return (
