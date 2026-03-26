@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { apiService } from '../services/api';
 import { supabase } from '../services/supabase';
 import { useAuth } from '../contexts/AuthContext';
+import { useData } from '../contexts/DataContext';
 import Modal from '../components/common/Modal';
 import KakeboImport from '../components/KakeboImport';
 import { useTranslation } from 'react-i18next';
@@ -38,17 +39,28 @@ export default function SettingsPage() {
   const { logout, user } = useAuth();
   const { t } = useTranslation();
   const { numberFormat, setNumberFormat } = useSettings();
+  const { userProfiles, activeProfile, switchProfile, createUserProfile, updateUserProfile, deleteUserProfile } = useData();
   const [theme, setTheme] = useState<'dark' | 'light' | 'system'>(getTheme);
   const [currentLang, setCurrentLang] = useState<string>(() => {
     const l = i18n.language?.slice(0, 2);
     return ['it', 'es'].includes(l) ? l : 'en';
   });
 
+  // Password
   const [showChangePassword, setShowChangePassword] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [passwordMsg, setPasswordMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [passwordLoading, setPasswordLoading] = useState(false);
+
+  // Profili
+  const [editingProfileId, setEditingProfileId] = useState<string | null>(null);
+  const [editingProfileName, setEditingProfileName] = useState('');
+  const [newProfileName, setNewProfileName] = useState('');
+  const [showAddProfile, setShowAddProfile] = useState(false);
+  const [profileLoading, setProfileLoading] = useState(false);
+  const [profileMsg, setProfileMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const [exportMessage, setExportMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [showKakeboImport, setShowKakeboImport] = useState(false);
@@ -79,9 +91,18 @@ export default function SettingsPage() {
     setPasswordLoading(true);
     setPasswordMsg(null);
     try {
+      // Verifica la password attuale
+      const email = user?.name ?? '';
+      const { error: signInError } = await supabase.auth.signInWithPassword({ email, password: currentPassword });
+      if (signInError) {
+        setPasswordMsg({ type: 'error', text: t('settings.errorCurrentPassword') });
+        setPasswordLoading(false);
+        return;
+      }
       const { error } = await supabase.auth.updateUser({ password: newPassword });
       if (error) throw error;
       setPasswordMsg({ type: 'success', text: t('settings.successPasswordChanged') });
+      setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
       setShowChangePassword(false);
@@ -89,6 +110,51 @@ export default function SettingsPage() {
       setPasswordMsg({ type: 'error', text: err.message || t('settings.errorPasswordChange') });
     } finally {
       setPasswordLoading(false);
+    }
+  };
+
+  const handleSaveProfileName = async (id: string) => {
+    const name = editingProfileName.trim();
+    if (!name) return;
+    setProfileLoading(true);
+    try {
+      await updateUserProfile(id, name);
+      setEditingProfileId(null);
+    } catch {
+      setProfileMsg({ type: 'error', text: t('settings.errorProfileSave') });
+    } finally {
+      setProfileLoading(false);
+    }
+  };
+
+  const handleAddProfile = async () => {
+    const name = newProfileName.trim();
+    if (!name) return;
+    setProfileLoading(true);
+    try {
+      await createUserProfile(name);
+      setNewProfileName('');
+      setShowAddProfile(false);
+    } catch {
+      setProfileMsg({ type: 'error', text: t('settings.errorProfileSave') });
+    } finally {
+      setProfileLoading(false);
+    }
+  };
+
+  const handleDeleteProfile = async (id: string) => {
+    if (userProfiles.length <= 1) return;
+    setProfileLoading(true);
+    try {
+      if (activeProfile?.id === id) {
+        const other = userProfiles.find(p => p.id !== id)!;
+        await switchProfile(other);
+      }
+      await deleteUserProfile(id);
+    } catch {
+      setProfileMsg({ type: 'error', text: t('settings.errorProfileDelete') });
+    } finally {
+      setProfileLoading(false);
     }
   };
 
@@ -124,16 +190,105 @@ export default function SettingsPage() {
 
       <div className="max-w-lg mx-auto px-4 pt-6 space-y-5">
 
-        {/* Profilo */}
+        {/* Profili */}
         <section className="card">
-          <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-4">{t('settings.profile')}</h2>
+          <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-4">{t('settings.profiles')}</h2>
+
+          {profileMsg && (
+            <div className={`mb-3 text-sm px-3 py-2 rounded-lg ${profileMsg.type === 'success' ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400' : 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400'}`}>
+              {profileMsg.text}
+            </div>
+          )}
+
+          <div className="space-y-2">
+            {userProfiles.map(profile => (
+              <div key={profile.id} className={`flex items-center gap-2 px-3 py-2.5 rounded-lg border-2 transition-colors ${activeProfile?.id === profile.id ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20' : 'border-gray-200 dark:border-gray-700'}`}>
+                {editingProfileId === profile.id ? (
+                  <input
+                    className="input flex-1 text-sm py-1"
+                    value={editingProfileName}
+                    onChange={e => setEditingProfileName(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') handleSaveProfileName(profile.id); if (e.key === 'Escape') setEditingProfileId(null); }}
+                    autoFocus
+                  />
+                ) : (
+                  <button
+                    className="flex-1 text-left text-sm font-medium text-gray-800 dark:text-gray-100"
+                    onClick={() => { if (activeProfile?.id !== profile.id) switchProfile(profile); }}
+                  >
+                    {profile.name}
+                    {activeProfile?.id === profile.id && <span className="ml-2 text-xs text-primary-500 font-normal">{t('settings.activeProfile')}</span>}
+                  </button>
+                )}
+
+                {editingProfileId === profile.id ? (
+                  <div className="flex gap-1">
+                    <button onClick={() => setEditingProfileId(null)} className="text-xs px-2 py-1 rounded bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200">{t('common.cancel')}</button>
+                    <button onClick={() => handleSaveProfileName(profile.id)} disabled={profileLoading} className="text-xs px-2 py-1 rounded bg-primary-500 text-white">{t('common.save')}</button>
+                  </div>
+                ) : (
+                  <div className="flex gap-1">
+                    <button
+                      onClick={() => { setEditingProfileId(profile.id); setEditingProfileName(profile.name); }}
+                      className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+                    >
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536M9 11l6-6 3 3-6 6H9v-3z" />
+                      </svg>
+                    </button>
+                    {userProfiles.length > 1 && (
+                      <button
+                        onClick={() => handleDeleteProfile(profile.id)}
+                        disabled={profileLoading}
+                        className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"
+                      >
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            ))}
+
+            {/* Aggiungi profilo */}
+            {showAddProfile ? (
+              <div className="flex gap-2 mt-1">
+                <input
+                  className="input flex-1 text-sm"
+                  placeholder={t('settings.profileNamePlaceholder')}
+                  value={newProfileName}
+                  onChange={e => setNewProfileName(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') handleAddProfile(); if (e.key === 'Escape') setShowAddProfile(false); }}
+                  autoFocus
+                />
+                <button onClick={() => setShowAddProfile(false)} className="btn-secondary text-sm px-3">{t('common.cancel')}</button>
+                <button onClick={handleAddProfile} disabled={profileLoading || !newProfileName.trim()} className="btn-primary text-sm px-3">{t('common.add')}</button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setShowAddProfile(true)}
+                className="w-full flex items-center justify-center gap-2 py-2 text-sm text-primary-600 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded-lg transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                </svg>
+                {t('settings.addProfile')}
+              </button>
+            )}
+          </div>
+        </section>
+
+        {/* Account */}
+        <section className="card">
+          <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-4">{t('settings.account')}</h2>
           <div className="flex items-center gap-3 mb-4">
-            <div className="w-12 h-12 rounded-full bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center text-xl font-bold text-primary-600 dark:text-primary-400 shrink-0">
+            <div className="w-10 h-10 rounded-full bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center text-lg font-bold text-primary-600 dark:text-primary-400 shrink-0">
               {(user?.name?.[0] || '?').toUpperCase()}
             </div>
             <div className="min-w-0">
-              <div className="font-medium text-gray-900 dark:text-gray-100 truncate">{user?.name || 'Utente'}</div>
-              <div className="text-sm text-gray-500 dark:text-gray-400">{t('settings.activeAccount')}</div>
+              <div className="font-medium text-gray-900 dark:text-gray-100 truncate text-sm">{user?.name || 'Utente'}</div>
             </div>
           </div>
 
@@ -151,32 +306,49 @@ export default function SettingsPage() {
               </button>
             ) : (
               <form onSubmit={handleChangePassword} className="space-y-3 p-3 rounded-lg bg-gray-50 dark:bg-gray-700/50">
-                <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('settings.newPassword')}</div>
-                <input
-                  type="password"
-                  value={newPassword}
-                  onChange={e => setNewPassword(e.target.value)}
-                  className="input"
-                  placeholder={t('settings.passwordPlaceholder')}
-                  autoComplete="new-password"
-                  required
-                />
-                <input
-                  type="password"
-                  value={confirmPassword}
-                  onChange={e => setConfirmPassword(e.target.value)}
-                  className="input"
-                  placeholder={t('settings.confirmPassword')}
-                  autoComplete="new-password"
-                  required
-                />
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">{t('settings.currentPassword')}</label>
+                  <input
+                    type="password"
+                    value={currentPassword}
+                    onChange={e => setCurrentPassword(e.target.value)}
+                    className="input"
+                    placeholder={t('settings.passwordPlaceholder')}
+                    autoComplete="current-password"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">{t('settings.newPassword')}</label>
+                  <input
+                    type="password"
+                    value={newPassword}
+                    onChange={e => setNewPassword(e.target.value)}
+                    className="input"
+                    placeholder={t('settings.passwordPlaceholder')}
+                    autoComplete="new-password"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">{t('settings.confirmPassword')}</label>
+                  <input
+                    type="password"
+                    value={confirmPassword}
+                    onChange={e => setConfirmPassword(e.target.value)}
+                    className="input"
+                    placeholder={t('settings.passwordPlaceholder')}
+                    autoComplete="new-password"
+                    required
+                  />
+                </div>
                 {passwordMsg && (
                   <div className={`text-sm px-3 py-2 rounded-lg ${passwordMsg.type === 'success' ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400' : 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400'}`}>
                     {passwordMsg.text}
                   </div>
                 )}
                 <div className="flex gap-2">
-                  <button type="button" onClick={() => setShowChangePassword(false)} className="flex-1 btn-secondary text-sm py-2">
+                  <button type="button" onClick={() => { setShowChangePassword(false); setCurrentPassword(''); setNewPassword(''); setConfirmPassword(''); setPasswordMsg(null); }} className="flex-1 btn-secondary text-sm py-2">
                     {t('common.cancel')}
                   </button>
                   <button type="submit" className="flex-1 btn-primary text-sm py-2" disabled={passwordLoading}>

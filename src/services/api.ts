@@ -18,6 +18,7 @@ import type {
   User,
   RecurringTransaction,
   RecurringFrequency,
+  UserProfile,
 } from '../types';
 
 async function getCurrentUserId(): Promise<string> {
@@ -212,6 +213,62 @@ const DEFAULT_ACCOUNTS: Record<Lang, { name: string; icon: string; initial_balan
 
 class ApiService {
 
+  // ==================== ACTIVE PROFILE ====================
+
+  private _activeProfileId: string | null = null;
+
+  setActiveProfile(profileId: string) {
+    this._activeProfileId = profileId;
+    localStorage.setItem('activeProfileId', profileId);
+  }
+
+  getActiveProfileId(): string {
+    if (!this._activeProfileId) {
+      this._activeProfileId = localStorage.getItem('activeProfileId');
+    }
+    if (!this._activeProfileId) throw new Error('Nessun profilo attivo');
+    return this._activeProfileId;
+  }
+
+  clearActiveProfile() {
+    this._activeProfileId = null;
+    localStorage.removeItem('activeProfileId');
+  }
+
+  // ==================== PROFILES ====================
+
+  async getProfiles(): Promise<UserProfile[]> {
+    const { data, error } = await supabase.from('profiles').select('*').order('created_at');
+    if (error) throw error;
+    return (data || []).map(row => ({
+      id: row.id,
+      user_id: row.user_id,
+      name: row.name,
+      created_at: row.created_at,
+    }));
+  }
+
+  async createProfile(name: string): Promise<UserProfile> {
+    const userId = await getCurrentUserId();
+    const { data, error } = await supabase
+      .from('profiles')
+      .insert({ user_id: userId, name })
+      .select()
+      .single();
+    if (error) throw error;
+    return { id: data.id, user_id: data.user_id, name: data.name, created_at: data.created_at };
+  }
+
+  async updateProfile(id: string, name: string): Promise<void> {
+    const { error } = await supabase.from('profiles').update({ name }).eq('id', id);
+    if (error) throw error;
+  }
+
+  async deleteProfile(id: string): Promise<void> {
+    const { error } = await supabase.from('profiles').delete().eq('id', id);
+    if (error) throw error;
+  }
+
   // AUTH
 
   getCurrentUser(): User | null {
@@ -229,14 +286,16 @@ class ApiService {
   // ==================== ACCOUNTS ====================
 
   async getAccounts(): Promise<Account[]> {
-    const { data, error } = await supabase.from('accounts').select('*').order('id');
+    const profileId = this.getActiveProfileId();
+    const { data, error } = await supabase.from('accounts').select('*').eq('profile_id', profileId).order('id');
     if (error) throw error;
     return (data || []).map(mapAccount);
   }
 
   async createDefaultAccounts(lang: Lang = 'en'): Promise<Account[]> {
     const userId = await getCurrentUserId();
-    const defaults = DEFAULT_ACCOUNTS[lang].map(a => ({ ...a, user_id: userId }));
+    const profileId = this.getActiveProfileId();
+    const defaults = DEFAULT_ACCOUNTS[lang].map(a => ({ ...a, user_id: userId, profile_id: profileId }));
     const { data, error } = await supabase.from('accounts').insert(defaults).select();
     if (error) throw error;
     return (data || []).map(mapAccount);
@@ -244,10 +303,11 @@ class ApiService {
 
   async createAccount(formData: AccountFormData): Promise<Account> {
     const userId = await getCurrentUserId();
+    const profileId = this.getActiveProfileId();
     const { current_balance: _, ...dbData } = formData as any;
     const { data, error } = await supabase
       .from('accounts')
-      .insert({ ...dbData, user_id: userId })
+      .insert({ ...dbData, user_id: userId, profile_id: profileId })
       .select()
       .single();
     if (error) throw error;
@@ -274,13 +334,15 @@ class ApiService {
   // ==================== CATEGORIES ====================
 
   async getCategories(): Promise<CategoryWithStats[]> {
-    const { data, error } = await supabase.from('categories').select('*, subcategories(*)').order('id');
+    const profileId = this.getActiveProfileId();
+    const { data, error } = await supabase.from('categories').select('*, subcategories(*)').eq('profile_id', profileId).order('id');
     if (error) throw error;
     return (data || []).map(mapCategory);
   }
 
   async createDefaultCategories(existing: CategoryWithStats[], lang: Lang = 'en'): Promise<CategoryWithStats[]> {
     const userId = await getCurrentUserId();
+    const profileId = this.getActiveProfileId();
     const hasExpense = existing.some(c => c.category_type === 'expense' || c.category_type == null);
     const hasIncome = existing.some(c => c.category_type === 'income');
     const hasInvestment = existing.some(c => c.category_type === 'investment');
@@ -290,7 +352,7 @@ class ApiService {
       const isIncome = cat.category_type === 'income';
       const isInvestment = cat.category_type === 'investment';
       return (isExpense && !hasExpense) || (isIncome && !hasIncome) || (isInvestment && !hasInvestment);
-    }).map(cat => ({ ...cat, user_id: userId }));
+    }).map(cat => ({ ...cat, user_id: userId, profile_id: profileId }));
 
     if (toCreate.length === 0) return existing;
 
@@ -301,9 +363,10 @@ class ApiService {
 
   async createCategory(formData: CategoryFormData): Promise<Category> {
     const userId = await getCurrentUserId();
+    const profileId = this.getActiveProfileId();
     const { data, error } = await supabase
       .from('categories')
-      .insert({ ...formData, user_id: userId })
+      .insert({ ...formData, user_id: userId, profile_id: profileId })
       .select('*, subcategories(*)')
       .single();
     if (error) throw error;
@@ -368,6 +431,7 @@ class ApiService {
       .order('date', { ascending: false })
       .order('id', { ascending: false });
 
+    query = query.eq('profile_id', this.getActiveProfileId());
     if (params?.startDate) query = query.gte('date', params.startDate);
     if (params?.endDate) query = query.lte('date', params.endDate);
     if (params?.category) query = query.eq('category', params.category);
@@ -380,10 +444,11 @@ class ApiService {
 
   async createTransaction(formData: TransactionFormData): Promise<Transaction> {
     const userId = await getCurrentUserId();
+    const profileId = this.getActiveProfileId();
     const { recurrence: _, ...dbData } = formData;
     const { data, error } = await supabase
       .from('transactions')
-      .insert({ ...dbData, user_id: userId })
+      .insert({ ...dbData, user_id: userId, profile_id: profileId })
       .select()
       .single();
     if (error) throw error;
@@ -396,6 +461,7 @@ class ApiService {
     let query = supabase
       .from('transfers')
       .select('*')
+      .eq('profile_id', this.getActiveProfileId())
       .order('date', { ascending: false })
       .order('id', { ascending: false });
     if (params?.startDate) query = query.gte('date', params.startDate);
@@ -407,11 +473,13 @@ class ApiService {
 
   async createTransfer(formData: TransactionFormData): Promise<Transfer> {
     const userId = await getCurrentUserId();
+    const profileId = this.getActiveProfileId();
     if (!formData.to_account_id) throw new Error('Conto di destinazione mancante');
     const { data, error } = await supabase
       .from('transfers')
       .insert({
         user_id: userId,
+        profile_id: profileId,
         from_account_id: formData.account_id,
         to_account_id: formData.to_account_id,
         amount: formData.amount,
@@ -511,11 +579,13 @@ class ApiService {
     formData: Omit<RecurringTransaction, 'id' | 'user_id' | 'created_at' | 'next_due_date'>
   ): Promise<RecurringTransaction> {
     const userId = await getCurrentUserId();
+    const profileId = this.getActiveProfileId();
     const { data, error } = await supabase
       .from('recurring_transactions')
       .insert({
         ...formData,
         user_id: userId,
+        profile_id: profileId,
         next_due_date: getNextDueDate(formData.start_date, formData.frequency),
       })
       .select()
@@ -554,6 +624,7 @@ class ApiService {
           .from('transactions')
           .insert({
             user_id: userId,
+            profile_id: rule.profile_id,
             account_id: rule.account_id,
             type: rule.type,
             category: rule.category,
@@ -649,18 +720,21 @@ class ApiService {
   // ==================== PORTFOLIOS ====================
 
   async getPortfolios(): Promise<Portfolio[]> {
-    const { data, error } = await supabase.from('portfolios').select('*').order('id');
+    const profileId = this.getActiveProfileId();
+    const { data, error } = await supabase.from('portfolios').select('*').eq('profile_id', profileId).order('id');
     if (error) throw error;
     return (data || []).map(mapPortfolio);
   }
 
   async createPortfolio(formData: PortfolioFormData): Promise<Portfolio> {
     const userId = await getCurrentUserId();
+    const profileId = this.getActiveProfileId();
     const { data, error } = await supabase
       .from('portfolios')
       .insert({
         ...formData,
         user_id: userId,
+        profile_id: profileId,
         initial_capital: formData.initial_capital ?? 0,
         reference_currency: formData.reference_currency ?? 'EUR',
         risk_free_source: formData.risk_free_source ?? '',

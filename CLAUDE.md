@@ -114,12 +114,26 @@ interface Account {
 }
 ```
 
+## Profili multipli
+
+Ogni account (email) può avere più profili, ciascuno con dati separati (conti, categorie, transazioni, trasferimenti, portafogli). Un profilo corrisponde a un insieme di dati indipendente (es. "Personale" vs "Freelance").
+
+- Tabella `profiles`: `id UUID`, `user_id UUID` (FK auth.users), `name TEXT`. Il profilo principale ha `id = auth.uid()`.
+- Tutte le tabelle dati (`accounts`, `categories`, `transactions`, `transfers`, `portfolios`, `recurring_transactions`) hanno `profile_id UUID` (FK → `profiles.id`, ON DELETE CASCADE)
+- Il profilo attivo è in `localStorage['activeProfileId']` e in `apiService._activeProfileId`
+- `apiService.setActiveProfile(id)` va chiamato prima di qualsiasi query — lo fa `DataContext.fetchAllData` all'avvio
+- Tutte le query GET filtrano per `profile_id`; tutte le INSERT includono `profile_id`
+- Il selettore profili è in `SettingsPage` (sezione "Profili"): switch, rinomina, aggiungi, elimina
+- Il profilo principale (`id = user_id`) non è eliminabile (RLS blocca DELETE dove `id = user_id`)
+
 ## Contesti React
 
 ### DataContext (`src/contexts/DataContext.tsx`)
 - Tiene in memoria accounts, categories, transactions, transfers, portfolios (cache in-memory, no localStorage)
 - Si inizializza alla detection della sessione Supabase via `onAuthStateChange`
 - Espone `refreshAll()`, `refreshTransactions(startDate?, endDate?)`, `refreshTransfers()`, `refreshPortfolios()`, e CRUD ottimistico per tutti i tipi
+- Espone `userProfiles`, `activeProfile`, `switchProfile(profile)`, `createUserProfile(name)`, `updateUserProfile(id, name)`, `deleteUserProfile(id)`
+- All'avvio carica i profili, risolve il profilo attivo da localStorage, chiama `apiService.setActiveProfile()` prima di caricare i dati
 - Ricalcola `current_balance` degli account via `useEffect` ogni volta che cambiano transactions o transfers:
   - transactions: income +, expense/investment -
   - transfers: `from_account_id` -, `to_account_id` +

@@ -11,6 +11,13 @@ export interface AuthResponse {
 }
 
 
+export interface UserProfile {
+  id: string;       // UUID (= auth.uid() per il profilo principale)
+  user_id: string;  // FK a auth.users
+  name: string;
+  created_at?: string;
+}
+
 export type TransactionCategory = string;
 
 export type TransactionType = 'expense' | 'income' | 'investment' | 'transfer';

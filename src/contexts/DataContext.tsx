@@ -2,7 +2,7 @@ import { createContext, useContext, useState, useEffect, useRef, type ReactNode 
 import i18n from '../i18n';
 import { apiService } from '../services/api';
 import { supabase } from '../services/supabase';
-import type { Account, Category, Transaction, Transfer, Portfolio } from '../types';
+import type { Account, Category, Transaction, Transfer, Portfolio, UserProfile } from '../types';
 
 interface DataContextType {
   // Data
@@ -11,10 +11,18 @@ interface DataContextType {
   transactions: Transaction[];
   transfers: Transfer[];
   portfolios: Portfolio[];
+  userProfiles: UserProfile[];
+  activeProfile: UserProfile | null;
 
   // Loading states
   isLoading: boolean;
   isInitialized: boolean;
+
+  // Profile operations
+  switchProfile: (profile: UserProfile) => Promise<void>;
+  createUserProfile: (name: string) => Promise<UserProfile>;
+  updateUserProfile: (id: string, name: string) => Promise<void>;
+  deleteUserProfile: (id: string) => Promise<void>;
 
   // CRUD operations
   addAccount: (account: Account) => void;
@@ -61,6 +69,8 @@ export function DataProvider({ children }: DataProviderProps) {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [transfers, setTransfers] = useState<Transfer[]>([]);
   const [portfolios, setPortfolios] = useState<Portfolio[]>([]);
+  const [userProfiles, setUserProfiles] = useState<UserProfile[]>([]);
+  const [activeProfile, setActiveProfile] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isInitialized, setIsInitialized] = useState(false);
   const isFetchingRef = useRef(false);
@@ -121,19 +131,27 @@ export function DataProvider({ children }: DataProviderProps) {
     isFetchingRef.current = true;
     setIsLoading(true);
     try {
-      // Valida la sessione server-side (getUser fa una chiamata al server, non usa la cache)
+      // Valida la sessione server-side
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         await supabase.auth.signOut();
         return;
       }
-      // Verifica che il profilo esista nel DB
-      const { data: profile } = await supabase.from('profiles').select('id').eq('id', user.id).single();
-      if (!profile) {
-        console.warn('Profile not found, signing out');
+      // Carica i profili utente
+      const profiles = await apiService.getProfiles();
+      if (!profiles.length) {
+        console.warn('No profiles found, signing out');
         await supabase.auth.signOut();
         return;
       }
+      setUserProfiles(profiles);
+
+      // Determina il profilo attivo
+      const savedId = localStorage.getItem('activeProfileId');
+      const resolved = profiles.find(p => p.id === savedId) ?? profiles[0];
+      setActiveProfile(resolved);
+      apiService.setActiveProfile(resolved.id);
+
       // Carica accounts e categories
       const [accountsData, categoriesData] = await Promise.all([
         apiService.getAccounts(),
@@ -229,7 +247,42 @@ export function DataProvider({ children }: DataProviderProps) {
     setTransactions([]);
     setTransfers([]);
     setPortfolios([]);
+    setUserProfiles([]);
+    setActiveProfile(null);
+    apiService.clearActiveProfile();
     setIsInitialized(false);
+  };
+
+  // Profile operations
+
+  const switchProfile = async (profile: UserProfile) => {
+    apiService.setActiveProfile(profile.id);
+    setActiveProfile(profile);
+    // Ricarica tutti i dati per il nuovo profilo
+    setAccounts([]);
+    setCategories([]);
+    setTransactions([]);
+    setTransfers([]);
+    setPortfolios([]);
+    setIsInitialized(false);
+    await fetchAllData();
+  };
+
+  const createUserProfile = async (name: string): Promise<UserProfile> => {
+    const profile = await apiService.createProfile(name);
+    setUserProfiles(prev => [...prev, profile]);
+    return profile;
+  };
+
+  const updateUserProfile = async (id: string, name: string): Promise<void> => {
+    await apiService.updateProfile(id, name);
+    setUserProfiles(prev => prev.map(p => p.id === id ? { ...p, name } : p));
+    if (activeProfile?.id === id) setActiveProfile(prev => prev ? { ...prev, name } : prev);
+  };
+
+  const deleteUserProfile = async (id: string): Promise<void> => {
+    await apiService.deleteProfile(id);
+    setUserProfiles(prev => prev.filter(p => p.id !== id));
   };
 
   // Account operations
@@ -320,8 +373,14 @@ export function DataProvider({ children }: DataProviderProps) {
     transactions,
     transfers,
     portfolios,
+    userProfiles,
+    activeProfile,
     isLoading,
     isInitialized,
+    switchProfile,
+    createUserProfile,
+    updateUserProfile,
+    deleteUserProfile,
     addAccount,
     updateAccount,
     deleteAccount,
