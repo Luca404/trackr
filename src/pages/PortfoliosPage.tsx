@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { apiService } from '../services/api';
 import { supabase } from '../services/supabase';
 import { useData } from '../contexts/DataContext';
@@ -361,7 +361,7 @@ function PortfolioForm({ onSubmit, onDelete, onCancel, initialData, isEditMode, 
           type="text"
           value={name}
           onChange={(e) => setName(e.target.value)}
-          className="input"
+          className="input-field"
           placeholder="Es: Fineco, TradeRepublic..."
           autoComplete="off" autoCorrect="off" spellCheck={false}
           required
@@ -374,7 +374,7 @@ function PortfolioForm({ onSubmit, onDelete, onCancel, initialData, isEditMode, 
           type="text"
           value={description}
           onChange={(e) => setDescription(e.target.value)}
-          className="input"
+          className="input-field"
           placeholder="Breve descrizione..."
           autoComplete="off" autoCorrect="off" spellCheck={false}
         />
@@ -571,8 +571,103 @@ function PositionForm({ currency, onAdd, onCancel }: PositionFormProps) {
   const currSymbols: Record<string, string> = { EUR: '€', USD: '$', GBP: '£', CHF: 'Fr' };
   const currSymbol = currSymbols[currency] || currency;
 
+  // Ticker search
+  const [instrumentType, setInstrumentType] = useState<'etf' | 'stock'>('etf');
+  const [ucitsCache, setUcitsCache] = useState<any[]>([]);
+  const [symbolOptions, setSymbolOptions] = useState<any[]>([]);
+  const [symbolLoading, setSymbolLoading] = useState(false);
+  const [symbolSearchOpen, setSymbolSearchOpen] = useState(false);
+  const [symbolSearchCompleted, setSymbolSearchCompleted] = useState(false);
+  const skipSymbolSearchRef = useRef(false);
+  const [isinLookupLoading, setIsinLookupLoading] = useState(false);
+  const [isinLookupError, setIsinLookupError] = useState(false);
+  const ucitsLoadedRef = useRef(false);
+  const isIsinStr = useCallback((s: string) => /^[A-Z]{2}[A-Z0-9]{10}$/.test(s), []);
+
+  useEffect(() => {
+    if (ucitsLoadedRef.current || ucitsCache.length > 0 || instrumentType !== 'etf') return;
+    const cached = sessionStorage.getItem('ucits_etf_list');
+    if (cached) {
+      try { setUcitsCache(JSON.parse(cached)); ucitsLoadedRef.current = true; return; } catch {}
+    }
+    ucitsLoadedRef.current = true;
+    fetch(`${PF_BACKEND_URL}/symbols/ucits`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data?.results) {
+          setUcitsCache(data.results);
+          try { sessionStorage.setItem('ucits_etf_list', JSON.stringify(data.results)); } catch {}
+        }
+      })
+      .catch(() => { ucitsLoadedRef.current = false; });
+  }, [instrumentType, ucitsCache.length]);
+
+  useEffect(() => {
+    if (skipSymbolSearchRef.current) { skipSymbolSearchRef.current = false; return; }
+    if (!symbol || symbol.length < 2) {
+      setSymbolOptions([]);
+      setSymbolSearchCompleted(false);
+      setSymbolSearchOpen(false);
+      return;
+    }
+    setSymbolSearchCompleted(false);
+    const controller = new AbortController();
+    const run = async () => {
+      setSymbolLoading(true);
+      if (instrumentType === 'etf') {
+        await new Promise(r => setTimeout(r, 100));
+        if (controller.signal.aborted) return;
+        const q = symbol.toUpperCase();
+        const filtered = ucitsCache.filter(item => {
+          const sym = (item.symbol || '').toUpperCase();
+          const isin = (item.isin || '').toUpperCase();
+          return sym.startsWith(q) || (isIsinStr(q) && isin === q);
+        }).slice(0, 25);
+        setSymbolOptions(filtered);
+        setSymbolSearchOpen(true);
+        setSymbolLoading(false);
+        setSymbolSearchCompleted(true);
+        return;
+      }
+      try {
+        const res = await fetch(
+          `${PF_BACKEND_URL}/symbols/search?q=${encodeURIComponent(symbol)}&instrument_type=stock`,
+          { signal: controller.signal }
+        );
+        if (res.ok) { const data = await res.json(); setSymbolOptions(data.results || []); setSymbolSearchOpen(true); }
+      } catch (err: any) {
+        if (err.name !== 'AbortError') console.error('Symbol search error:', err);
+      } finally {
+        if (!controller.signal.aborted) { setSymbolLoading(false); setSymbolSearchCompleted(true); }
+      }
+    };
+    const timer = setTimeout(run, 250);
+    return () => { clearTimeout(timer); controller.abort(); };
+  }, [symbol, instrumentType, ucitsCache, isIsinStr]);
+
+  const handleIsinLookup = async () => {
+    setIsinLookupLoading(true);
+    setIsinLookupError(false);
+    try {
+      const res = await fetch(`${PF_BACKEND_URL}/symbols/isin-lookup?isin=${symbol}`);
+      if (!res.ok) throw new Error('not found');
+      const data = await res.json();
+      const entries = data.listings.map((l: any) => ({
+        symbol: l.ticker, isin: symbol, name: l.name, exchange: l.exchange, currency: l.currency, ter: l.ter,
+      }));
+      setUcitsCache(prev => [...prev, ...entries]);
+      setSymbolOptions(entries);
+      setSymbolSearchOpen(true);
+      setSymbolSearchCompleted(true);
+    } catch {
+      setIsinLookupError(true);
+    } finally {
+      setIsinLookupLoading(false);
+    }
+  };
+
   const formatDisplayDate = (d: string) => {
-    if (!d) return 'Seleziona data';
+    if (!d) return t('transactions.selectDate');
     const [y, m, day] = d.split('-');
     return `${day}/${m}/${y}`;
   };
@@ -586,48 +681,128 @@ function PositionForm({ currency, onAdd, onCancel }: PositionFormProps) {
   };
 
   return (
-    <form onSubmit={handleSubmit} autoComplete="off" className="space-y-5">
+    <form onSubmit={handleSubmit} autoComplete="off" className="space-y-4">
+
+      {/* ETF / Stock toggle */}
+      <div className="flex rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700">
+        {(['etf', 'stock'] as const).map(typ => (
+          <button
+            key={typ}
+            type="button"
+            onClick={() => { setInstrumentType(typ); setSymbol(''); setSymbolOptions([]); setSymbolSearchCompleted(false); }}
+            className={`flex-1 py-2 text-sm font-medium transition-colors ${instrumentType === typ ? 'bg-blue-500 text-white' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
+          >
+            {typ === 'etf' ? 'ETF' : 'Stock'}
+          </button>
+        ))}
+      </div>
 
       {/* Ticker */}
-      <div>
-        <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">{t('portfolios.ticker')}</div>
-        <input
-          type="text"
-          value={symbol}
-          onChange={e => setSymbol(e.target.value.toUpperCase())}
-          className="w-full px-4 py-3 text-2xl font-mono font-bold tracking-widest bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 text-gray-900 dark:text-gray-100 placeholder-gray-300 dark:placeholder-gray-600 uppercase"
-          placeholder="VWCE"
-          autoComplete="off" autoCorrect="off" spellCheck={false}
-          autoCapitalize="characters"
-          required
-        />
+      <div className="relative">
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+          {instrumentType === 'etf' ? t('transactions.tickerOrIsin') : t('transactions.tickerOrName')}
+        </label>
+        <div className="relative">
+          <input
+            type="text"
+            value={symbol}
+            onChange={(e) => { setSymbol(e.target.value.toUpperCase()); setIsinLookupError(false); }}
+            placeholder={instrumentType === 'etf' ? 'VWCE, SWDA, IE00...' : 'AAPL, MSFT...'}
+            className={'input-field uppercase tracking-wider font-mono font-bold text-lg' + (symbolLoading ? ' pr-8' : '')}
+            onFocus={() => { if (symbolOptions.length > 0) setSymbolSearchOpen(true); }}
+            onBlur={() => setTimeout(() => setSymbolSearchOpen(false), 150)}
+            autoComplete="off" autoCorrect="off" spellCheck={false}
+            autoCapitalize="characters"
+            required
+          />
+          {symbolLoading && (
+            <div className="absolute right-3 top-1/2 -translate-y-1/2">
+              <svg className="animate-spin h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+              </svg>
+            </div>
+          )}
+        </div>
+
+        {symbolSearchOpen && symbol.length >= 2 && !symbolLoading && symbolSearchCompleted && (
+          <div className="absolute z-20 mt-1 w-full border border-gray-200 dark:border-gray-700 rounded-lg max-h-52 overflow-auto bg-white dark:bg-gray-900 shadow-xl">
+            {symbolOptions.length > 0 ? symbolOptions.map((opt: any) => (
+              <button
+                key={`${opt.symbol}-${opt.exchange || ''}`}
+                type="button"
+                onMouseDown={() => {
+                  setSymbol(opt.symbol);
+                  setSymbolOptions([]);
+                  setSymbolSearchOpen(false);
+                  skipSymbolSearchRef.current = true;
+                }}
+                className="w-full flex items-center justify-between px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-800 text-left border-b border-gray-100 dark:border-gray-800 last:border-0"
+              >
+                <div className="min-w-0">
+                  <span className="font-mono font-bold text-sm text-gray-900 dark:text-gray-100">{opt.symbol}</span>
+                  {opt.name && <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{opt.name}</p>}
+                </div>
+                <div className="flex flex-col items-end gap-0.5 ml-2 shrink-0 text-xs text-gray-400">
+                  {opt.exchange && <span>{opt.exchange}</span>}
+                  {opt.currency && <span className="font-medium">{opt.currency}</span>}
+                </div>
+              </button>
+            )) : (
+              <div className="px-3 py-3 text-center text-xs text-gray-500 dark:text-gray-400">
+                {isIsinStr(symbol) ? (
+                  <div className="flex flex-col items-center gap-2">
+                    <span>{t('transactions.isinNotCached')}</span>
+                    {isinLookupError && <span className="text-red-500">{t('transactions.isinNotFound')}</span>}
+                    <button
+                      type="button"
+                      onMouseDown={handleIsinLookup}
+                      disabled={isinLookupLoading}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-60 transition text-xs"
+                    >
+                      {isinLookupLoading && (
+                        <svg className="animate-spin h-3 w-3" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                        </svg>
+                      )}
+                      {isinLookupLoading ? t('transactions.searching') : t('transactions.searchJustEtf')}
+                    </button>
+                  </div>
+                ) : (
+                  <span>{t('transactions.noResults')}</span>
+                )}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Quantità e Prezzo */}
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">{t('portfolios.quantity')}</div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('portfolios.quantity')}</label>
           <input
             type="text"
             inputMode="decimal"
             value={quantity}
             onChange={e => setQuantity(e.target.value)}
-            className="w-full px-4 py-3 text-xl font-semibold bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 text-gray-900 dark:text-gray-100 placeholder-gray-300 dark:placeholder-gray-600"
+            className="input-field text-lg font-semibold"
             placeholder="0"
             required
           />
         </div>
         <div>
-          <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
             {t('portfolios.price')} ({currSymbol})
-          </div>
+          </label>
           <input
             type="text"
             inputMode="decimal"
             value={price}
             onChange={e => setPrice(e.target.value)}
-            className="w-full px-4 py-3 text-xl font-semibold bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 text-gray-900 dark:text-gray-100 placeholder-gray-300 dark:placeholder-gray-600"
-            placeholder="0,00"
+            className="input-field text-lg font-semibold"
+            placeholder="0.00"
             required
           />
         </div>
@@ -635,11 +810,11 @@ function PositionForm({ currency, onAdd, onCancel }: PositionFormProps) {
 
       {/* Data */}
       <div>
-        <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">{t('portfolios.purchaseDate')}</div>
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('portfolios.purchaseDate')}</label>
         <button
           type="button"
           onClick={() => dateRef.current?.showPicker()}
-          className="w-full px-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-left text-gray-700 dark:text-gray-300 font-medium flex items-center justify-between"
+          className="input-field text-left flex items-center justify-between"
         >
           <span>{formatDisplayDate(date)}</span>
           <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

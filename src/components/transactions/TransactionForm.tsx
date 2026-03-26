@@ -63,7 +63,7 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
   const [symbolSearchOpen, setSymbolSearchOpen] = useState(false);
   const [symbolSearchCompleted, setSymbolSearchCompleted] = useState(false);
   const [selectedSymbolInfo, setSelectedSymbolInfo] = useState<{ name: string; exchange: string; currency: string; ter: string; isin: string } | null>(null);
-  const [skipSymbolSearch, setSkipSymbolSearch] = useState(false);
+  const skipSymbolSearchRef = useRef(false);
   const [isinLookupLoading, setIsinLookupLoading] = useState(false);
   const [isinLookupError, setIsinLookupError] = useState(false);
   const ucitsLoadedRef = useRef(false);
@@ -166,7 +166,7 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
   // Ricerca simboli con debounce
   const isIsinStr = useCallback((s: string) => /^[A-Z]{2}[A-Z0-9]{10}$/.test(s), []);
   useEffect(() => {
-    if (skipSymbolSearch) { setSkipSymbolSearch(false); return; }
+    if (skipSymbolSearchRef.current) { skipSymbolSearchRef.current = false; return; }
     if (!ticker || ticker.length < 2) {
       setSymbolOptions([]);
       setSymbolSearchCompleted(false);
@@ -207,7 +207,7 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
     };
     const timer = setTimeout(run, 250);
     return () => { clearTimeout(timer); controller.abort(); };
-  }, [ticker, instrumentType, skipSymbolSearch, ucitsCache, isIsinStr]);
+  }, [ticker, instrumentType, ucitsCache, isIsinStr]);
 
   const handleIsinLookup = async () => {
     setIsinLookupLoading(true);
@@ -656,7 +656,7 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
                       setSelectedSymbolInfo({ name: opt.name || '', exchange: opt.exchange || '', currency: opt.currency || '', ter: opt.ter || '', isin: opt.isin || '' });
                       setSymbolOptions([]);
                       setSymbolSearchOpen(false);
-                      setSkipSymbolSearch(true);
+                      skipSymbolSearchRef.current = true;
                     }}
                     className="w-full flex items-center justify-between px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-800 text-left border-b border-gray-100 dark:border-gray-800 last:border-0"
                   >
