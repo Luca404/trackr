@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 
 type PeriodType = 'day' | 'week' | 'month' | 'year' | 'all' | 'custom';
 
@@ -17,6 +18,8 @@ function PeriodSelector({
   onCustomClick,
   earliestDate
 }: PeriodSelectorProps) {
+  const { t, i18n } = useTranslation();
+  const locale = i18n.language === 'it' ? 'it-IT' : 'en-US';
   const [isOpen, setIsOpen] = useState(false);
   const [currentType, setCurrentType] = useState<PeriodType>('month');
 
@@ -52,32 +55,28 @@ function PeriodSelector({
   }, [startDate, endDate]);
 
   const formatDateRange = (start: Date, end: Date, type: PeriodType) => {
-    // Per giorno mostra solo la data singola
     if (type === 'day') {
-      return start.toLocaleDateString('it-IT', { day: 'numeric', month: 'short', year: 'numeric' });
+      return start.toLocaleDateString(locale, { day: 'numeric', month: 'short', year: 'numeric' });
     }
-
-    const startStr = start.toLocaleDateString('it-IT', { day: 'numeric', month: 'short', year: 'numeric' });
-    const endStr = end.toLocaleDateString('it-IT', { day: 'numeric', month: 'short', year: 'numeric' });
+    const startStr = start.toLocaleDateString(locale, { day: 'numeric', month: 'short', year: 'numeric' });
+    const endStr = end.toLocaleDateString(locale, { day: 'numeric', month: 'short', year: 'numeric' });
     return `${startStr} - ${endStr}`;
   };
 
   const getPeriodLabel = () => {
-    const monthNames = ['Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno',
-                        'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre'];
-
     if (currentType === 'month') {
-      return `${monthNames[startDate.getMonth()]} ${startDate.getFullYear()}`;
+      return new Date(startDate.getFullYear(), startDate.getMonth(), 1)
+        .toLocaleDateString(locale, { month: 'long', year: 'numeric' });
     } else if (currentType === 'year') {
       return `${startDate.getFullYear()}`;
     } else if (currentType === 'week') {
-      return 'Settimana';
+      return t('period.week');
     } else if (currentType === 'day') {
-      return 'Giorno';
+      return t('period.day');
     } else if (currentType === 'all') {
-      return 'Tutto il periodo';
+      return t('period.all');
     } else {
-      return 'Periodo Personalizzato';
+      return t('period.custom');
     }
   };
 
@@ -203,7 +202,7 @@ function PeriodSelector({
               navigatePeriod('prev');
             }}
             className="absolute left-0 top-0 bottom-0 w-16 flex items-center justify-center active:bg-gray-100 dark:active:bg-gray-700 md:hover:bg-gray-100 md:dark:hover:bg-gray-700 rounded-l-lg transition-all duration-75"
-            aria-label="Periodo precedente"
+            aria-label={t('period.prev')}
           >
             <svg className="w-5 h-5 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
@@ -227,7 +226,7 @@ function PeriodSelector({
               navigatePeriod('next');
             }}
             className="absolute right-0 top-0 bottom-0 w-16 flex items-center justify-center active:bg-gray-100 dark:active:bg-gray-700 md:hover:bg-gray-100 md:dark:hover:bg-gray-700 rounded-r-lg transition-all duration-75"
-            aria-label="Periodo successivo"
+            aria-label={t('period.next')}
           >
             <svg className="w-5 h-5 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
@@ -253,8 +252,8 @@ function PeriodSelector({
                     : 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-900 dark:text-gray-100'
                 }`}
               >
-                <div className="font-medium">Giorno</div>
-                <div className="text-sm opacity-75">Oggi</div>
+                <div className="font-medium">{t('period.day')}</div>
+                <div className="text-sm opacity-75">{t('period.today')}</div>
               </button>
 
               <button
@@ -266,8 +265,8 @@ function PeriodSelector({
                     : 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-900 dark:text-gray-100'
                 }`}
               >
-                <div className="font-medium">Settimana</div>
-                <div className="text-sm opacity-75">Settimana corrente</div>
+                <div className="font-medium">{t('period.week')}</div>
+                <div className="text-sm opacity-75">{t('period.weekCurrent')}</div>
               </button>
 
               <button
@@ -279,8 +278,8 @@ function PeriodSelector({
                     : 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-900 dark:text-gray-100'
                 }`}
               >
-                <div className="font-medium">Mese</div>
-                <div className="text-sm opacity-75">Mese corrente</div>
+                <div className="font-medium">{t('period.month')}</div>
+                <div className="text-sm opacity-75">{t('period.monthCurrent')}</div>
               </button>
 
               <button
@@ -292,8 +291,8 @@ function PeriodSelector({
                     : 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-900 dark:text-gray-100'
                 }`}
               >
-                <div className="font-medium">Anno</div>
-                <div className="text-sm opacity-75">Anno corrente</div>
+                <div className="font-medium">{t('period.year')}</div>
+                <div className="text-sm opacity-75">{t('period.yearCurrent')}</div>
               </button>
 
               <button
@@ -305,8 +304,8 @@ function PeriodSelector({
                     : 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-900 dark:text-gray-100'
                 }`}
               >
-                <div className="font-medium">Tutto il Periodo</div>
-                <div className="text-sm opacity-75">Tutte le transazioni</div>
+                <div className="font-medium">{t('period.all')}</div>
+                <div className="text-sm opacity-75">{t('period.allDesc')}</div>
               </button>
 
               <button
@@ -318,8 +317,8 @@ function PeriodSelector({
                     : 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-900 dark:text-gray-100'
                 }`}
               >
-                <div className="font-medium">Personalizzato</div>
-                <div className="text-sm opacity-75">Scegli le date</div>
+                <div className="font-medium">{t('period.custom')}</div>
+                <div className="text-sm opacity-75">{t('period.customDesc')}</div>
               </button>
             </div>
           </div>

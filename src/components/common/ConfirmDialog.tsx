@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import Modal from './Modal';
 
 interface ConfirmDialogProps {
@@ -17,10 +18,14 @@ export default function ConfirmDialog({
   onConfirm,
   title,
   message,
-  confirmText = 'Conferma',
-  cancelText = 'Annulla',
+  confirmText,
+  cancelText,
   isDestructive = false,
 }: ConfirmDialogProps) {
+  const { t } = useTranslation();
+  const resolvedConfirmText = confirmText ?? t('common.confirm');
+  const resolvedCancelText = cancelText ?? t('common.cancel');
+
   const handleConfirm = () => {
     onConfirm();
     onClose();
@@ -32,14 +37,16 @@ export default function ConfirmDialog({
         <p className="text-gray-700 dark:text-gray-300">{message}</p>
 
         <div className="flex gap-3">
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex-1 h-12 rounded-lg border-2 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors flex items-center justify-center text-2xl"
-            title={cancelText}
-          >
-            ✕
-          </button>
+          {resolvedCancelText && (
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 h-12 rounded-lg border-2 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors flex items-center justify-center text-2xl"
+              title={resolvedCancelText}
+            >
+              ✕
+            </button>
+          )}
           <button
             type="button"
             onClick={handleConfirm}
@@ -48,7 +55,7 @@ export default function ConfirmDialog({
                 ? 'bg-red-500 hover:bg-red-600'
                 : 'bg-primary-500 hover:bg-primary-600'
             }`}
-            title={confirmText}
+            title={resolvedConfirmText}
           >
             {isDestructive ? '🗑️' : '✓'}
           </button>

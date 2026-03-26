@@ -66,11 +66,11 @@ export default function SettingsPage() {
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
     if (newPassword !== confirmPassword) {
-      setPasswordMsg({ type: 'error', text: 'Le password non coincidono' });
+      setPasswordMsg({ type: 'error', text: t('settings.errorPasswordMismatch') });
       return;
     }
     if (newPassword.length < 6) {
-      setPasswordMsg({ type: 'error', text: 'La password deve avere almeno 6 caratteri' });
+      setPasswordMsg({ type: 'error', text: t('settings.errorPasswordTooShort') });
       return;
     }
     setPasswordLoading(true);
@@ -78,12 +78,12 @@ export default function SettingsPage() {
     try {
       const { error } = await supabase.auth.updateUser({ password: newPassword });
       if (error) throw error;
-      setPasswordMsg({ type: 'success', text: 'Password aggiornata con successo' });
+      setPasswordMsg({ type: 'success', text: t('settings.successPasswordChanged') });
       setNewPassword('');
       setConfirmPassword('');
       setShowChangePassword(false);
     } catch (err: any) {
-      setPasswordMsg({ type: 'error', text: err.message || 'Errore durante il cambio password' });
+      setPasswordMsg({ type: 'error', text: err.message || t('settings.errorPasswordChange') });
     } finally {
       setPasswordLoading(false);
     }
@@ -92,9 +92,9 @@ export default function SettingsPage() {
   const handleExport = async () => {
     try {
       await apiService.exportData();
-      setExportMessage({ type: 'success', text: 'Backup esportato con successo!' });
+      setExportMessage({ type: 'success', text: t('settings.successExported') });
     } catch {
-      setExportMessage({ type: 'error', text: 'Errore durante l\'esportazione' });
+      setExportMessage({ type: 'error', text: t('settings.errorExporting') });
     }
   };
 

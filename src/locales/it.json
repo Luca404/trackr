@@ -111,7 +111,9 @@
     "currentBalance": "Saldo Corrente",
     "namePlaceholder": "es. Conto Principale",
     "deleteTitle": "Elimina Conto",
-    "cannotDeleteTitle": "Impossibile Eliminare"
+    "deleteMessage": "Sei sicuro di voler eliminare \"{{name}}\"? Questa azione non può essere annullata.",
+    "cannotDeleteTitle": "Impossibile Eliminare",
+    "cannotDeleteMessage": "Non puoi eliminare \"{{name}}\": {{count}} transazioni sono collegate a questo conto."
   },
   "categories": {
     "newCategory": "Nuova Categoria",
@@ -209,6 +211,66 @@
     "installIos": "iOS",
     "installIosDesc": "Condividi (□↑) → \"Aggiungi a Home\"",
     "installDesktop": "Desktop",
-    "installDesktopDesc": "Icona di installazione nella barra degli indirizzi"
+    "installDesktopDesc": "Icona di installazione nella barra degli indirizzi",
+    "errorPasswordMismatch": "Le password non coincidono",
+    "errorPasswordTooShort": "La password deve avere almeno 6 caratteri",
+    "successPasswordChanged": "Password aggiornata con successo",
+    "errorPasswordChange": "Errore durante il cambio password",
+    "successExported": "Backup esportato con successo!",
+    "errorExporting": "Errore durante l'esportazione"
+  },
+  "period": {
+    "selectPeriod": "Seleziona Periodo",
+    "startDate": "Data Inizio",
+    "endDate": "Data Fine",
+    "invalidRange": "La data di inizio deve essere prima della data di fine",
+    "prev": "Periodo precedente",
+    "next": "Periodo successivo",
+    "day": "Giorno",
+    "today": "Oggi",
+    "week": "Settimana",
+    "weekCurrent": "Settimana corrente",
+    "month": "Mese",
+    "monthCurrent": "Mese corrente",
+    "year": "Anno",
+    "yearCurrent": "Anno corrente",
+    "all": "Tutto il Periodo",
+    "allDesc": "Tutte le transazioni",
+    "custom": "Personalizzato",
+    "customDesc": "Scegli le date"
+  },
+  "login": {
+    "login": "Login",
+    "register": "Registrati",
+    "confirmPassword": "Conferma password",
+    "tagline": "Gestisci le tue spese personali",
+    "loading": "Caricamento...",
+    "signIn": "Accedi",
+    "errorPasswordMismatch": "Le password non corrispondono",
+    "errorPasswordTooShort": "La password deve essere di almeno 6 caratteri",
+    "errorAuth": "Errore durante l'autenticazione",
+    "successRegistration": "Registrazione completata! Controlla la tua email per confermare l'account, poi accedi."
+  },
+  "kakebo": {
+    "uploadDesc": "Carica il file {{filename}} esportato dall'app Kakebo (backup SQLite).",
+    "chooseFile": "Scegli file {{filename}}",
+    "accounts": "Conti",
+    "transactions": "Transazioni",
+    "categories": "Categorie",
+    "period": "Periodo: {{from}} → {{to}}",
+    "accountsToImport": "Conti da importare",
+    "invNote": "I conti con \"→ inv.\" non vengono creati: i trasferimenti verso di essi diventano transazioni di investimento.",
+    "expenseToInv": "Categorie spesa → investimento",
+    "expenseToInvDesc": "Seleziona le categorie da importare come investimenti.",
+    "resetData": "⚠️ Azzera dati esistenti",
+    "deleteAccountsLabel": "Elimina {{accounts}} conto/i e {{txs}} transazioni/trasferimenti esistenti",
+    "deleteCatsLabel": "Elimina {{count}} categorie esistenti",
+    "importing": "Importazione in corso...",
+    "importDone": "Importazione completata",
+    "accountsCreated": "{{count}} conti creati",
+    "resultLine": "{{tx}} transazioni · {{inv}} investimenti · {{tr}} trasferimenti",
+    "skipped": "{{count}} record ignorati",
+    "importAndReset": "⚠️ Importa e azzera",
+    "import": "Importa"
   }
 }

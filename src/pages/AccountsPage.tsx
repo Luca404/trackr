@@ -457,8 +457,8 @@ export default function AccountsPage() {
           title={deleteError ? t('accounts.cannotDeleteTitle') : t('accounts.deleteTitle')}
           message={
             deleteError
-              ? `Non puoi eliminare il conto "${selectedAccount?.name}" perché ci ${transactionCount === 1 ? 'è' : 'sono'} ${transactionCount} transazion${transactionCount === 1 ? 'e' : 'i'} collegat${transactionCount === 1 ? 'a' : 'e'} a questo conto.`
-              : `Sei sicuro di voler eliminare il conto "${selectedAccount?.name}"? Questa azione non può essere annullata.`
+              ? t('accounts.cannotDeleteMessage', { name: selectedAccount?.name, count: transactionCount })
+              : t('accounts.deleteMessage', { name: selectedAccount?.name })
           }
           confirmText={deleteError ? t('common.ok') : t('common.delete')}
           cancelText={deleteError ? undefined : t('common.cancel')}

@@ -111,7 +111,9 @@
     "currentBalance": "Current Balance",
     "namePlaceholder": "e.g. Main Account",
     "deleteTitle": "Delete Account",
-    "cannotDeleteTitle": "Cannot Delete"
+    "deleteMessage": "Are you sure you want to delete \"{{name}}\"? This action cannot be undone.",
+    "cannotDeleteTitle": "Cannot Delete",
+    "cannotDeleteMessage": "You cannot delete \"{{name}}\": {{count}} transactions are linked to this account."
   },
   "categories": {
     "newCategory": "New Category",
@@ -209,6 +211,66 @@
     "installIos": "iOS",
     "installIosDesc": "Share (□↑) → \"Add to Home\"",
     "installDesktop": "Desktop",
-    "installDesktopDesc": "Install icon in the address bar"
+    "installDesktopDesc": "Install icon in the address bar",
+    "errorPasswordMismatch": "Passwords do not match",
+    "errorPasswordTooShort": "Password must be at least 6 characters",
+    "successPasswordChanged": "Password updated successfully",
+    "errorPasswordChange": "Error changing password",
+    "successExported": "Backup exported successfully!",
+    "errorExporting": "Error during export"
+  },
+  "period": {
+    "selectPeriod": "Select Period",
+    "startDate": "Start Date",
+    "endDate": "End Date",
+    "invalidRange": "Start date must be before end date",
+    "prev": "Previous period",
+    "next": "Next period",
+    "day": "Day",
+    "today": "Today",
+    "week": "Week",
+    "weekCurrent": "Current week",
+    "month": "Month",
+    "monthCurrent": "Current month",
+    "year": "Year",
+    "yearCurrent": "Current year",
+    "all": "All Time",
+    "allDesc": "All transactions",
+    "custom": "Custom",
+    "customDesc": "Choose dates"
+  },
+  "login": {
+    "login": "Login",
+    "register": "Register",
+    "confirmPassword": "Confirm password",
+    "tagline": "Manage your personal finances",
+    "loading": "Loading...",
+    "signIn": "Sign in",
+    "errorPasswordMismatch": "Passwords do not match",
+    "errorPasswordTooShort": "Password must be at least 6 characters",
+    "errorAuth": "Authentication error",
+    "successRegistration": "Registration complete! Check your email to confirm your account, then sign in."
+  },
+  "kakebo": {
+    "uploadDesc": "Upload the {{filename}} file exported from the Kakebo app (SQLite backup).",
+    "chooseFile": "Choose {{filename}} file",
+    "accounts": "Accounts",
+    "transactions": "Transactions",
+    "categories": "Categories",
+    "period": "Period: {{from}} → {{to}}",
+    "accountsToImport": "Accounts to import",
+    "invNote": "Accounts marked \"→ inv.\" are not created: transfers to them become investment transactions.",
+    "expenseToInv": "Expense categories → investment",
+    "expenseToInvDesc": "Select categories to import as investments.",
+    "resetData": "⚠️ Reset existing data",
+    "deleteAccountsLabel": "Delete {{accounts}} account(s) and {{txs}} existing transactions/transfers",
+    "deleteCatsLabel": "Delete {{count}} existing categories",
+    "importing": "Importing...",
+    "importDone": "Import completed",
+    "accountsCreated": "{{count}} accounts created",
+    "resultLine": "{{tx}} transactions · {{inv}} investments · {{tr}} transfers",
+    "skipped": "{{count}} records skipped",
+    "importAndReset": "⚠️ Import and reset",
+    "import": "Import"
   }
 }

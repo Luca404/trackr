@@ -1,4 +1,5 @@
 import { useState, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { supabase } from '../services/supabase';
 import { useData } from '../contexts/DataContext';
 import type { CategoryWithStats } from '../types';
@@ -67,6 +68,7 @@ interface Props {
 type Step = 'upload' | 'options' | 'importing' | 'done';
 
 export default function KakeboImport({ onClose }: Props) {
+  const { t } = useTranslation();
   const { accounts, categories, transactions, transfers, refreshAll } = useData();
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -136,7 +138,7 @@ export default function KakeboImport({ onClose }: Props) {
 
       setStep('options');
     } catch (e: any) {
-      setError('Errore nel parsing del file: ' + (e.message || e));
+      setError((e.message || String(e)));
     }
   };
 
@@ -149,23 +151,23 @@ export default function KakeboImport({ onClose }: Props) {
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Non autenticato');
+      if (!user) throw new Error('Not authenticated');
       const userId = user.id;
 
       // 0. Delete existing data if requested
       if (deleteAccounts) {
-        setProgress('Eliminazione conti e transazioni...');
+        setProgress(t('kakebo.resetData'));
         await supabase.from('transactions').delete().eq('user_id', userId);
         await supabase.from('transfers').delete().eq('user_id', userId);
         await supabase.from('accounts').delete().eq('user_id', userId);
       }
       if (deleteCategories) {
-        setProgress('Eliminazione categorie...');
+        setProgress(t('kakebo.resetData'));
         await supabase.from('categories').delete().eq('user_id', userId);
       }
 
       // 1. Create all kakebo accounts as new trackr accounts
-      setProgress('Creazione conti...');
+      setProgress(t('kakebo.accounts'));
       const contoIdMap: Record<number, number> = {};
 
       for (const c of parsed.conti) {
@@ -184,7 +186,7 @@ export default function KakeboImport({ onClose }: Props) {
       }
 
       // 2. Build category name map & create missing categories
-      setProgress('Sincronizzazione categorie...');
+      setProgress(t('kakebo.categories'));
 
       const kCatById: Record<number, KCategoria> = {};
       for (const c of parsed.categorie) kCatById[c.id] = c;
@@ -242,7 +244,7 @@ export default function KakeboImport({ onClose }: Props) {
       }
 
       // 3. Build transaction / transfer rows
-      setProgress('Importazione transazioni...');
+      setProgress(t('kakebo.transactions'));
       const txRows: any[] = [];
       const trRows: any[] = [];
       let skipped = 0;
@@ -305,7 +307,7 @@ export default function KakeboImport({ onClose }: Props) {
       await refreshAll();
 
     } catch (e: any) {
-      setError(e.message || 'Errore durante l\'importazione');
+      setError(e.message || String(e));
       setStep('options');
     }
   };
@@ -331,7 +333,7 @@ export default function KakeboImport({ onClose }: Props) {
       {step === 'upload' && (
         <div>
           <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-            Carica il file <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded">kakebo_db</code> esportato dall'app Kakebo (backup SQLite).
+            {t('kakebo.uploadDesc', { filename: 'kakebo_db' })}
           </p>
           <button
             className="w-full py-8 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-xl text-gray-500 dark:text-gray-400 text-sm flex flex-col items-center gap-2 hover:border-primary-400 dark:hover:border-primary-500 transition-colors"
@@ -340,7 +342,7 @@ export default function KakeboImport({ onClose }: Props) {
             <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v8" />
             </svg>
-            <span>Scegli file <code>kakebo_db</code></span>
+            <span>{t('kakebo.chooseFile', { filename: 'kakebo_db' })}</span>
           </button>
           <input ref={fileRef} type="file" className="hidden" accept="*/*"
             onChange={e => e.target.files?.[0] && handleFile(e.target.files[0])} />
@@ -355,26 +357,26 @@ export default function KakeboImport({ onClose }: Props) {
           <div className="grid grid-cols-3 gap-2 text-center">
             <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
               <div className="text-lg font-bold text-gray-900 dark:text-white">{parsed.conti.length}</div>
-              <div className="text-xs text-gray-500 dark:text-gray-400">Conti</div>
+              <div className="text-xs text-gray-500 dark:text-gray-400">{t('kakebo.accounts')}</div>
             </div>
             <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
               <div className="text-lg font-bold text-gray-900 dark:text-white">{parsed.movimenti.length}</div>
-              <div className="text-xs text-gray-500 dark:text-gray-400">Transazioni</div>
+              <div className="text-xs text-gray-500 dark:text-gray-400">{t('kakebo.transactions')}</div>
             </div>
             <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
               <div className="text-lg font-bold text-gray-900 dark:text-white">{parsed.categorie.filter(c => c.padreId == null).length}</div>
-              <div className="text-xs text-gray-500 dark:text-gray-400">Categorie</div>
+              <div className="text-xs text-gray-500 dark:text-gray-400">{t('kakebo.categories')}</div>
             </div>
           </div>
           {dateRange && (
             <p className="text-xs text-gray-500 dark:text-gray-400 text-center">
-              Periodo: {dateRange.from} → {dateRange.to}
+              {t('kakebo.period', { from: dateRange.from, to: dateRange.to })}
             </p>
           )}
 
-          {/* Conti da importare */}
+          {/* Accounts to import */}
           <div>
-            <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Conti da importare</div>
+            <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{t('kakebo.accountsToImport')}</div>
             <div className="space-y-1.5">
               {parsed.conti.map(c => (
                 <div key={c.id} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-50 dark:bg-gray-700/50">
@@ -399,16 +401,16 @@ export default function KakeboImport({ onClose }: Props) {
               ))}
             </div>
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1.5">
-              I conti con "→ inv." non vengono creati: i trasferimenti verso di essi diventano transazioni di investimento.
+              {t('kakebo.invNote')}
             </p>
           </div>
 
           {/* Investment categories */}
           {expenseCats.length > 0 && (
             <div>
-              <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Categorie spesa → investimento</div>
+              <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('kakebo.expenseToInv')}</div>
               <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
-                Seleziona le categorie da importare come <strong>investimenti</strong>.
+                {t('kakebo.expenseToInvDesc')}
               </p>
               <div className="space-y-0.5">
                 {expenseCats.map(c => (
@@ -436,7 +438,7 @@ export default function KakeboImport({ onClose }: Props) {
           {/* Delete existing */}
           {(existingAccountsCount > 0 || existingCatsCount > 0) && (
             <div className="border border-red-200 dark:border-red-800 rounded-xl p-4 space-y-3">
-              <div className="text-sm font-medium text-red-700 dark:text-red-400">⚠️ Azzera dati esistenti</div>
+              <div className="text-sm font-medium text-red-700 dark:text-red-400">{t('kakebo.resetData')}</div>
               {existingAccountsCount > 0 && (
                 <label className="flex items-start gap-2 cursor-pointer">
                   <input
@@ -446,7 +448,7 @@ export default function KakeboImport({ onClose }: Props) {
                     className="w-4 h-4 rounded mt-0.5 text-red-500"
                   />
                   <span className="text-sm text-gray-700 dark:text-gray-300">
-                    Elimina {existingAccountsCount} conto/i e {existingTxCount} transazioni/trasferimenti esistenti
+                    {t('kakebo.deleteAccountsLabel', { accounts: existingAccountsCount, txs: existingTxCount })}
                   </span>
                 </label>
               )}
@@ -459,7 +461,7 @@ export default function KakeboImport({ onClose }: Props) {
                     className="w-4 h-4 rounded mt-0.5 text-red-500"
                   />
                   <span className="text-sm text-gray-700 dark:text-gray-300">
-                    Elimina {existingCatsCount} categorie esistenti
+                    {t('kakebo.deleteCatsLabel', { count: existingCatsCount })}
                   </span>
                 </label>
               )}
@@ -469,12 +471,12 @@ export default function KakeboImport({ onClose }: Props) {
           {error && <p className="text-sm text-red-500 dark:text-red-400">{error}</p>}
 
           <div className="flex gap-2">
-            <button className="flex-1 btn-secondary text-sm" onClick={onClose}>Annulla</button>
+            <button className="flex-1 btn-secondary text-sm" onClick={onClose}>{t('common.cancel')}</button>
             <button
               className={`flex-1 text-sm font-medium py-2 px-4 rounded-lg transition-colors ${deleteAccounts || deleteCategories ? 'bg-red-600 hover:bg-red-700 text-white' : 'btn-primary'}`}
               onClick={handleImport}
             >
-              {deleteAccounts || deleteCategories ? '⚠️ Importa e azzera' : 'Importa'}
+              {deleteAccounts || deleteCategories ? t('kakebo.importAndReset') : t('kakebo.import')}
             </button>
           </div>
         </div>
@@ -487,7 +489,7 @@ export default function KakeboImport({ onClose }: Props) {
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
           </svg>
-          <p className="text-sm text-gray-600 dark:text-gray-400">{progress || 'Importazione in corso...'}</p>
+          <p className="text-sm text-gray-600 dark:text-gray-400">{progress || t('kakebo.importing')}</p>
         </div>
       )}
 
@@ -496,14 +498,14 @@ export default function KakeboImport({ onClose }: Props) {
         <div className="space-y-4">
           <div className="bg-green-50 dark:bg-green-900/20 rounded-xl p-4 text-center space-y-1">
             <div className="text-2xl">✅</div>
-            <div className="font-semibold text-green-800 dark:text-green-300">Importazione completata</div>
+            <div className="font-semibold text-green-800 dark:text-green-300">{t('kakebo.importDone')}</div>
             <div className="text-sm text-green-700 dark:text-green-400 space-y-0.5">
-              <div>{result.accounts} conti creati</div>
-              <div>{result.transactions} transazioni · {result.investments} investimenti · {result.transfers} trasferimenti</div>
-              {result.skipped > 0 && <div className="text-xs opacity-75">{result.skipped} record ignorati</div>}
+              <div>{t('kakebo.accountsCreated', { count: result.accounts })}</div>
+              <div>{t('kakebo.resultLine', { tx: result.transactions, inv: result.investments, tr: result.transfers })}</div>
+              {result.skipped > 0 && <div className="text-xs opacity-75">{t('kakebo.skipped', { count: result.skipped })}</div>}
             </div>
           </div>
-          <button className="w-full btn-primary" onClick={onClose}>Chiudi</button>
+          <button className="w-full btn-primary" onClick={onClose}>{t('common.close')}</button>
         </div>
       )}
     </div>

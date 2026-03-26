@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import Modal from './Modal';
 
 interface DateRangePickerProps {
@@ -16,6 +17,7 @@ export default function DateRangePicker({
   initialStart,
   initialEnd
 }: DateRangePickerProps) {
+  const { t } = useTranslation();
   const [startDate, setStartDate] = useState(
     initialStart ? initialStart.toISOString().split('T')[0] : new Date().toISOString().split('T')[0]
   );
@@ -29,7 +31,7 @@ export default function DateRangePicker({
     end.setHours(23, 59, 59, 999);
 
     if (start > end) {
-      alert('La data di inizio deve essere prima della data di fine');
+      alert(t('period.invalidRange'));
       return;
     }
 
@@ -38,11 +40,11 @@ export default function DateRangePicker({
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Seleziona Periodo">
+    <Modal isOpen={isOpen} onClose={onClose} title={t('period.selectPeriod')}>
       <div className="space-y-4">
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-            Data Inizio
+            {t('period.startDate')}
           </label>
           <input
             type="date"
@@ -54,7 +56,7 @@ export default function DateRangePicker({
 
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-            Data Fine
+            {t('period.endDate')}
           </label>
           <input
             type="date"
@@ -70,14 +72,14 @@ export default function DateRangePicker({
             onClick={onClose}
             className="flex-1 px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
           >
-            Annulla
+            {t('common.cancel')}
           </button>
           <button
             type="button"
             onClick={handleConfirm}
             className="flex-1 px-4 py-2 rounded-lg bg-primary-500 text-white hover:bg-primary-600 transition-colors"
           >
-            Conferma
+            {t('common.confirm')}
           </button>
         </div>
       </div>

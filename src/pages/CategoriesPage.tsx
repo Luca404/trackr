@@ -434,7 +434,7 @@ export default function CategoriesPage() {
                 : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
             }`}
           >
-            💸 Uscite
+            💸 {t('categories.expense')}
           </button>
           <button
             onClick={() => setFilter('income')}
@@ -444,7 +444,7 @@ export default function CategoriesPage() {
                 : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
             }`}
           >
-            💰 Entrate
+            💰 {t('categories.income')}
           </button>
           <button
             onClick={() => setFilter('investment')}
@@ -454,7 +454,7 @@ export default function CategoriesPage() {
                 : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
             }`}
           >
-            📈 Investimenti
+            📈 {t('categories.investment')}
           </button>
         </div>
 
@@ -613,13 +613,13 @@ export default function CategoriesPage() {
                   className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary-500 text-white hover:bg-primary-600 transition-colors text-sm font-medium"
                 >
                   <span className="text-xl">+</span>
-                  <span>Nuova Sottocategoria</span>
+                  <span>{t('common.newSubcategory')}</span>
                 </button>
               </div>
             ) : (
               <form onSubmit={handleSubcategorySubmit} autoComplete="off" className="space-y-3">
                 <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Nuova Sottocategoria
+                  {t('common.newSubcategory')}
                 </h4>
 
                 <div className="flex gap-2">
@@ -628,7 +628,7 @@ export default function CategoriesPage() {
                     value={subcategoryFormData.name}
                     onChange={(e) => setSubcategoryFormData({ ...subcategoryFormData, name: e.target.value })}
                     className="flex-[3] px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-sm"
-                    placeholder="Nome sottocategoria"
+                    placeholder={t('common.subcategoryName')}
                     autoComplete="off" autoCorrect="off" spellCheck={false}
                     required
                     autoFocus
@@ -636,7 +636,7 @@ export default function CategoriesPage() {
                   <button
                     type="submit"
                     className="flex-1 h-10 rounded-lg bg-primary-500 text-white hover:bg-primary-600 transition-colors flex items-center justify-center text-2xl"
-                    title="Aggiungi"
+                    title={t('common.add')}
                   >
                     ✓
                   </button>
@@ -658,12 +658,12 @@ export default function CategoriesPage() {
             setShowSubcategoryForm(false);
             setSubcategoryFormData({ name: '' });
           }}
-          title={isEditMode ? 'Modifica Categoria' : 'Nuova Categoria'}
+          title={isEditMode ? t('categories.editCategory') : t('categories.newCategory')}
         >
           <form onSubmit={handleCategorySubmit} autoComplete="off" className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Nome
+                {t('categories.name')}
               </label>
               <input
                 type="text"
@@ -677,7 +677,7 @@ export default function CategoriesPage() {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Colore
+                {t('categories.color')}
               </label>
               <div className="flex items-center gap-3">
                 <div className="grid grid-cols-8 gap-1.5 flex-1">
@@ -696,14 +696,14 @@ export default function CategoriesPage() {
                   onClick={() => setCategoryFormData(prev => ({ ...prev, color: randomPresetColor() }))}
                   className="shrink-0 text-xs text-gray-500 dark:text-gray-400 hover:text-primary-500 dark:hover:text-primary-400 border border-gray-300 dark:border-gray-600 rounded-lg px-2 py-1"
                 >
-                  🎲 Random
+                  {t('categories.randomColor')}
                 </button>
               </div>
             </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Icona
+                {t('categories.icon')}
               </label>
               <div className="max-h-64 overflow-y-auto space-y-3 pr-1">
                 {(() => {
@@ -732,7 +732,7 @@ export default function CategoriesPage() {
                     <>
                       {suggested.length > 0 && (
                         <div>
-                          <div className="text-xs font-medium text-primary-500 dark:text-primary-400 mb-1">✨ Suggeriti</div>
+                          <div className="text-xs font-medium text-primary-500 dark:text-primary-400 mb-1">{t('categories.suggested')}</div>
                           {renderGrid(suggested)}
                         </div>
                       )}
@@ -755,14 +755,14 @@ export default function CategoriesPage() {
                     type="button"
                     onClick={(e) => handleDeleteCategory(e, selectedCategory.id)}
                     className="flex-1 h-12 rounded-lg bg-red-500 text-white hover:bg-red-600 transition-colors flex items-center justify-center text-2xl"
-                    title="Elimina"
+                    title={t('common.delete')}
                   >
                     🗑️
                   </button>
                   <button
                     type="submit"
                     className="flex-1 h-12 rounded-lg bg-primary-500 text-white hover:bg-primary-600 transition-colors flex items-center justify-center text-2xl"
-                    title="Salva"
+                    title={t('common.save')}
                   >
                     ✓
                   </button>
@@ -771,7 +771,7 @@ export default function CategoriesPage() {
                 <button
                   type="submit"
                   className="w-full h-12 rounded-lg bg-primary-500 text-white hover:bg-primary-600 transition-colors flex items-center justify-center text-2xl"
-                  title="Crea"
+                  title={t('common.create')}
                 >
                   ✓
                 </button>
@@ -794,10 +794,10 @@ export default function CategoriesPage() {
           isOpen={isDeleteCategoryDialogOpen}
           onClose={() => setIsDeleteCategoryDialogOpen(false)}
           onConfirm={confirmDeleteCategory}
-          title="Elimina Categoria"
-          message="Sei sicuro di voler eliminare questa categoria? Verranno eliminate anche tutte le sottocategorie associate."
-          confirmText="Elimina"
-          cancelText="Annulla"
+          title={t('categories.deleteTitle')}
+          message={t('categories.deleteMessage')}
+          confirmText={t('common.delete')}
+          cancelText={t('common.cancel')}
           isDestructive={true}
         />
 
@@ -805,10 +805,10 @@ export default function CategoriesPage() {
           isOpen={isDeleteSubcategoryDialogOpen}
           onClose={() => setIsDeleteSubcategoryDialogOpen(false)}
           onConfirm={confirmDeleteSubcategory}
-          title="Elimina Sottocategoria"
-          message="Sei sicuro di voler eliminare questa sottocategoria?"
-          confirmText="Elimina"
-          cancelText="Annulla"
+          title={t('categories.deleteSubcategoryTitle')}
+          message={t('categories.deleteSubcategoryMessage')}
+          confirmText={t('common.delete')}
+          cancelText={t('common.cancel')}
           isDestructive={true}
         />
       </div>

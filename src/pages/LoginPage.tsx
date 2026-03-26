@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { useData } from '../contexts/DataContext';
 
@@ -12,6 +13,7 @@ export default function LoginPage() {
   const [info, setInfo] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
+  const { t } = useTranslation();
   const { login, register } = useAuth();
   const { refreshAll } = useData();
   const navigate = useNavigate();
@@ -23,11 +25,11 @@ export default function LoginPage() {
 
     if (!isLogin) {
       if (password !== confirmPassword) {
-        setError('Le password non corrispondono');
+        setError(t('login.errorPasswordMismatch'));
         return;
       }
       if (password.length < 6) {
-        setError('La password deve essere di almeno 6 caratteri');
+        setError(t('login.errorPasswordTooShort'));
         return;
       }
     }
@@ -41,11 +43,11 @@ export default function LoginPage() {
         navigate('/accounts');
       } else {
         await register(email, password);
-        setInfo('Registrazione completata! Controlla la tua email per confermare l\'account, poi accedi.');
+        setInfo(t('login.successRegistration'));
         setIsLogin(true);
       }
     } catch (err: any) {
-      setError(err.message ?? 'Errore durante l\'autenticazione');
+      setError(err.message ?? t('login.errorAuth'));
     } finally {
       setIsLoading(false);
     }
@@ -57,7 +59,7 @@ export default function LoginPage() {
         {/* Logo/Title */}
         <div className="text-center mb-8">
           <h1 className="text-4xl font-bold text-white mb-2">Trackr</h1>
-          <p className="text-primary-100">Gestisci le tue spese personali</p>
+          <p className="text-primary-100">{t('login.tagline')}</p>
         </div>
 
         {/* Form Card */}
@@ -73,7 +75,7 @@ export default function LoginPage() {
                   : 'text-gray-600 dark:text-gray-400'
               }`}
             >
-              Login
+              {t('login.login')}
             </button>
             <button
               type="button"
@@ -84,7 +86,7 @@ export default function LoginPage() {
                   : 'text-gray-600 dark:text-gray-400'
               }`}
             >
-              Registrati
+              {t('login.register')}
             </button>
           </div>
 
@@ -134,7 +136,7 @@ export default function LoginPage() {
                   htmlFor="confirmPassword"
                   className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
                 >
-                  Conferma password
+                  {t('login.confirmPassword')}
                 </label>
                 <input
                   id="confirmPassword"
@@ -172,10 +174,10 @@ export default function LoginPage() {
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                   </svg>
-                  Caricamento...
+                  {t('login.loading')}
                 </span>
               ) : (
-                isLogin ? 'Accedi' : 'Registrati'
+                isLogin ? t('login.signIn') : t('login.register')
               )}
             </button>
           </form>
