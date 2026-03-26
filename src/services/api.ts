@@ -152,18 +152,45 @@ function mapPortfolio(row: any): Portfolio {
 
 // ==================== DEFAULT DATA ====================
 
-const DEFAULT_CATEGORIES = [
-  { name: 'Alimentari', icon: '🍔', category_type: 'expense' },
-  { name: 'Trasporti', icon: '🚗', category_type: 'expense' },
-  { name: 'Utenze', icon: '⚡', category_type: 'expense' },
-  { name: 'Svago', icon: '🎮', category_type: 'expense' },
-  { name: 'Salute', icon: '🏥', category_type: 'expense' },
-  { name: 'Shopping', icon: '🛍️', category_type: 'expense' },
-  { name: 'Investimento', icon: '💰', category_type: 'investment' },
-  { name: 'Stipendio', icon: '💵', category_type: 'income' },
-  { name: 'Bonus', icon: '🎁', category_type: 'income' },
-  { name: 'Altro', icon: '📌', category_type: null },
-];
+type Lang = 'en' | 'it';
+
+const DEFAULT_CATEGORIES: Record<Lang, { name: string; icon: string; category_type: string | null }[]> = {
+  it: [
+    { name: 'Alimentari', icon: '🍔', category_type: 'expense' },
+    { name: 'Trasporti', icon: '🚗', category_type: 'expense' },
+    { name: 'Utenze', icon: '⚡', category_type: 'expense' },
+    { name: 'Svago', icon: '🎮', category_type: 'expense' },
+    { name: 'Salute', icon: '🏥', category_type: 'expense' },
+    { name: 'Shopping', icon: '🛍️', category_type: 'expense' },
+    { name: 'Investimento', icon: '📈', category_type: 'investment' },
+    { name: 'Stipendio', icon: '💵', category_type: 'income' },
+    { name: 'Bonus', icon: '🎁', category_type: 'income' },
+    { name: 'Altro', icon: '📌', category_type: null },
+  ],
+  en: [
+    { name: 'Groceries', icon: '🍔', category_type: 'expense' },
+    { name: 'Transport', icon: '🚗', category_type: 'expense' },
+    { name: 'Utilities', icon: '⚡', category_type: 'expense' },
+    { name: 'Entertainment', icon: '🎮', category_type: 'expense' },
+    { name: 'Health', icon: '🏥', category_type: 'expense' },
+    { name: 'Shopping', icon: '🛍️', category_type: 'expense' },
+    { name: 'Investment', icon: '📈', category_type: 'investment' },
+    { name: 'Salary', icon: '💵', category_type: 'income' },
+    { name: 'Bonus', icon: '🎁', category_type: 'income' },
+    { name: 'Other', icon: '📌', category_type: null },
+  ],
+};
+
+const DEFAULT_ACCOUNTS: Record<Lang, { name: string; icon: string; initial_balance: number; is_favorite: boolean }[]> = {
+  it: [
+    { name: 'Conto Corrente', icon: '🏦', initial_balance: 0, is_favorite: true },
+    { name: 'Contanti', icon: '💵', initial_balance: 0, is_favorite: false },
+  ],
+  en: [
+    { name: 'Checking Account', icon: '🏦', initial_balance: 0, is_favorite: true },
+    { name: 'Cash', icon: '💵', initial_balance: 0, is_favorite: false },
+  ],
+};
 
 // ==================== API SERVICE ====================
 
@@ -191,12 +218,9 @@ class ApiService {
     return (data || []).map(mapAccount);
   }
 
-  async createDefaultAccounts(): Promise<Account[]> {
+  async createDefaultAccounts(lang: Lang = 'en'): Promise<Account[]> {
     const userId = await getCurrentUserId();
-    const defaults = [
-      { user_id: userId, name: 'Conto Corrente', icon: '🏦', initial_balance: 0, is_favorite: true },
-      { user_id: userId, name: 'Contanti', icon: '💵', initial_balance: 0, is_favorite: false },
-    ];
+    const defaults = DEFAULT_ACCOUNTS[lang].map(a => ({ ...a, user_id: userId }));
     const { data, error } = await supabase.from('accounts').insert(defaults).select();
     if (error) throw error;
     return (data || []).map(mapAccount);
@@ -239,13 +263,13 @@ class ApiService {
     return (data || []).map(mapCategory);
   }
 
-  async createDefaultCategories(existing: CategoryWithStats[]): Promise<CategoryWithStats[]> {
+  async createDefaultCategories(existing: CategoryWithStats[], lang: Lang = 'en'): Promise<CategoryWithStats[]> {
     const userId = await getCurrentUserId();
     const hasExpense = existing.some(c => c.category_type === 'expense' || c.category_type == null);
     const hasIncome = existing.some(c => c.category_type === 'income');
     const hasInvestment = existing.some(c => c.category_type === 'investment');
 
-    const toCreate = DEFAULT_CATEGORIES.filter(cat => {
+    const toCreate = DEFAULT_CATEGORIES[lang].filter(cat => {
       const isExpense = cat.category_type === 'expense' || cat.category_type === null;
       const isIncome = cat.category_type === 'income';
       const isInvestment = cat.category_type === 'investment';

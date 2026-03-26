@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect, useRef, type ReactNode } from 'react';
+import i18n from '../i18n';
 import { apiService } from '../services/api';
 import { supabase } from '../services/supabase';
 import type { Account, Category, Transaction, Transfer, Portfolio } from '../types';
@@ -140,15 +141,16 @@ export function DataProvider({ children }: DataProviderProps) {
       ]);
       // Controllo rigido: crea default se mancanti
       let finalAccounts = accountsData;
+      const lang = i18n.language?.startsWith('it') ? 'it' : 'en';
       if (accountsData.length === 0) {
-        finalAccounts = await apiService.createDefaultAccounts();
+        finalAccounts = await apiService.createDefaultAccounts(lang);
       }
       let finalCategories = categoriesData;
       const hasExpense = categoriesData.some(c => c.category_type === 'expense' || c.category_type == null);
       const hasIncome = categoriesData.some(c => c.category_type === 'income');
       const hasInvestment = categoriesData.some(c => c.category_type === 'investment');
       if (!hasExpense || !hasIncome || !hasInvestment) {
-        finalCategories = await apiService.createDefaultCategories(categoriesData);
+        finalCategories = await apiService.createDefaultCategories(categoriesData, lang);
       }
       setAccounts(finalAccounts);
       setCategories(finalCategories);
