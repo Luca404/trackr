@@ -43,6 +43,11 @@ export default function PortfoliosPage() {
   const [loadingSummaries, setLoadingSummaries] = useState(false);
 
   const investmentCategories = categories.filter(c => c.category_type === 'investment');
+  const [hideBalances, setHideBalances] = useState(() => localStorage.getItem('hideBalances') === 'true');
+  const toggleHideBalances = () => {
+    setHideBalances(h => { const next = !h; localStorage.setItem('hideBalances', String(next)); return next; });
+  };
+  const mask = (formatted: string) => '•'.repeat(formatted.length);
 
   const SUMMARIES_CACHE_KEY = 'pf_summaries_cache';
   const SUMMARIES_CACHE_TTL = 24 * 60 * 60 * 1000; // 24h
@@ -178,31 +183,31 @@ export default function PortfoliosPage() {
                 <div className="sticky top-0 z-10 -mx-4 px-4 pt-1 pb-3 bg-gray-50 dark:bg-gray-900 relative">
                   <div className="card py-5">
                     <div className="text-sm text-gray-500 dark:text-gray-400 mb-1 text-center">{t('portfolios.totalInvestments')}</div>
-                    <div className="text-4xl font-bold text-center">
-                      {loadingSummaries && !hasSummaries
-                        ? <span className="inline-block h-10 w-40 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
-                        : <span className={totalPL >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>
-                            {formatCurrency(totalInvestments)}
-                          </span>
-                      }
+                    <div className="flex items-center justify-center gap-3">
+                      <div className="text-4xl font-bold">
+                        {loadingSummaries && !hasSummaries
+                          ? <span className="inline-block h-10 w-40 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
+                          : <span className={totalPL >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>
+                              {hideBalances ? mask(formatCurrency(totalInvestments)) : formatCurrency(totalInvestments)}
+                            </span>
+                        }
+                      </div>
+                      <button
+                        onClick={toggleHideBalances}
+                        className="text-gray-400 dark:text-gray-500 text-xl outline-none focus:outline-none select-none"
+                        style={{ WebkitTapHighlightColor: 'transparent' }}
+                      >
+                        {hideBalances ? '🙈' : '👁️'}
+                      </button>
                     </div>
                     {hasSummaries && (
                       <div className={`text-sm text-center mt-1 ${totalPL >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
-                        {totalPL >= 0 ? '+' : ''}{formatCurrency(totalPL)}
+                        {hideBalances
+                          ? mask((totalPL >= 0 ? '+' : '') + formatCurrency(totalPL))
+                          : (totalPL >= 0 ? '+' : '') + formatCurrency(totalPL)
+                        }
                       </div>
                     )}
-                    <a
-                      href="https://portfolio-tracker-one-tau.vercel.app/"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="mt-4 flex items-center justify-center gap-2 w-full py-2.5 rounded-xl bg-primary-500 hover:bg-primary-600 active:bg-primary-700 text-white text-sm font-medium transition-colors"
-                    >
-                      <span>📊</span>
-                      <span>{t('portfolios.analyzePortfolio')}</span>
-                      <svg className="w-3.5 h-3.5 opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                      </svg>
-                    </a>
                   </div>
                   <div className="absolute left-0 right-0 h-6 bg-gradient-to-b from-gray-50 dark:from-gray-900 to-transparent pointer-events-none" style={{ top: '100%' }} />
                 </div>
@@ -251,20 +256,20 @@ export default function PortfoliosPage() {
                         <div>
                           <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">{t('portfolios.currentValueLabel')}</div>
                           <div className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                            {formatCurrency(sm.total_value, sm.reference_currency)}
+                            {hideBalances ? mask(formatCurrency(sm.total_value, sm.reference_currency)) : formatCurrency(sm.total_value, sm.reference_currency)}
                           </div>
                         </div>
                         <div>
                           <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">{t('portfolios.plLabel')}</div>
                           <div className={`text-lg font-semibold ${sm.total_gain_loss >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
-                            {formatCurrency(sm.total_gain_loss, sm.reference_currency)}
-                            <span className="text-sm ml-1">
-                              ({sm.total_gain_loss_pct >= 0 ? '+' : ''}{sm.total_gain_loss_pct.toFixed(2)}%)
-                            </span>
+                            {hideBalances
+                              ? mask(formatCurrency(sm.total_gain_loss, sm.reference_currency))
+                              : <>{formatCurrency(sm.total_gain_loss, sm.reference_currency)}<span className="text-sm ml-1">({sm.total_gain_loss_pct >= 0 ? '+' : ''}{sm.total_gain_loss_pct.toFixed(2)}%)</span></>
+                            }
                           </div>
                           {sm.xirr != null && (
                             <div className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
-                              {t('portfolios.xirrLabel')}: {sm.xirr >= 0 ? '+' : ''}{sm.xirr.toFixed(2)}%
+                              {t('portfolios.xirrLabel')}: {hideBalances ? '••••' : `${sm.xirr >= 0 ? '+' : ''}${sm.xirr.toFixed(2)}%`}
                             </div>
                           )}
                         </div>
@@ -282,6 +287,22 @@ export default function PortfoliosPage() {
               >
                 <div className="w-10 h-10 rounded-full border-2 border-gray-300 dark:border-gray-600 flex items-center justify-center text-gray-400 dark:text-gray-500 font-bold text-2xl">+</div>
               </div>
+
+              {/* Analyze link */}
+              {portfolios.length > 0 && (
+                <a
+                  href="https://portfolio-tracker-one-tau.vercel.app/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-center gap-2 py-3 text-sm text-primary-600 dark:text-primary-400 font-medium"
+                >
+                  <span>📊</span>
+                  <span>{t('portfolios.analyzePortfolio')}</span>
+                  <svg className="w-3.5 h-3.5 opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                  </svg>
+                </a>
+              )}
             </>
           )
         }
