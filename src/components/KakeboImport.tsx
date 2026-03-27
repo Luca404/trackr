@@ -24,7 +24,7 @@ interface InvDetail {
   amount: number;
   description: string | null;
   destContoId: number;
-  instrumentType: 'etf' | 'stock';
+  instrumentType: 'etf' | 'stock' | 'bond';
   ticker: string;
   quantity: string;
   price: string;
@@ -37,7 +37,7 @@ interface InvPosition {
   totalAmount: number;    // portfolio-level, for display
   transferCount: number;  // portfolio-level, for display
   lastDate: string;
-  instrumentType: 'etf' | 'stock';
+  instrumentType: 'etf' | 'stock' | 'bond';
   ticker: string;
   totalQty: string;
   avgPrice: string;
@@ -70,7 +70,7 @@ interface TickerCardProps {
   totalAmount?: number;
   transferCount?: number;
   // form values
-  instrumentType: 'etf' | 'stock';
+  instrumentType: 'etf' | 'stock' | 'bond';
   ticker: string;
   quantity: string;
   price: string;
@@ -78,7 +78,7 @@ interface TickerCardProps {
   priceLabel: string;
   showValidation?: boolean;
   onRemove?: () => void;
-  onChange: (id: string, updates: Partial<{ instrumentType: 'etf' | 'stock'; ticker: string; quantity: string; price: string }>) => void;
+  onChange: (id: string, updates: Partial<{ instrumentType: 'etf' | 'stock' | 'bond'; ticker: string; quantity: string; price: string }>) => void;
 }
 
 function TickerCard({
@@ -87,71 +87,37 @@ function TickerCard({
   onChange,
 }: TickerCardProps) {
   const { t } = useTranslation();
-  const [ucitsCache, setUcitsCache] = useState<any[]>([]);
   const [symbolOptions, setSymbolOptions] = useState<any[]>([]);
   const [symbolLoading, setSymbolLoading] = useState(false);
   const [symbolSearchOpen, setSymbolSearchOpen] = useState(false);
   const [symbolSearchCompleted, setSymbolSearchCompleted] = useState(false);
-  const ucitsLoadedRef = useRef(false);
   const skipNextSearch = useRef(false);
 
-  // Load UCITS cache from sessionStorage or API
-  useEffect(() => {
-    if (instrumentType !== 'etf' || ucitsLoadedRef.current || ucitsCache.length > 0) return;
-    const cached = sessionStorage.getItem('ucits_etf_list');
-    if (cached) { setUcitsCache(JSON.parse(cached)); return; }
-    ucitsLoadedRef.current = true;
-    fetch(`${PF_BACKEND_URL}/symbols/ucits`)
-      .then(r => r.ok ? r.json() : null)
-      .then(data => { if (data?.etfs) { setUcitsCache(data.etfs); sessionStorage.setItem('ucits_etf_list', JSON.stringify(data.etfs)); } })
-      .catch(() => { ucitsLoadedRef.current = false; });
-  }, [instrumentType, ucitsCache.length]);
-
-  // Symbol search with debounce
+  // Symbol search with debounce — always uses backend API
   useEffect(() => {
     if (skipNextSearch.current) { skipNextSearch.current = false; return; }
     if (!ticker || ticker.length < 2) {
       setSymbolOptions([]); setSymbolSearchCompleted(false); setSymbolSearchOpen(false); return;
     }
-    // For ETF: wait until cache is loaded before searching
-    if (instrumentType === 'etf' && ucitsCache.length === 0) return;
-
     setSymbolSearchCompleted(false);
     const controller = new AbortController();
     const run = async () => {
       setSymbolLoading(true);
-      if (instrumentType === 'etf') {
-        await new Promise(r => setTimeout(r, 100));
-        if (controller.signal.aborted) return;
-        const q = ticker.toUpperCase();
-        const filtered = ucitsCache.filter(item => {
-          const sym = (item.symbol || '').toUpperCase();
-          const isin = (item.isin || '').toUpperCase();
-          return sym.startsWith(q) || isin.startsWith(q);
-        }).slice(0, 25);
-        if (!controller.signal.aborted) {
-          setSymbolOptions(filtered);
-          setSymbolSearchOpen(true);
-          setSymbolLoading(false);
-          setSymbolSearchCompleted(true);
-        }
-      } else {
-        try {
-          const res = await fetch(
-            `${PF_BACKEND_URL}/symbols/search?q=${encodeURIComponent(ticker)}&instrument_type=stock`,
-            { signal: controller.signal }
-          );
-          if (res.ok) { const data = await res.json(); setSymbolOptions(data.results || []); setSymbolSearchOpen(true); }
-        } catch (err: any) {
-          if (err.name !== 'AbortError') console.error(err);
-        } finally {
-          if (!controller.signal.aborted) { setSymbolLoading(false); setSymbolSearchCompleted(true); }
-        }
+      try {
+        const res = await fetch(
+          `${PF_BACKEND_URL}/symbols/search?q=${encodeURIComponent(ticker)}&instrument_type=${instrumentType}`,
+          { signal: controller.signal }
+        );
+        if (res.ok) { const data = await res.json(); setSymbolOptions(data.results || []); setSymbolSearchOpen(true); }
+      } catch (err: any) {
+        if (err.name !== 'AbortError') console.error(err);
+      } finally {
+        if (!controller.signal.aborted) { setSymbolLoading(false); setSymbolSearchCompleted(true); }
       }
     };
-    const timer = setTimeout(run, 250);
+    const timer = setTimeout(run, 300);
     return () => { clearTimeout(timer); controller.abort(); };
-  }, [ticker, instrumentType, ucitsCache]);
+  }, [ticker, instrumentType]);
 
   const selectSymbol = (item: any) => {
     skipNextSearch.current = true;
@@ -201,16 +167,16 @@ function TickerCard({
         </div>
       </div>
 
-      {/* ETF / Stock toggle */}
+      {/* ETF / Stock / Bond toggle */}
       <div className="flex rounded-lg overflow-hidden border border-gray-200 dark:border-gray-600">
-        {(['etf', 'stock'] as const).map(typ => (
+        {(['etf', 'stock', 'bond'] as const).map(typ => (
           <button
             key={typ}
             type="button"
             onClick={() => { onChange(id, { instrumentType: typ, ticker: '' }); setSymbolOptions([]); setSymbolSearchOpen(false); setSymbolSearchCompleted(false); }}
             className={`flex-1 py-1.5 text-xs font-medium transition-colors ${instrumentType === typ ? 'bg-blue-500 text-white' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400'}`}
           >
-            {typ === 'etf' ? 'ETF' : 'Stock'}
+            {typ === 'etf' ? 'ETF' : typ === 'stock' ? 'Stock' : 'Bond'}
           </button>
         ))}
       </div>
@@ -223,7 +189,7 @@ function TickerCard({
         <div className="relative">
           <input
             className="w-full px-2 py-1.5 text-xs rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent uppercase font-mono"
-            placeholder={instrumentType === 'etf' ? 'VWCE, SWDA, IE00...' : 'AAPL, MSFT...'}
+            placeholder={instrumentType === 'etf' ? 'VWCE, SWDA, IE00...' : instrumentType === 'bond' ? 'BTP, XS12...' : 'AAPL, MSFT...'}
             value={ticker}
             onChange={e => onChange(id, { ticker: e.target.value.toUpperCase() })}
             onFocus={() => { if (symbolOptions.length > 0) setSymbolSearchOpen(true); }}
