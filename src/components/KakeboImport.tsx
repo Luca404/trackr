@@ -30,11 +30,12 @@ interface InvDetail {
   price: string;
 }
 
-// Mode B: one entry per investment portfolio account (current position)
+// Mode B: one entry per position (multiple per portfolio allowed)
 interface InvPosition {
+  id: string;
   contoId: number;
-  totalAmount: number;
-  transferCount: number;
+  totalAmount: number;    // portfolio-level, for display
+  transferCount: number;  // portfolio-level, for display
   lastDate: string;
   instrumentType: 'etf' | 'stock';
   ticker: string;
@@ -75,13 +76,14 @@ interface TickerCardProps {
   price: string;
   qtyLabel: string;
   priceLabel: string;
-  required?: boolean;
+  showValidation?: boolean;
+  onRemove?: () => void;
   onChange: (id: string, updates: Partial<{ instrumentType: 'etf' | 'stock'; ticker: string; quantity: string; price: string }>) => void;
 }
 
 function TickerCard({
   id, contoName, date, amount, totalAmount, transferCount,
-  instrumentType, ticker, quantity, price, qtyLabel, priceLabel, required,
+  instrumentType, ticker, quantity, price, qtyLabel, priceLabel, showValidation, onRemove,
   onChange,
 }: TickerCardProps) {
   const { t } = useTranslation();
@@ -157,7 +159,7 @@ function TickerCard({
     setSymbolOptions([]); setSymbolSearchOpen(false);
   };
 
-  const missing = required && (!ticker.trim() || !quantity.trim() || !price.trim());
+  const missing = showValidation && (!ticker.trim() || !quantity.trim() || !price.trim());
 
   return (
     <div className={`rounded-xl border p-3 space-y-3 ${missing ? 'border-red-300 dark:border-red-700' : 'border-gray-200 dark:border-gray-700'}`}>
@@ -175,19 +177,26 @@ function TickerCard({
             )}
           </div>
         </div>
-        <div className="text-right">
-          {amount != null && (
-            <div className="text-sm font-semibold text-gray-900 dark:text-white">
-              {amount.toLocaleString('it-IT', { style: 'currency', currency: 'EUR' })}
-            </div>
-          )}
-          {totalAmount != null && (
-            <>
+        <div className="flex items-center gap-2 ml-auto">
+          <div className="text-right">
+            {amount != null && (
               <div className="text-sm font-semibold text-gray-900 dark:text-white">
-                {totalAmount.toLocaleString('it-IT', { style: 'currency', currency: 'EUR' })}
+                {amount.toLocaleString('it-IT', { style: 'currency', currency: 'EUR' })}
               </div>
-              <div className="text-xs text-gray-400">totale investito</div>
-            </>
+            )}
+            {totalAmount != null && (
+              <>
+                <div className="text-sm font-semibold text-gray-900 dark:text-white">
+                  {totalAmount.toLocaleString('it-IT', { style: 'currency', currency: 'EUR' })}
+                </div>
+                <div className="text-xs text-gray-400">totale investito</div>
+              </>
+            )}
+          </div>
+          {onRemove && (
+            <button type="button" onClick={onRemove} className="p-1 text-gray-400 hover:text-red-500 transition-colors shrink-0" aria-label="Rimuovi">
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+            </button>
           )}
         </div>
       </div>
@@ -298,6 +307,7 @@ export default function KakeboImport({ onClose }: Props) {
   const [invMode, setInvMode] = useState<InvMode>('orders');
   const [invDetails, setInvDetails] = useState<InvDetail[]>([]);    // mode A
   const [invPositions, setInvPositions] = useState<InvPosition[]>([]); // mode B
+  const [validated, setValidated] = useState(false);
 
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<{
@@ -366,21 +376,12 @@ export default function KakeboImport({ onClose }: Props) {
       }));
     setInvDetails(details);
 
-    // Build mode B: one InvPosition per inv conto
-    const posMap = new Map<number, InvPosition>();
+    // Build mode B: one InvPosition per inv conto (user can add more later)
+    const posMap = new Map<number, { totalAmount: number; transferCount: number; lastDate: string }>();
     for (const m of invTransfers) {
       const date = msToDate(m.dataOperazione);
       if (!posMap.has(m.contoId)) {
-        posMap.set(m.contoId, {
-          contoId: m.contoId,
-          totalAmount: Math.abs(m.importo1),
-          transferCount: 1,
-          lastDate: date,
-          instrumentType: 'etf',
-          ticker: '',
-          totalQty: '',
-          avgPrice: '',
-        });
+        posMap.set(m.contoId, { totalAmount: Math.abs(m.importo1), transferCount: 1, lastDate: date });
       } else {
         const p = posMap.get(m.contoId)!;
         p.totalAmount += Math.abs(m.importo1);
@@ -388,7 +389,15 @@ export default function KakeboImport({ onClose }: Props) {
         if (date > p.lastDate) p.lastDate = date;
       }
     }
-    setInvPositions(Array.from(posMap.values()));
+    setInvPositions(Array.from(posMap.entries()).map(([contoId, info]) => ({
+      id: `${contoId}-0`,
+      contoId,
+      ...info,
+      instrumentType: 'etf' as const,
+      ticker: '',
+      totalQty: '',
+      avgPrice: '',
+    })));
     setStep('inv_details');
   };
 
@@ -396,8 +405,27 @@ export default function KakeboImport({ onClose }: Props) {
     setInvDetails(prev => prev.map(d => d.movimentoId === movimentoId ? { ...d, ...updates } : d));
   };
 
-  const updatePosition = (contoId: number, updates: Partial<Pick<InvPosition, 'instrumentType' | 'ticker' | 'totalQty' | 'avgPrice'>>) => {
-    setInvPositions(prev => prev.map(p => p.contoId === contoId ? { ...p, ...updates } : p));
+  const updatePosition = (posId: string, updates: Partial<Pick<InvPosition, 'instrumentType' | 'ticker' | 'totalQty' | 'avgPrice'>>) => {
+    setInvPositions(prev => prev.map(p => p.id === posId ? { ...p, ...updates } : p));
+  };
+
+  const addPosition = (contoId: number) => {
+    const ref = invPositions.find(p => p.contoId === contoId)!;
+    setInvPositions(prev => [...prev, {
+      id: `${contoId}-${Date.now()}`,
+      contoId,
+      totalAmount: ref.totalAmount,
+      transferCount: ref.transferCount,
+      lastDate: ref.lastDate,
+      instrumentType: 'etf',
+      ticker: '',
+      totalQty: '',
+      avgPrice: '',
+    }]);
+  };
+
+  const removePosition = (posId: string) => {
+    setInvPositions(prev => prev.filter(p => p.id !== posId));
   };
 
   // ── step 4: import ──────────────────────────────────────────────────────────
@@ -407,13 +435,18 @@ export default function KakeboImport({ onClose }: Props) {
 
     // Mode A validation: all fields required
     if (invMode === 'orders' && invDetails.length > 0) {
-      const incomplete = invDetails.some(d => !d.ticker.trim() || !d.quantity.trim() || !d.price.trim());
-      if (incomplete) {
-        setError('Compila tutti i campi ticker, quantità e prezzo per ogni operazione');
+      const firstIncomplete = invDetails.find(d => !d.ticker.trim() || !d.quantity.trim() || !d.price.trim());
+      if (firstIncomplete) {
+        setValidated(true);
+        setError('Compila tutti i campi per ogni operazione');
+        setTimeout(() => {
+          document.getElementById(`card-${firstIncomplete.movimentoId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 50);
         return;
       }
     }
 
+    setValidated(false);
     setStep('importing');
     setError(null);
 
@@ -753,7 +786,7 @@ export default function KakeboImport({ onClose }: Props) {
           <div className="flex rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700">
             <button
               type="button"
-              onClick={() => setInvMode('orders')}
+              onClick={() => { setInvMode('orders'); setValidated(false); setError(null); }}
               className={`flex-1 py-2.5 text-xs font-medium transition-colors text-center leading-snug ${invMode === 'orders' ? 'bg-primary-500 text-white' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400'}`}
             >
               Ordini storici
@@ -761,7 +794,7 @@ export default function KakeboImport({ onClose }: Props) {
             </button>
             <button
               type="button"
-              onClick={() => setInvMode('positions')}
+              onClick={() => { setInvMode('positions'); setValidated(false); setError(null); }}
               className={`flex-1 py-2.5 text-xs font-medium transition-colors text-center leading-snug ${invMode === 'positions' ? 'bg-primary-500 text-white' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400'}`}
             >
               Posizioni correnti
@@ -784,48 +817,75 @@ export default function KakeboImport({ onClose }: Props) {
             {invMode === 'orders' && invDetails.map(detail => {
               const conto = parsed?.conti.find(c => c.id === detail.destContoId);
               return (
-                <TickerCard
-                  key={detail.movimentoId}
-                  id={String(detail.movimentoId)}
-                  contoName={conto?.nome.trim() ?? '—'}
-                  date={detail.date}
-                  amount={detail.amount}
-                  instrumentType={detail.instrumentType}
-                  ticker={detail.ticker}
-                  quantity={detail.quantity}
-                  price={detail.price}
-                  qtyLabel={t('kakebo.qty')}
-                  priceLabel={t('kakebo.pricePerUnit')}
-                  required
-                  onChange={(_, updates) => updateDetail(detail.movimentoId, updates)}
-                />
+                <div key={detail.movimentoId} id={`card-${detail.movimentoId}`}>
+                  <TickerCard
+                    id={String(detail.movimentoId)}
+                    contoName={conto?.nome.trim() ?? '—'}
+                    date={detail.date}
+                    amount={detail.amount}
+                    instrumentType={detail.instrumentType}
+                    ticker={detail.ticker}
+                    quantity={detail.quantity}
+                    price={detail.price}
+                    qtyLabel={t('kakebo.qty')}
+                    priceLabel={t('kakebo.pricePerUnit')}
+                    showValidation={validated}
+                    onChange={(_, updates) => updateDetail(detail.movimentoId, updates)}
+                  />
+                </div>
               );
             })}
 
-            {invMode === 'positions' && invPositions.map(pos => {
-              const conto = parsed?.conti.find(c => c.id === pos.contoId);
-              return (
-                <TickerCard
-                  key={pos.contoId}
-                  id={String(pos.contoId)}
-                  contoName={conto?.nome.trim() ?? '—'}
-                  totalAmount={pos.totalAmount}
-                  transferCount={pos.transferCount}
-                  instrumentType={pos.instrumentType}
-                  ticker={pos.ticker}
-                  quantity={pos.totalQty}
-                  price={pos.avgPrice}
-                  qtyLabel="Quantità totale"
-                  priceLabel="Prezzo medio di carico"
-                  onChange={(_, updates) => updatePosition(pos.contoId, {
-                    ...(updates.instrumentType !== undefined && { instrumentType: updates.instrumentType }),
-                    ...(updates.ticker !== undefined && { ticker: updates.ticker }),
-                    ...(updates.quantity !== undefined && { totalQty: updates.quantity }),
-                    ...(updates.price !== undefined && { avgPrice: updates.price }),
-                  })}
-                />
-              );
-            })}
+            {invMode === 'positions' && (() => {
+              // Group positions by contoId
+              const groups = new Map<number, InvPosition[]>();
+              for (const pos of invPositions) {
+                if (!groups.has(pos.contoId)) groups.set(pos.contoId, []);
+                groups.get(pos.contoId)!.push(pos);
+              }
+              return Array.from(groups.entries()).map(([contoId, positions]) => {
+                const conto = parsed?.conti.find(c => c.id === contoId);
+                return (
+                  <div key={contoId} className="space-y-2">
+                    <div className="flex items-center justify-between px-1">
+                      <span className="text-xs font-medium text-gray-600 dark:text-gray-400">
+                        📈 {conto?.nome.trim()}
+                      </span>
+                      <span className="text-xs text-gray-400">
+                        {positions[0].totalAmount.toLocaleString('it-IT', { style: 'currency', currency: 'EUR' })} investiti · {positions[0].transferCount} acquisti
+                      </span>
+                    </div>
+                    {positions.map(pos => (
+                      <TickerCard
+                        key={pos.id}
+                        id={pos.id}
+                        contoName=""
+                        instrumentType={pos.instrumentType}
+                        ticker={pos.ticker}
+                        quantity={pos.totalQty}
+                        price={pos.avgPrice}
+                        qtyLabel="Quantità totale"
+                        priceLabel="Prezzo medio di carico"
+                        onRemove={positions.length > 1 ? () => removePosition(pos.id) : undefined}
+                        onChange={(_, updates) => updatePosition(pos.id, {
+                          ...(updates.instrumentType !== undefined && { instrumentType: updates.instrumentType }),
+                          ...(updates.ticker !== undefined && { ticker: updates.ticker }),
+                          ...(updates.quantity !== undefined && { totalQty: updates.quantity }),
+                          ...(updates.price !== undefined && { avgPrice: updates.price }),
+                        })}
+                      />
+                    ))}
+                    <button
+                      type="button"
+                      className="w-full py-2 text-xs text-primary-500 dark:text-primary-400 border border-dashed border-primary-300 dark:border-primary-700 rounded-xl hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-colors"
+                      onClick={() => addPosition(contoId)}
+                    >
+                      + Aggiungi posizione
+                    </button>
+                  </div>
+                );
+              });
+            })()}
           </div>
 
           {error && <p className="text-sm text-red-500 dark:text-red-400">{error}</p>}
