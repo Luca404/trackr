@@ -87,37 +87,83 @@ function TickerCard({
   onChange,
 }: TickerCardProps) {
   const { t } = useTranslation();
+  const [ucitsCache, setUcitsCache] = useState<any[]>([]);
   const [symbolOptions, setSymbolOptions] = useState<any[]>([]);
   const [symbolLoading, setSymbolLoading] = useState(false);
   const [symbolSearchOpen, setSymbolSearchOpen] = useState(false);
   const [symbolSearchCompleted, setSymbolSearchCompleted] = useState(false);
+  const ucitsLoadedRef = useRef(false);
   const skipNextSearch = useRef(false);
 
-  // Symbol search with debounce — always uses backend API
+  // Load UCITS cache for ETF (sessionStorage → API) — same approach as TransactionForm
+  useEffect(() => {
+    if (instrumentType !== 'etf' || ucitsLoadedRef.current || ucitsCache.length > 0) return;
+    const cached = sessionStorage.getItem('ucits_etf_list');
+    if (cached) {
+      try { setUcitsCache(JSON.parse(cached)); ucitsLoadedRef.current = true; return; } catch {}
+    }
+    ucitsLoadedRef.current = true;
+    fetch(`${PF_BACKEND_URL}/symbols/ucits`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data?.results) {
+          setUcitsCache(data.results);
+          try { sessionStorage.setItem('ucits_etf_list', JSON.stringify(data.results)); } catch {}
+        }
+      })
+      .catch(() => { ucitsLoadedRef.current = false; });
+  }, [instrumentType, ucitsCache.length]);
+
+  // Symbol search with debounce
   useEffect(() => {
     if (skipNextSearch.current) { skipNextSearch.current = false; return; }
     if (!ticker || ticker.length < 2) {
       setSymbolOptions([]); setSymbolSearchCompleted(false); setSymbolSearchOpen(false); return;
     }
+    // Bond: no search, manual input only
+    if (instrumentType === 'bond') {
+      setSymbolOptions([]); setSymbolLoading(false); setSymbolSearchCompleted(false); setSymbolSearchOpen(false); return;
+    }
+    // ETF: wait for cache
+    if (instrumentType === 'etf' && ucitsCache.length === 0) return;
+
     setSymbolSearchCompleted(false);
     const controller = new AbortController();
     const run = async () => {
       setSymbolLoading(true);
-      try {
-        const res = await fetch(
-          `${PF_BACKEND_URL}/symbols/search?q=${encodeURIComponent(ticker)}&instrument_type=${instrumentType}`,
-          { signal: controller.signal }
-        );
-        if (res.ok) { const data = await res.json(); setSymbolOptions(data.results || []); setSymbolSearchOpen(true); }
-      } catch (err: any) {
-        if (err.name !== 'AbortError') console.error(err);
-      } finally {
-        if (!controller.signal.aborted) { setSymbolLoading(false); setSymbolSearchCompleted(true); }
+      if (instrumentType === 'etf') {
+        await new Promise(r => setTimeout(r, 100));
+        if (controller.signal.aborted) return;
+        const q = ticker.toUpperCase();
+        const isIsin = /^[A-Z]{2}[A-Z0-9]{10}$/.test(q);
+        const filtered = ucitsCache.filter(item => {
+          const sym = (item.symbol || '').toUpperCase();
+          const isin = (item.isin || '').toUpperCase();
+          return sym.startsWith(q) || (isIsin && isin === q);
+        }).slice(0, 25);
+        if (!controller.signal.aborted) {
+          setSymbolOptions(filtered);
+          setSymbolSearchOpen(true);
+          setSymbolLoading(false);
+          setSymbolSearchCompleted(true);
+        }
+      } else {
+        try {
+          const res = await fetch(
+            `${PF_BACKEND_URL}/symbols/search?q=${encodeURIComponent(ticker)}&instrument_type=stock`,
+            { signal: controller.signal }
+          );
+          if (res.ok) { const data = await res.json(); setSymbolOptions(data.results || []); setSymbolSearchOpen(true); }
+        } catch (err: any) {
+          if (err.name !== 'AbortError') console.error(err);
+        } finally {
+          if (!controller.signal.aborted) { setSymbolLoading(false); setSymbolSearchCompleted(true); }
+        }
       }
     };
-    const timer = setTimeout(run, 300);
+    const timer = setTimeout(run, 250);
     return () => { clearTimeout(timer); controller.abort(); };
-  }, [ticker, instrumentType]);
+  }, [ticker, instrumentType, ucitsCache]);
 
   const selectSymbol = (item: any) => {
     skipNextSearch.current = true;
