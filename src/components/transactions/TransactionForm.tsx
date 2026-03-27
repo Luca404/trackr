@@ -56,7 +56,7 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
   });
 
   // Symbol search
-  const [instrumentType, setInstrumentType] = useState<'etf' | 'stock'>('etf');
+  const [instrumentType, setInstrumentType] = useState<'etf' | 'stock' | 'bond'>('etf');
   const [ucitsCache, setUcitsCache] = useState<any[]>([]);
   const [symbolOptions, setSymbolOptions] = useState<any[]>([]);
   const [symbolLoading, setSymbolLoading] = useState(false);
@@ -67,6 +67,9 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
   const [isinLookupLoading, setIsinLookupLoading] = useState(false);
   const [isinLookupError, setIsinLookupError] = useState(false);
   const ucitsLoadedRef = useRef(false);
+  const [bondMeta, setBondMeta] = useState<any>(null);
+  const [bondLookupLoading, setBondLookupLoading] = useState(false);
+  const [bondLookupError, setBondLookupError] = useState(false);
 
   const [selectedPortfolio, setSelectedPortfolio] = useState<Portfolio | null>(null);
 
@@ -178,6 +181,13 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
 
     const run = async () => {
       setSymbolLoading(true);
+      if (instrumentType === 'bond') {
+        setSymbolOptions([]);
+        setSymbolLoading(false);
+        setSymbolSearchCompleted(false);
+        setSymbolSearchOpen(false);
+        return;
+      }
       if (instrumentType === 'etf') {
         await new Promise(r => setTimeout(r, 100));
         if (controller.signal.aborted) return;
@@ -208,6 +218,30 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
     const timer = setTimeout(run, 250);
     return () => { clearTimeout(timer); controller.abort(); };
   }, [ticker, instrumentType, ucitsCache, isIsinStr]);
+
+  const handleBondLookup = async () => {
+    setBondLookupLoading(true);
+    setBondLookupError(false);
+    setBondMeta(null);
+    try {
+      const res = await fetch(`${PF_BACKEND_URL}/symbols/bond-lookup?isin=${ticker}`);
+      if (!res.ok) throw new Error('not found');
+      const data = await res.json();
+      const meta = data.metadata || {};
+      setBondMeta(meta);
+      setSelectedSymbolInfo({
+        name: meta.issuer || '',
+        exchange: 'XFRA',
+        currency: meta.currency || 'EUR',
+        ter: '',
+        isin: ticker,
+      });
+    } catch {
+      setBondLookupError(true);
+    } finally {
+      setBondLookupLoading(false);
+    }
+  };
 
   const handleIsinLookup = async () => {
     setIsinLookupLoading(true);
@@ -605,16 +639,24 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
           </button>
         </div>
 
-        {/* ETF / Stock toggle */}
+        {/* ETF / Stock / Bond toggle */}
         <div className="flex rounded-lg overflow-hidden border border-gray-300 dark:border-gray-600">
-          {(['etf', 'stock'] as const).map(t => (
+          {(['etf', 'stock', 'bond'] as const).map(inst => (
             <button
-              key={t}
+              key={inst}
               type="button"
-              onClick={() => { setInstrumentType(t); setTicker(''); setSelectedSymbolInfo(null); setSymbolOptions([]); setSymbolSearchCompleted(false); }}
-              className={`flex-1 py-2 text-sm font-medium transition-colors ${instrumentType === t ? 'bg-blue-500 text-white' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
+              onClick={() => {
+                setInstrumentType(inst);
+                setTicker('');
+                setSelectedSymbolInfo(null);
+                setSymbolOptions([]);
+                setSymbolSearchCompleted(false);
+                setBondMeta(null);
+                setBondLookupError(false);
+              }}
+              className={`flex-1 py-2 text-sm font-medium transition-colors ${instrumentType === inst ? 'bg-blue-500 text-white' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
             >
-              {t === 'etf' ? 'ETF' : 'Stock'}
+              {inst === 'etf' ? 'ETF' : inst === 'stock' ? 'Stock' : 'Bond'}
             </button>
           ))}
         </div>
@@ -622,13 +664,21 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
         {/* Ticker + Quantità */}
         <div className="grid grid-cols-2 gap-3">
           <div className="relative">
-            <label className={labelClass}>{instrumentType === 'etf' ? t('transactions.tickerOrIsin') : t('transactions.tickerOrName')}</label>
+            <label className={labelClass}>
+              {instrumentType === 'etf' ? t('transactions.tickerOrIsin') : instrumentType === 'bond' ? 'ISIN' : t('transactions.tickerOrName')}
+            </label>
             <div className="relative">
               <input
                 type="text"
                 value={ticker}
-                onChange={(e) => { setTicker(e.target.value.toUpperCase()); setSelectedSymbolInfo(null); setIsinLookupError(false); }}
-                placeholder={instrumentType === 'etf' ? 'Es. VWCE, SWDA' : 'Es. AAPL, MSFT'}
+                onChange={(e) => {
+                  setTicker(e.target.value.toUpperCase());
+                  setSelectedSymbolInfo(null);
+                  setIsinLookupError(false);
+                  setBondMeta(null);
+                  setBondLookupError(false);
+                }}
+                placeholder={instrumentType === 'etf' ? 'Es. VWCE, SWDA' : instrumentType === 'bond' ? 'Es. IT0005398406' : 'Es. AAPL, MSFT'}
                 className={inputClass + ' uppercase tracking-wider font-mono' + (symbolLoading ? ' pr-8' : '')}
                 onFocus={() => { if (symbolOptions.length > 0) setSymbolSearchOpen(true); }}
                 onBlur={() => setTimeout(() => setSymbolSearchOpen(false), 150)}
@@ -696,6 +746,27 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
               </div>
             )}
 
+            {/* Bond lookup button */}
+            {instrumentType === 'bond' && isIsinStr(ticker) && !bondMeta && (
+              <div className="mt-2 flex flex-col items-start gap-1">
+                {bondLookupError && <span className="text-red-500 text-xs">Non trovato (Börse Frankfurt)</span>}
+                <button
+                  type="button"
+                  onMouseDown={handleBondLookup}
+                  disabled={bondLookupLoading}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-60 transition text-xs"
+                >
+                  {bondLookupLoading && (
+                    <svg className="animate-spin h-3 w-3" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                    </svg>
+                  )}
+                  {bondLookupLoading ? t('transactions.searching') : 'Cerca obbligazione'}
+                </button>
+              </div>
+            )}
+
             {/* Info asset selezionato */}
             {selectedSymbolInfo?.name && (
               <div className="mt-1 text-xs text-gray-500 dark:text-gray-400 truncate">
@@ -708,7 +779,7 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
           </div>
 
           <div>
-            <label className={labelClass}>{t('transactions.quantity')}</label>
+            <label className={labelClass}>{instrumentType === 'bond' ? 'Nominale (€)' : t('transactions.quantity')}</label>
             <input
               type="number"
               inputMode="decimal"
@@ -723,10 +794,36 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
           </div>
         </div>
 
+        {/* Bond metadata panel */}
+        {bondMeta && (
+          <div className="grid grid-cols-2 gap-2 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl text-xs">
+            {bondMeta.issuer && (
+              <div><span className="text-gray-500 dark:text-gray-400">Emittente</span><div className="font-medium text-gray-900 dark:text-gray-100 truncate">{bondMeta.issuer}</div></div>
+            )}
+            {bondMeta.coupon != null && (
+              <div><span className="text-gray-500 dark:text-gray-400">Cedola</span><div className="font-medium text-gray-900 dark:text-gray-100">{bondMeta.coupon}%</div></div>
+            )}
+            {(bondMeta.maturity || bondMeta.maturity_bi) && (
+              <div><span className="text-gray-500 dark:text-gray-400">Scadenza</span><div className="font-medium text-gray-900 dark:text-gray-100">{bondMeta.maturity_bi || bondMeta.maturity}</div></div>
+            )}
+            {bondMeta.ytm_gross != null && (
+              <div><span className="text-gray-500 dark:text-gray-400">YTM lordo</span><div className="font-medium text-gray-900 dark:text-gray-100">{bondMeta.ytm_gross}%</div></div>
+            )}
+            {bondMeta.ytm_net != null && (
+              <div><span className="text-gray-500 dark:text-gray-400">YTM netto</span><div className="font-medium text-gray-900 dark:text-gray-100">{bondMeta.ytm_net}%</div></div>
+            )}
+            {bondMeta.duration != null && (
+              <div><span className="text-gray-500 dark:text-gray-400">Duration</span><div className="font-medium text-gray-900 dark:text-gray-100">{bondMeta.duration}</div></div>
+            )}
+          </div>
+        )}
+
         {/* Prezzo + Commissioni */}
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className={labelClass}>{t('transactions.pricePerUnit')} ({selectedSymbolInfo?.currency ? getCurrencySymbol(selectedSymbolInfo.currency) : '€'})</label>
+            <label className={labelClass}>
+              {instrumentType === 'bond' ? 'Price (% of par)' : `${t('transactions.pricePerUnit')} (${selectedSymbolInfo?.currency ? getCurrencySymbol(selectedSymbolInfo.currency) : '€'})`}
+            </label>
             <input
               type="number"
               inputMode="decimal"
@@ -764,6 +861,11 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
           {qty > 0 && price > 0 && commission > 0 && (
             <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
               {qty} × {formatCurrency(price)} + {formatCurrency(commission)} {t('transactions.commissions')}
+            </div>
+          )}
+          {instrumentType === 'bond' && qty > 0 && price > 0 && (
+            <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+              {qty}€ × {price}% / 100 = {formatCurrency(qty * price / 100)}
             </div>
           )}
         </div>
