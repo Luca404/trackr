@@ -266,6 +266,7 @@
     "transactions": "Transacciones",
     "categories": "Categorías",
     "period": "Período: {{from}} → {{to}}",
+    "transfersSummary": "{{total}} transferencias encontradas, {{inv}} de ellas a carteras",
     "accountsToImport": "Cuentas a importar",
     "invNote": "Las cuentas marcadas \"→ cartera\" no se crean como cuentas: se convierten en una cartera de inversión y las transferencias hacia ellas se convierten en transacciones de inversión.",
     "expenseToInv": "Categorías de gasto → inversión",

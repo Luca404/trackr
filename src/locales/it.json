@@ -266,6 +266,7 @@
     "transactions": "Transazioni",
     "categories": "Categorie",
     "period": "Periodo: {{from}} → {{to}}",
+    "transfersSummary": "{{total}} giroconti trovati, di cui {{inv}} verso portafogli",
     "accountsToImport": "Conti da importare",
     "invNote": "I conti selezionati come \"→ portafoglio\" non vengono creati come conti: diventano un portafoglio investimenti e i trasferimenti verso di essi diventano transazioni di investimento.",
     "expenseToInv": "Categorie di spesa → investimento",

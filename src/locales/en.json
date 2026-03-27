@@ -266,6 +266,7 @@
     "transactions": "Transactions",
     "categories": "Categories",
     "period": "Period: {{from}} → {{to}}",
+    "transfersSummary": "{{total}} transfers found, {{inv}} of which to portfolios",
     "accountsToImport": "Accounts to import",
     "invNote": "Accounts marked \"→ portfolio\" are not created as accounts: they become an investment portfolio and transfers to them become investment transactions.",
     "expenseToInv": "Expense categories → investment",

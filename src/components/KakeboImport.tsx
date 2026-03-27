@@ -425,6 +425,8 @@ export default function KakeboImport({ onClose }: Props) {
 
   const expenseCats = parsed?.categorie.filter(c => c.padreId == null && c.tipoMovimento === 0) ?? [];
   const incomeCats = parsed?.categorie.filter(c => c.padreId == null && c.tipoMovimento === 1) ?? [];
+  const totalTransfers = parsed?.movimenti.filter(m => m.tipo === -1).length ?? 0;
+  const invTransfers = parsed?.movimenti.filter(m => m.tipo === -1 && invContoIds.has(m.contoId)).length ?? 0;
   const existingAccountsCount = accounts.length;
   const existingCatsCount = categories.length;
   const existingTxCount = transactions.length + transfers.length;
@@ -477,6 +479,11 @@ export default function KakeboImport({ onClose }: Props) {
               <div className="text-xs text-gray-500 dark:text-gray-400">{t('kakebo.categories')}</div>
             </div>
           </div>
+          {totalTransfers > 0 && (
+            <p className="text-xs text-gray-500 dark:text-gray-400 text-center">
+              {t('kakebo.transfersSummary', { total: totalTransfers, inv: invTransfers })}
+            </p>
+          )}
           {dateRange && (
             <p className="text-xs text-gray-500 dark:text-gray-400 text-center">
               {t('kakebo.period', { from: dateRange.from, to: dateRange.to })}
