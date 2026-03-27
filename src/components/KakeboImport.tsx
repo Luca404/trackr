@@ -344,7 +344,7 @@ export default function KakeboImport({ onClose }: Props) {
             </svg>
             <span>{t('kakebo.chooseFile', { filename: 'kakebo_db' })}</span>
           </button>
-          <input ref={fileRef} type="file" className="hidden" accept="*/*"
+          <input ref={fileRef} type="file" className="hidden" accept=".db,.sqlite,.sqlite3,application/x-sqlite3,application/vnd.sqlite3"
             onChange={e => e.target.files?.[0] && handleFile(e.target.files[0])} />
           {error && <p className="mt-3 text-sm text-red-500 dark:text-red-400">{error}</p>}
         </div>
