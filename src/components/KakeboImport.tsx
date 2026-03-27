@@ -9,61 +9,45 @@ const PF_BACKEND_URL = import.meta.env.VITE_PF_BACKEND_URL || 'https://portfolio
 
 // ── Kakebo internal types ──────────────────────────────────────────────────────
 
-interface KConto {
-  id: number;
-  nome: string;
-  tipo: number;           // 0=normale, 1=investimento
-}
-
-interface KCategoria {
-  id: number;
-  padreId: number | null;
-  tipoMovimento: number;  // 0=spesa, 1=entrata
-  nome: string;
-}
-
+interface KConto { id: number; nome: string; tipo: number; }
+interface KCategoria { id: number; padreId: number | null; tipoMovimento: number; nome: string; }
 interface KMovimento {
-  id: number;
-  contoId: number;
-  categoriaId: number | null;
-  sottocategoriaId: number | null;
-  dataOperazione: number; // Unix ms
-  note: string | null;
-  tipo: number;           // 0=spesa, 1=entrata, -1=trasferimento
-  contoPrelievoId: number | null;
-  importo1: number;
+  id: number; contoId: number; categoriaId: number | null; sottocategoriaId: number | null;
+  dataOperazione: number; note: string | null; tipo: number; contoPrelievoId: number | null; importo1: number;
 }
+interface ParsedDB { conti: KConto[]; categorie: KCategoria[]; movimenti: KMovimento[]; }
 
-interface ParsedDB {
-  conti: KConto[];
-  categorie: KCategoria[];
-  movimenti: KMovimento[];
-}
-
-// Group of investment transfers to the same portfolio with the same amount
-interface InvGroup {
-  groupKey: string;
-  destContoId: number;
+// Mode A: one entry per individual investment transfer
+interface InvDetail {
+  movimentoId: number;
+  date: string;
   amount: number;
-  movimentoIds: number[];
-  dates: string[];
-  descriptions: (string | null)[];
+  description: string | null;
+  destContoId: number;
   instrumentType: 'etf' | 'stock';
   ticker: string;
   quantity: string;
   price: string;
 }
 
-// ── helpers ────────────────────────────────────────────────────────────────────
-
-function msToDate(ms: number): string {
-  return new Date(ms).toISOString().slice(0, 10);
+// Mode B: one entry per investment portfolio account (current position)
+interface InvPosition {
+  contoId: number;
+  totalAmount: number;
+  transferCount: number;
+  lastDate: string;
+  instrumentType: 'etf' | 'stock';
+  ticker: string;
+  totalQty: string;
+  avgPrice: string;
 }
 
+// ── helpers ────────────────────────────────────────────────────────────────────
+
+function msToDate(ms: number): string { return new Date(ms).toISOString().slice(0, 10); }
 function chunk<T>(arr: T[], size: number): T[][] {
   return Array.from({ length: Math.ceil(arr.length / size) }, (_, i) => arr.slice(i * size, (i + 1) * size));
 }
-
 function queryAll<T>(db: any, sql: string): T[] {
   const stmt = db.prepare(sql);
   const rows: T[] = [];
@@ -71,20 +55,35 @@ function queryAll<T>(db: any, sql: string): T[] {
   stmt.free();
   return rows;
 }
+function isInvestmentName(name: string): boolean { return /investiment/i.test(name); }
 
-function isInvestmentName(name: string): boolean {
-  return /investiment/i.test(name);
-}
+// ── TickerCard sub-component ──────────────────────────────────────────────────
 
-// ── InvGroupCard sub-component ─────────────────────────────────────────────────
-
-interface InvGroupCardProps {
-  group: InvGroup;
+interface TickerCardProps {
+  id: string;
   contoName: string;
-  onChange: (groupKey: string, updates: Partial<Pick<InvGroup, 'instrumentType' | 'ticker' | 'quantity' | 'price'>>) => void;
+  // header info (mode A)
+  date?: string;
+  amount?: number;
+  // header info (mode B)
+  totalAmount?: number;
+  transferCount?: number;
+  // form values
+  instrumentType: 'etf' | 'stock';
+  ticker: string;
+  quantity: string;
+  price: string;
+  qtyLabel: string;
+  priceLabel: string;
+  required?: boolean;
+  onChange: (id: string, updates: Partial<{ instrumentType: 'etf' | 'stock'; ticker: string; quantity: string; price: string }>) => void;
 }
 
-function InvGroupCard({ group, contoName, onChange }: InvGroupCardProps) {
+function TickerCard({
+  id, contoName, date, amount, totalAmount, transferCount,
+  instrumentType, ticker, quantity, price, qtyLabel, priceLabel, required,
+  onChange,
+}: TickerCardProps) {
   const { t } = useTranslation();
   const [ucitsCache, setUcitsCache] = useState<any[]>([]);
   const [symbolOptions, setSymbolOptions] = useState<any[]>([]);
@@ -94,37 +93,35 @@ function InvGroupCard({ group, contoName, onChange }: InvGroupCardProps) {
   const ucitsLoadedRef = useRef(false);
   const skipNextSearch = useRef(false);
 
-  // Load UCITS cache (sessionStorage → API) when ETF mode
+  // Load UCITS cache from sessionStorage or API
   useEffect(() => {
-    if (ucitsLoadedRef.current || ucitsCache.length > 0 || group.instrumentType !== 'etf') return;
+    if (instrumentType !== 'etf' || ucitsLoadedRef.current || ucitsCache.length > 0) return;
     const cached = sessionStorage.getItem('ucits_etf_list');
     if (cached) { setUcitsCache(JSON.parse(cached)); return; }
     ucitsLoadedRef.current = true;
     fetch(`${PF_BACKEND_URL}/symbols/ucits`)
       .then(r => r.ok ? r.json() : null)
-      .then(data => {
-        if (data?.etfs) {
-          setUcitsCache(data.etfs);
-          sessionStorage.setItem('ucits_etf_list', JSON.stringify(data.etfs));
-        }
-      })
+      .then(data => { if (data?.etfs) { setUcitsCache(data.etfs); sessionStorage.setItem('ucits_etf_list', JSON.stringify(data.etfs)); } })
       .catch(() => { ucitsLoadedRef.current = false; });
-  }, [group.instrumentType, ucitsCache.length]);
+  }, [instrumentType, ucitsCache.length]);
 
   // Symbol search with debounce
   useEffect(() => {
     if (skipNextSearch.current) { skipNextSearch.current = false; return; }
-    if (!group.ticker || group.ticker.length < 2) {
+    if (!ticker || ticker.length < 2) {
       setSymbolOptions([]); setSymbolSearchCompleted(false); setSymbolSearchOpen(false); return;
     }
+    // For ETF: wait until cache is loaded before searching
+    if (instrumentType === 'etf' && ucitsCache.length === 0) return;
+
     setSymbolSearchCompleted(false);
     const controller = new AbortController();
     const run = async () => {
       setSymbolLoading(true);
-      if (group.instrumentType === 'etf') {
+      if (instrumentType === 'etf') {
         await new Promise(r => setTimeout(r, 100));
         if (controller.signal.aborted) return;
-        const q = group.ticker.toUpperCase();
+        const q = ticker.toUpperCase();
         const filtered = ucitsCache.filter(item => {
           const sym = (item.symbol || '').toUpperCase();
           const isin = (item.isin || '').toUpperCase();
@@ -139,7 +136,7 @@ function InvGroupCard({ group, contoName, onChange }: InvGroupCardProps) {
       } else {
         try {
           const res = await fetch(
-            `${PF_BACKEND_URL}/symbols/search?q=${encodeURIComponent(group.ticker)}&instrument_type=stock`,
+            `${PF_BACKEND_URL}/symbols/search?q=${encodeURIComponent(ticker)}&instrument_type=stock`,
             { signal: controller.signal }
           );
           if (res.ok) { const data = await res.json(); setSymbolOptions(data.results || []); setSymbolSearchOpen(true); }
@@ -152,41 +149,45 @@ function InvGroupCard({ group, contoName, onChange }: InvGroupCardProps) {
     };
     const timer = setTimeout(run, 250);
     return () => { clearTimeout(timer); controller.abort(); };
-  }, [group.ticker, group.instrumentType, ucitsCache]);
+  }, [ticker, instrumentType, ucitsCache]);
 
   const selectSymbol = (item: any) => {
     skipNextSearch.current = true;
-    onChange(group.groupKey, { ticker: (item.symbol || '').toUpperCase() });
-    setSymbolOptions([]);
-    setSymbolSearchOpen(false);
+    onChange(id, { ticker: (item.symbol || '').toUpperCase() });
+    setSymbolOptions([]); setSymbolSearchOpen(false);
   };
 
-  const isEmpty = !group.ticker.trim() || !group.quantity.trim() || !group.price.trim();
+  const missing = required && (!ticker.trim() || !quantity.trim() || !price.trim());
 
   return (
-    <div className="rounded-xl border border-gray-200 dark:border-gray-700 p-3 space-y-3">
+    <div className={`rounded-xl border p-3 space-y-3 ${missing ? 'border-red-300 dark:border-red-700' : 'border-gray-200 dark:border-gray-700'}`}>
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <span className="text-base">📈</span>
           <div>
             <div className="text-xs font-medium text-gray-700 dark:text-gray-300">{contoName}</div>
-            {group.movimentoIds.length > 1 && (
+            {date && <div className="text-xs text-gray-400">{date}</div>}
+            {transferCount != null && (
               <div className="text-xs text-primary-500 dark:text-primary-400">
-                ×{group.movimentoIds.length} ({group.dates[0]} → {group.dates[group.dates.length - 1]})
+                {transferCount} acquist{transferCount === 1 ? 'o' : 'i'}
               </div>
-            )}
-            {group.movimentoIds.length === 1 && (
-              <div className="text-xs text-gray-400">{group.dates[0]}</div>
             )}
           </div>
         </div>
         <div className="text-right">
-          <div className="text-sm font-semibold text-gray-900 dark:text-white">
-            {group.amount.toLocaleString('it-IT', { style: 'currency', currency: 'EUR' })}
-          </div>
-          {group.movimentoIds.length > 1 && (
-            <div className="text-xs text-gray-400">per operazione</div>
+          {amount != null && (
+            <div className="text-sm font-semibold text-gray-900 dark:text-white">
+              {amount.toLocaleString('it-IT', { style: 'currency', currency: 'EUR' })}
+            </div>
+          )}
+          {totalAmount != null && (
+            <>
+              <div className="text-sm font-semibold text-gray-900 dark:text-white">
+                {totalAmount.toLocaleString('it-IT', { style: 'currency', currency: 'EUR' })}
+              </div>
+              <div className="text-xs text-gray-400">totale investito</div>
+            </>
           )}
         </div>
       </div>
@@ -197,8 +198,8 @@ function InvGroupCard({ group, contoName, onChange }: InvGroupCardProps) {
           <button
             key={typ}
             type="button"
-            onClick={() => { onChange(group.groupKey, { instrumentType: typ, ticker: '' }); setSymbolOptions([]); setSymbolSearchOpen(false); }}
-            className={`flex-1 py-1.5 text-xs font-medium transition-colors ${group.instrumentType === typ ? 'bg-blue-500 text-white' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400'}`}
+            onClick={() => { onChange(id, { instrumentType: typ, ticker: '' }); setSymbolOptions([]); setSymbolSearchOpen(false); setSymbolSearchCompleted(false); }}
+            className={`flex-1 py-1.5 text-xs font-medium transition-colors ${instrumentType === typ ? 'bg-blue-500 text-white' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400'}`}
           >
             {typ === 'etf' ? 'ETF' : 'Stock'}
           </button>
@@ -208,15 +209,16 @@ function InvGroupCard({ group, contoName, onChange }: InvGroupCardProps) {
       {/* Ticker search */}
       <div className="relative">
         <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">
-          {group.instrumentType === 'etf' ? t('transactions.tickerOrIsin') : t('transactions.tickerOrName')}
+          {instrumentType === 'etf' ? t('transactions.tickerOrIsin') : t('transactions.tickerOrName')}
         </label>
         <div className="relative">
           <input
             className="w-full px-2 py-1.5 text-xs rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent uppercase font-mono"
-            placeholder={group.instrumentType === 'etf' ? 'VWCE, SWDA, IE00...' : 'AAPL, MSFT...'}
-            value={group.ticker}
-            onChange={e => onChange(group.groupKey, { ticker: e.target.value.toUpperCase() })}
+            placeholder={instrumentType === 'etf' ? 'VWCE, SWDA, IE00...' : 'AAPL, MSFT...'}
+            value={ticker}
+            onChange={e => onChange(id, { ticker: e.target.value.toUpperCase() })}
             onFocus={() => { if (symbolOptions.length > 0) setSymbolSearchOpen(true); }}
+            onBlur={() => setTimeout(() => setSymbolSearchOpen(false), 150)}
           />
           {symbolLoading && (
             <svg className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400 animate-spin" fill="none" viewBox="0 0 24 24">
@@ -225,14 +227,14 @@ function InvGroupCard({ group, contoName, onChange }: InvGroupCardProps) {
             </svg>
           )}
         </div>
-        {symbolSearchOpen && group.ticker.length >= 2 && !symbolLoading && symbolSearchCompleted && (
+        {symbolSearchOpen && ticker.length >= 2 && !symbolLoading && symbolSearchCompleted && symbolOptions.length > 0 && (
           <div className="absolute z-20 left-0 right-0 top-full mt-1 bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden max-h-44 overflow-y-auto">
             {symbolOptions.map((item: any, i: number) => (
               <button
                 key={i}
                 type="button"
+                onMouseDown={() => selectSymbol(item)}
                 className="w-full text-left px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-700 border-b border-gray-100 dark:border-gray-700 last:border-0"
-                onClick={() => selectSymbol(item)}
               >
                 <div className="flex items-center gap-2">
                   <span className="font-mono font-bold text-xs text-gray-900 dark:text-gray-100">{item.symbol}</span>
@@ -249,34 +251,29 @@ function InvGroupCard({ group, contoName, onChange }: InvGroupCardProps) {
       {/* Qty + Price */}
       <div className="grid grid-cols-2 gap-2">
         <div>
-          <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">{t('kakebo.qty')}</label>
+          <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">{qtyLabel}</label>
           <input
             className="w-full px-2 py-1.5 text-xs rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
             placeholder="10"
-            type="number"
-            min="0"
-            step="any"
-            value={group.quantity}
-            onChange={e => onChange(group.groupKey, { quantity: e.target.value })}
+            type="number" min="0" step="any"
+            value={quantity}
+            onChange={e => onChange(id, { quantity: e.target.value })}
           />
         </div>
         <div>
-          <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">{t('kakebo.pricePerUnit')}</label>
+          <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">{priceLabel}</label>
           <input
             className="w-full px-2 py-1.5 text-xs rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
             placeholder="100.00"
-            type="number"
-            min="0"
-            step="any"
-            value={group.price}
-            onChange={e => onChange(group.groupKey, { price: e.target.value })}
+            type="number" min="0" step="any"
+            value={price}
+            onChange={e => onChange(id, { price: e.target.value })}
           />
         </div>
       </div>
 
-      {/* Empty warning */}
-      {isEmpty && (
-        <p className="text-xs text-amber-600 dark:text-amber-400">{t('kakebo.invDetailsSkipNote')}</p>
+      {missing && (
+        <p className="text-xs text-red-500 dark:text-red-400">Compila tutti i campi per creare l'ordine</p>
       )}
     </div>
   );
@@ -284,11 +281,9 @@ function InvGroupCard({ group, contoName, onChange }: InvGroupCardProps) {
 
 // ── main component ─────────────────────────────────────────────────────────────
 
-interface Props {
-  onClose: () => void;
-}
-
+interface Props { onClose: () => void; }
 type Step = 'upload' | 'options' | 'inv_details' | 'importing' | 'done';
+type InvMode = 'orders' | 'positions';
 
 export default function KakeboImport({ onClose }: Props) {
   const { t } = useTranslation();
@@ -299,7 +294,11 @@ export default function KakeboImport({ onClose }: Props) {
   const [parsed, setParsed] = useState<ParsedDB | null>(null);
   const [invContoIds, setInvContoIds] = useState<Set<number>>(new Set());
   const [investmentCatIds, setInvestmentCatIds] = useState<Set<number>>(new Set());
-  const [invGroups, setInvGroups] = useState<InvGroup[]>([]);
+
+  const [invMode, setInvMode] = useState<InvMode>('orders');
+  const [invDetails, setInvDetails] = useState<InvDetail[]>([]);    // mode A
+  const [invPositions, setInvPositions] = useState<InvPosition[]>([]); // mode B
+
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<{
     accounts: number; transactions: number; investments: number; transfers: number; orders: number; skipped: number;
@@ -317,110 +316,104 @@ export default function KakeboImport({ onClose }: Props) {
       const db = new SQL.Database(new Uint8Array(buf));
 
       const conti = queryAll<any>(db, 'SELECT id, nome, tipo FROM Conto').map(r => ({
-        id: r.id as number,
-        nome: (r.nome as string) || '',
-        tipo: r.tipo as number,
+        id: r.id as number, nome: (r.nome as string) || '', tipo: r.tipo as number,
       }));
-
       const categorie = queryAll<any>(db, 'SELECT id, padreId, tipoMovimento, nome FROM Categoria').map(r => ({
-        id: r.id as number,
-        padreId: r.padreId as number | null,
-        tipoMovimento: r.tipoMovimento as number,
-        nome: (r.nome as string) || '',
+        id: r.id as number, padreId: r.padreId as number | null,
+        tipoMovimento: r.tipoMovimento as number, nome: (r.nome as string) || '',
       }));
-
       const movimenti = queryAll<any>(
-        db,
-        'SELECT id, contoId, categoriaId, sottocategoriaId, dataOperazione, note, tipo, contoPrelievoId, importo1 FROM Movimento'
+        db, 'SELECT id, contoId, categoriaId, sottocategoriaId, dataOperazione, note, tipo, contoPrelievoId, importo1 FROM Movimento'
       ).map(r => ({
-        id: r.id as number,
-        contoId: r.contoId as number,
-        categoriaId: r.categoriaId as number | null,
-        sottocategoriaId: r.sottocategoriaId as number | null,
-        dataOperazione: r.dataOperazione as number,
-        note: r.note as string | null,
-        tipo: r.tipo as number,
-        contoPrelievoId: r.contoPrelievoId as number | null,
+        id: r.id as number, contoId: r.contoId as number,
+        categoriaId: r.categoriaId as number | null, sottocategoriaId: r.sottocategoriaId as number | null,
+        dataOperazione: r.dataOperazione as number, note: r.note as string | null,
+        tipo: r.tipo as number, contoPrelievoId: r.contoPrelievoId as number | null,
         importo1: r.importo1 as number,
       }));
 
       db.close();
       setParsed({ conti, categorie, movimenti });
-
-      setInvContoIds(new Set(
-        conti.filter(c => c.tipo === 1 || isInvestmentName(c.nome)).map(c => c.id)
-      ));
-      setInvestmentCatIds(new Set(
-        categorie.filter(c => c.padreId == null && isInvestmentName(c.nome)).map(c => c.id)
-      ));
-
+      setInvContoIds(new Set(conti.filter(c => c.tipo === 1 || isInvestmentName(c.nome)).map(c => c.id)));
+      setInvestmentCatIds(new Set(categorie.filter(c => c.padreId == null && isInvestmentName(c.nome)).map(c => c.id)));
       setStep('options');
     } catch (e: any) {
-      if (/failed to (fetch|load|import)/i.test(e?.message || '')) {
-        window.location.reload();
-        return;
-      }
-      setError((e.message || String(e)));
+      if (/failed to (fetch|load|import)/i.test(e?.message || '')) { window.location.reload(); return; }
+      setError(e.message || String(e));
     }
   };
 
-  // ── step 2→3: build inv groups ───────────────────────────────────────────────
+  // ── step 2→3: build inv details/positions ───────────────────────────────────
 
   const handleGoToInvDetails = () => {
     if (!parsed) return;
     const invTransfers = parsed.movimenti.filter(m => m.tipo === -1 && invContoIds.has(m.contoId));
-    if (invTransfers.length === 0) {
-      handleImport();
-      return;
-    }
+    if (invTransfers.length === 0) { handleImport(); return; }
 
-    // Group by destContoId + amount (same portfolio account, same amount = likely same recurring purchase)
-    const groupMap = new Map<string, InvGroup>();
+    // Build mode A: one InvDetail per transfer, sorted by date
+    const details: InvDetail[] = invTransfers
+      .sort((a, b) => a.dataOperazione - b.dataOperazione)
+      .map(m => ({
+        movimentoId: m.id,
+        date: msToDate(m.dataOperazione),
+        amount: Math.abs(m.importo1),
+        description: m.note || null,
+        destContoId: m.contoId,
+        instrumentType: 'etf',
+        ticker: '',
+        quantity: '',
+        price: '',
+      }));
+    setInvDetails(details);
+
+    // Build mode B: one InvPosition per inv conto
+    const posMap = new Map<number, InvPosition>();
     for (const m of invTransfers) {
-      const key = `${m.contoId}|${Math.abs(m.importo1)}`;
       const date = msToDate(m.dataOperazione);
-      if (!groupMap.has(key)) {
-        groupMap.set(key, {
-          groupKey: key,
-          destContoId: m.contoId,
-          amount: Math.abs(m.importo1),
-          movimentoIds: [m.id],
-          dates: [date],
-          descriptions: [m.note || null],
+      if (!posMap.has(m.contoId)) {
+        posMap.set(m.contoId, {
+          contoId: m.contoId,
+          totalAmount: Math.abs(m.importo1),
+          transferCount: 1,
+          lastDate: date,
           instrumentType: 'etf',
           ticker: '',
-          quantity: '',
-          price: '',
+          totalQty: '',
+          avgPrice: '',
         });
       } else {
-        const g = groupMap.get(key)!;
-        g.movimentoIds.push(m.id);
-        g.dates.push(date);
-        g.descriptions.push(m.note || null);
+        const p = posMap.get(m.contoId)!;
+        p.totalAmount += Math.abs(m.importo1);
+        p.transferCount++;
+        if (date > p.lastDate) p.lastDate = date;
       }
     }
-
-    // Sort dates within each group
-    for (const g of groupMap.values()) {
-      const pairs = g.movimentoIds.map((id, i) => ({ id, date: g.dates[i], desc: g.descriptions[i] }));
-      pairs.sort((a, b) => a.date.localeCompare(b.date));
-      g.movimentoIds = pairs.map(p => p.id);
-      g.dates = pairs.map(p => p.date);
-      g.descriptions = pairs.map(p => p.desc);
-    }
-
-    setInvGroups(Array.from(groupMap.values()));
+    setInvPositions(Array.from(posMap.values()));
     setStep('inv_details');
   };
 
-  const updateInvGroup = (groupKey: string, updates: Partial<Pick<InvGroup, 'instrumentType' | 'ticker' | 'quantity' | 'price'>>) => {
-    setInvGroups(prev => prev.map(g => g.groupKey === groupKey ? { ...g, ...updates } : g));
+  const updateDetail = (movimentoId: number, updates: Partial<Pick<InvDetail, 'instrumentType' | 'ticker' | 'quantity' | 'price'>>) => {
+    setInvDetails(prev => prev.map(d => d.movimentoId === movimentoId ? { ...d, ...updates } : d));
+  };
+
+  const updatePosition = (contoId: number, updates: Partial<Pick<InvPosition, 'instrumentType' | 'ticker' | 'totalQty' | 'avgPrice'>>) => {
+    setInvPositions(prev => prev.map(p => p.contoId === contoId ? { ...p, ...updates } : p));
   };
 
   // ── step 4: import ──────────────────────────────────────────────────────────
 
   const handleImport = async () => {
     if (!parsed) return;
+
+    // Mode A validation: all fields required
+    if (invMode === 'orders' && invDetails.length > 0) {
+      const incomplete = invDetails.some(d => !d.ticker.trim() || !d.quantity.trim() || !d.price.trim());
+      if (incomplete) {
+        setError('Compila tutti i campi ticker, quantità e prezzo per ogni operazione');
+        return;
+      }
+    }
+
     setStep('importing');
     setError(null);
 
@@ -430,7 +423,7 @@ export default function KakeboImport({ onClose }: Props) {
       const userId = user.id;
       const profileId = apiService.getActiveProfileId();
 
-      // 0. Always delete existing data for active profile
+      // 0. Delete existing data
       setProgress(t('kakebo.resetData'));
       await supabase.from('transactions').delete().eq('profile_id', profileId);
       await supabase.from('transfers').delete().eq('profile_id', profileId);
@@ -438,7 +431,7 @@ export default function KakeboImport({ onClose }: Props) {
       await supabase.from('categories').delete().eq('profile_id', profileId);
       await supabase.from('portfolios').delete().eq('profile_id', profileId);
 
-      // 1. Create portfolios + linked categories for investment accounts
+      // 1. Create portfolios + categories for investment accounts
       setProgress(t('kakebo.accounts'));
       const invContoToPortfolioId: Record<number, number> = {};
       const invContoToCategoryName: Record<number, string> = {};
@@ -448,7 +441,6 @@ export default function KakeboImport({ onClose }: Props) {
         const conto = parsed.conti.find(c => c.id === contoId);
         if (!conto) continue;
         const name = conto.nome.trim();
-
         const { data: catData, error: catErr } = await supabase
           .from('categories')
           .insert({ user_id: userId, profile_id: profileId, name, icon: '📈', category_type: 'investment' })
@@ -458,24 +450,14 @@ export default function KakeboImport({ onClose }: Props) {
 
         const { data: portData, error: portErr } = await supabase
           .from('portfolios')
-          .insert({
-            user_id: userId,
-            profile_id: profileId,
-            name,
-            initial_capital: 0,
-            reference_currency: 'EUR',
-            risk_free_source: '',
-            market_benchmark: '',
-            category_id: catData.id,
-          })
+          .insert({ user_id: userId, profile_id: profileId, name, initial_capital: 0, reference_currency: 'EUR', risk_free_source: '', market_benchmark: '', category_id: catData.id })
           .select().single();
         if (portErr) throw portErr;
-
         invContoToPortfolioId[contoId] = portData.id;
         invContoToCategoryName[contoId] = name;
       }
 
-      // 2. Create trackr accounts for non-investment kakebo accounts
+      // 2. Create accounts for non-investment kakebo accounts
       const contoIdMap: Record<number, number> = {};
       for (const c of parsed.conti) {
         if (invContoIds.has(c.id)) continue;
@@ -487,38 +469,30 @@ export default function KakeboImport({ onClose }: Props) {
         contoIdMap[c.id] = data.id;
       }
 
-      // 3. Build category resolution map and create missing categories
+      // 3. Category resolution
       setProgress(t('kakebo.categories'));
-
       const kCatById: Record<number, KCategoria> = {};
       for (const c of parsed.categorie) kCatById[c.id] = c;
-
       const catResolved: Record<number, { catName: string; subName?: string }> = {};
       for (const c of parsed.categorie) {
         if (c.padreId == null) {
           catResolved[c.id] = { catName: c.nome.trim() };
         } else {
           const parent = kCatById[c.padreId];
-          catResolved[c.id] = {
-            catName: parent ? parent.nome.trim() : c.nome.trim(),
-            subName: c.nome.trim(),
-          };
+          catResolved[c.id] = { catName: parent ? parent.nome.trim() : c.nome.trim(), subName: c.nome.trim() };
         }
       }
 
       const { data: freshCats } = await supabase.from('categories').select('*, subcategories(*)').eq('profile_id', profileId);
-      for (const tc of (freshCats as CategoryWithStats[] || [])) {
+      for (const tc of (freshCats as CategoryWithStats[] || []))
         catCreated[`${tc.name.toLowerCase()}|${tc.category_type}`] = tc.id;
-      }
 
-      const getOrCreateCategory = async (name: string, type: 'expense' | 'income' | 'investment'): Promise<void> => {
+      const getOrCreateCategory = async (name: string, type: 'expense' | 'income' | 'investment') => {
         const key = `${name.toLowerCase()}|${type}`;
         if (catCreated[key]) return;
         const icon = type === 'investment' ? '📈' : type === 'income' ? '💰' : '💸';
         const { data, error: catErr } = await supabase
-          .from('categories')
-          .insert({ user_id: userId, profile_id: profileId, name, icon, category_type: type })
-          .select().single();
+          .from('categories').insert({ user_id: userId, profile_id: profileId, name, icon, category_type: type }).select().single();
         if (catErr) throw catErr;
         catCreated[key] = data.id;
       };
@@ -534,23 +508,19 @@ export default function KakeboImport({ onClose }: Props) {
       for (const m of parsed.movimenti) {
         if (m.tipo === -1) continue;
         const catId = m.sottocategoriaId ?? m.categoriaId;
-        if (catId == null) continue;
-        const resolved = catResolved[catId];
-        if (!resolved) continue;
-        await getOrCreateCategory(resolved.catName, getCatType(catId));
+        if (catId == null || !catResolved[catId]) continue;
+        await getOrCreateCategory(catResolved[catId].catName, getCatType(catId));
       }
 
-      // 4. Build transaction / transfer rows
+      // 4. Build transaction/transfer rows
       setProgress(t('kakebo.transactions'));
       const txRows: any[] = [];
       const trRows: any[] = [];
       let skipped = 0;
 
-      // Build a map from movimentoId → group for quick lookup
-      const movToGroup = new Map<number, InvGroup>();
-      for (const g of invGroups) {
-        for (const id of g.movimentoIds) movToGroup.set(id, g);
-      }
+      // Map movimentoId → InvDetail (mode A)
+      const movToDetail = new Map<number, InvDetail>();
+      if (invMode === 'orders') for (const d of invDetails) movToDetail.set(d.movimentoId, d);
 
       for (const m of parsed.movimenti) {
         const date = msToDate(m.dataOperazione);
@@ -562,7 +532,7 @@ export default function KakeboImport({ onClose }: Props) {
             const accountId = m.contoPrelievoId != null ? contoIdMap[m.contoPrelievoId] : undefined;
             if (!accountId) { skipped++; continue; }
             const catName = invContoToCategoryName[m.contoId] ?? 'Investimenti';
-            txRows.push({ user_id: userId, profile_id: profileId, account_id: accountId, type: 'investment', category: catName, subcategory: null, amount, description, date, _movimentoId: m.id });
+            txRows.push({ user_id: userId, profile_id: profileId, account_id: accountId, type: 'investment', category: catName, subcategory: null, amount, description, date, _movId: m.id });
           } else {
             const fromId = m.contoPrelievoId != null ? contoIdMap[m.contoPrelievoId] : undefined;
             const toId = contoIdMap[m.contoId];
@@ -572,26 +542,18 @@ export default function KakeboImport({ onClose }: Props) {
         } else {
           const accountId = contoIdMap[m.contoId];
           if (!accountId) { skipped++; continue; }
-
           const catId = m.sottocategoriaId ?? m.categoriaId;
-          let catName = 'Altro';
-          let subName: string | undefined;
-          if (catId != null && catResolved[catId]) {
-            catName = catResolved[catId].catName;
-            subName = catResolved[catId].subName;
-          }
-
+          let catName = 'Altro'; let subName: string | undefined;
+          if (catId != null && catResolved[catId]) { catName = catResolved[catId].catName; subName = catResolved[catId].subName; }
           let type: 'expense' | 'income' | 'investment' = m.tipo === 1 ? 'income' : 'expense';
           if (catId != null && getCatType(catId) === 'investment') type = 'investment';
-
           txRows.push({ user_id: userId, profile_id: profileId, account_id: accountId, type, category: catName, subcategory: subName || null, amount, description, date });
         }
       }
 
-      // 5. Batch insert transactions and transfers
+      // 5. Batch insert
       let txCount = 0; let invCount = 0; let trCount = 0;
-
-      const txRowsClean = txRows.map(({ _movimentoId: _, ...rest }) => rest);
+      const txRowsClean = txRows.map(({ _movId: _, ...rest }) => rest);
       for (const batch of chunk(txRowsClean, 500)) {
         const { error: txErr } = await supabase.from('transactions').insert(batch);
         if (txErr) throw txErr;
@@ -604,29 +566,39 @@ export default function KakeboImport({ onClose }: Props) {
         trCount += batch.length;
       }
 
-      // 6. Create orders for each movimento in each group that has ticker/qty/price
+      // 6. Create orders
       let orderCount = 0;
-      for (const m of parsed.movimenti) {
-        if (m.tipo !== -1 || !invContoIds.has(m.contoId)) continue;
-        const grp = movToGroup.get(m.id);
-        if (!grp) continue;
-        if (!grp.ticker.trim() || !grp.quantity.trim() || !grp.price.trim()) continue;
-        const portfolioId = invContoToPortfolioId[grp.destContoId];
-        if (!portfolioId) continue;
-
-        const { error: ordErr } = await supabase.from('orders').insert({
-          user_id: userId,
-          portfolio_id: portfolioId,
-          symbol: grp.ticker.trim().toUpperCase(),
-          currency: 'EUR',
-          quantity: parseFloat(grp.quantity),
-          price: parseFloat(grp.price),
-          commission: 0,
-          order_type: 'buy',
-          date: msToDate(m.dataOperazione),
-          name: m.note || undefined,
-        });
-        if (!ordErr) orderCount++;
+      if (invMode === 'orders') {
+        // Mode A: one order per individual transfer
+        for (const m of parsed.movimenti) {
+          if (m.tipo !== -1 || !invContoIds.has(m.contoId)) continue;
+          const detail = movToDetail.get(m.id);
+          if (!detail?.ticker.trim() || !detail.quantity.trim() || !detail.price.trim()) continue;
+          const portfolioId = invContoToPortfolioId[detail.destContoId];
+          if (!portfolioId) continue;
+          const { error: ordErr } = await supabase.from('orders').insert({
+            user_id: userId, portfolio_id: portfolioId,
+            symbol: detail.ticker.trim().toUpperCase(), currency: 'EUR',
+            quantity: parseFloat(detail.quantity), price: parseFloat(detail.price),
+            commission: 0, order_type: 'buy', date: detail.date,
+            name: detail.description || undefined,
+          });
+          if (!ordErr) orderCount++;
+        }
+      } else {
+        // Mode B: one order per portfolio position (current state)
+        for (const pos of invPositions) {
+          if (!pos.ticker.trim() || !pos.totalQty.trim() || !pos.avgPrice.trim()) continue;
+          const portfolioId = invContoToPortfolioId[pos.contoId];
+          if (!portfolioId) continue;
+          const { error: ordErr } = await supabase.from('orders').insert({
+            user_id: userId, portfolio_id: portfolioId,
+            symbol: pos.ticker.trim().toUpperCase(), currency: 'EUR',
+            quantity: parseFloat(pos.totalQty), price: parseFloat(pos.avgPrice),
+            commission: 0, order_type: 'buy', date: pos.lastDate,
+          });
+          if (!ordErr) orderCount++;
+        }
       }
 
       setProgress('');
@@ -636,28 +608,23 @@ export default function KakeboImport({ onClose }: Props) {
 
     } catch (e: any) {
       setError(e.message || String(e));
-      setStep(invGroups.length > 0 ? 'inv_details' : 'options');
+      setStep(invDetails.length > 0 ? 'inv_details' : 'options');
     }
   };
 
   // ── render ─────────────────────────────────────────────────────────────────
 
   const dateRange = parsed?.movimenti.length
-    ? (() => {
-        const dates = parsed.movimenti.map(m => m.dataOperazione);
-        return { from: msToDate(Math.min(...dates)), to: msToDate(Math.max(...dates)) };
-      })()
+    ? (() => { const dates = parsed.movimenti.map(m => m.dataOperazione); return { from: msToDate(Math.min(...dates)), to: msToDate(Math.max(...dates)) }; })()
     : null;
 
   const expenseCats = parsed?.categorie.filter(c => c.padreId == null && c.tipoMovimento === 0) ?? [];
   const incomeCats = parsed?.categorie.filter(c => c.padreId == null && c.tipoMovimento === 1) ?? [];
   const totalTransfers = parsed?.movimenti.filter(m => m.tipo === -1).length ?? 0;
-  const invTransfers = parsed?.movimenti.filter(m => m.tipo === -1 && invContoIds.has(m.contoId)).length ?? 0;
+  const invTransfersCount = parsed?.movimenti.filter(m => m.tipo === -1 && invContoIds.has(m.contoId)).length ?? 0;
 
   const toggleInvCat = (id: number) => setInvestmentCatIds(prev => {
-    const next = new Set(prev);
-    if (next.has(id)) next.delete(id); else next.add(id);
-    return next;
+    const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next;
   });
 
   return (
@@ -687,7 +654,6 @@ export default function KakeboImport({ onClose }: Props) {
       {/* ── Options ── */}
       {step === 'options' && parsed && (
         <div className="space-y-5">
-          {/* Summary */}
           <div className="grid grid-cols-3 gap-2 text-center">
             <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
               <div className="text-lg font-bold text-gray-900 dark:text-white">{parsed.conti.length}</div>
@@ -704,7 +670,7 @@ export default function KakeboImport({ onClose }: Props) {
           </div>
           {totalTransfers > 0 && (
             <p className="text-xs text-gray-500 dark:text-gray-400 text-center">
-              {t('kakebo.transfersSummary', { total: totalTransfers, inv: invTransfers })}
+              {t('kakebo.transfersSummary', { total: totalTransfers, inv: invTransfersCount })}
             </p>
           )}
           {dateRange && (
@@ -725,16 +691,9 @@ export default function KakeboImport({ onClose }: Props) {
                     <span className="text-base">{isInv ? '📈' : '🏦'}</span>
                     <span className="text-sm text-gray-700 dark:text-gray-300 flex-1">{c.nome.trim()}</span>
                     <label className="flex items-center gap-1.5 cursor-pointer shrink-0">
-                      <input
-                        type="checkbox"
-                        checked={isInv}
-                        onChange={() => setInvContoIds(prev => {
-                          const next = new Set(prev);
-                          if (next.has(c.id)) next.delete(c.id); else next.add(c.id);
-                          return next;
-                        })}
-                        className="w-4 h-4 rounded text-primary-500"
-                      />
+                      <input type="checkbox" checked={isInv}
+                        onChange={() => setInvContoIds(prev => { const next = new Set(prev); if (next.has(c.id)) next.delete(c.id); else next.add(c.id); return next; })}
+                        className="w-4 h-4 rounded text-primary-500" />
                       <span className="text-xs text-gray-500 dark:text-gray-400">→ portafoglio</span>
                     </label>
                   </div>
@@ -743,7 +702,6 @@ export default function KakeboImport({ onClose }: Props) {
             </div>
           </div>
 
-          {/* Expense categories → investment */}
           {expenseCats.length > 0 && (
             <div>
               <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('kakebo.expenseToInv')}</div>
@@ -760,7 +718,6 @@ export default function KakeboImport({ onClose }: Props) {
             </div>
           )}
 
-          {/* Income categories → investment */}
           {incomeCats.length > 0 && (
             <div>
               <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('kakebo.incomeToInv')}</div>
@@ -778,12 +735,9 @@ export default function KakeboImport({ onClose }: Props) {
           )}
 
           {error && <p className="text-sm text-red-500 dark:text-red-400">{error}</p>}
-
           <div className="flex gap-2">
             <button className="flex-1 btn-secondary text-sm" onClick={onClose}>{t('common.cancel')}</button>
-            <button className="flex-1 btn-primary text-sm" onClick={handleGoToInvDetails}>
-              {t('kakebo.next')}
-            </button>
+            <button className="flex-1 btn-primary text-sm" onClick={handleGoToInvDetails}>{t('kakebo.next')}</button>
           </div>
         </div>
       )}
@@ -793,18 +747,82 @@ export default function KakeboImport({ onClose }: Props) {
         <div className="space-y-4">
           <div>
             <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('kakebo.invDetailsTitle')}</div>
-            <p className="text-xs text-gray-500 dark:text-gray-400">{t('kakebo.invDetailsDesc')}</p>
           </div>
 
+          {/* Mode toggle */}
+          <div className="flex rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700">
+            <button
+              type="button"
+              onClick={() => setInvMode('orders')}
+              className={`flex-1 py-2.5 text-xs font-medium transition-colors text-center leading-snug ${invMode === 'orders' ? 'bg-primary-500 text-white' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400'}`}
+            >
+              Ordini storici
+              <div className={`text-xs font-normal mt-0.5 ${invMode === 'orders' ? 'text-primary-100' : 'text-gray-400'}`}>Un ordine per ogni acquisto</div>
+            </button>
+            <button
+              type="button"
+              onClick={() => setInvMode('positions')}
+              className={`flex-1 py-2.5 text-xs font-medium transition-colors text-center leading-snug ${invMode === 'positions' ? 'bg-primary-500 text-white' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400'}`}
+            >
+              Posizioni correnti
+              <div className={`text-xs font-normal mt-0.5 ${invMode === 'positions' ? 'text-primary-100' : 'text-gray-400'}`}>Saldo attuale del portafoglio</div>
+            </button>
+          </div>
+
+          {invMode === 'orders' && (
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              Inserisci ticker, quantità e prezzo per ogni singolo acquisto. Tutti i campi sono obbligatori.
+            </p>
+          )}
+          {invMode === 'positions' && (
+            <div className="bg-amber-50 dark:bg-amber-900/20 rounded-xl p-3 text-xs text-amber-700 dark:text-amber-400">
+              ⚠️ Con questa modalità il portafoglio mostrerà solo la posizione attuale e non sarà possibile analizzare lo storico degli acquisti (rendimento nel tempo, XIRR, ecc.).
+            </div>
+          )}
+
           <div className="space-y-3">
-            {invGroups.map(group => {
-              const conto = parsed?.conti.find(c => c.id === group.destContoId);
+            {invMode === 'orders' && invDetails.map(detail => {
+              const conto = parsed?.conti.find(c => c.id === detail.destContoId);
               return (
-                <InvGroupCard
-                  key={group.groupKey}
-                  group={group}
+                <TickerCard
+                  key={detail.movimentoId}
+                  id={String(detail.movimentoId)}
                   contoName={conto?.nome.trim() ?? '—'}
-                  onChange={updateInvGroup}
+                  date={detail.date}
+                  amount={detail.amount}
+                  instrumentType={detail.instrumentType}
+                  ticker={detail.ticker}
+                  quantity={detail.quantity}
+                  price={detail.price}
+                  qtyLabel={t('kakebo.qty')}
+                  priceLabel={t('kakebo.pricePerUnit')}
+                  required
+                  onChange={(_, updates) => updateDetail(detail.movimentoId, updates)}
+                />
+              );
+            })}
+
+            {invMode === 'positions' && invPositions.map(pos => {
+              const conto = parsed?.conti.find(c => c.id === pos.contoId);
+              return (
+                <TickerCard
+                  key={pos.contoId}
+                  id={String(pos.contoId)}
+                  contoName={conto?.nome.trim() ?? '—'}
+                  totalAmount={pos.totalAmount}
+                  transferCount={pos.transferCount}
+                  instrumentType={pos.instrumentType}
+                  ticker={pos.ticker}
+                  quantity={pos.totalQty}
+                  price={pos.avgPrice}
+                  qtyLabel="Quantità totale"
+                  priceLabel="Prezzo medio di carico"
+                  onChange={(_, updates) => updatePosition(pos.contoId, {
+                    ...(updates.instrumentType !== undefined && { instrumentType: updates.instrumentType }),
+                    ...(updates.ticker !== undefined && { ticker: updates.ticker }),
+                    ...(updates.quantity !== undefined && { totalQty: updates.quantity }),
+                    ...(updates.price !== undefined && { avgPrice: updates.price }),
+                  })}
                 />
               );
             })}
@@ -813,7 +831,7 @@ export default function KakeboImport({ onClose }: Props) {
           {error && <p className="text-sm text-red-500 dark:text-red-400">{error}</p>}
 
           <div className="flex gap-2">
-            <button className="flex-1 btn-secondary text-sm" onClick={() => setStep('options')}>{t('common.cancel')}</button>
+            <button className="flex-1 btn-secondary text-sm" onClick={() => { setError(null); setStep('options'); }}>{t('common.cancel')}</button>
             <button className="flex-1 btn-primary text-sm" onClick={() => handleImport()}>{t('kakebo.import')}</button>
           </div>
         </div>
