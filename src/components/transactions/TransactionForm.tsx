@@ -230,8 +230,8 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
       const meta = data.metadata || {};
       setBondMeta(meta);
       setSelectedSymbolInfo({
-        name: meta.issuer || '',
-        exchange: 'XFRA',
+        name: meta.name || meta.issuer || '',
+        exchange: 'MOT/EuroMOT',
         currency: meta.currency || 'EUR',
         ter: '',
         isin: ticker,
