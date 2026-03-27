@@ -67,6 +67,8 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
   const [isinLookupLoading, setIsinLookupLoading] = useState(false);
   const [isinLookupError, setIsinLookupError] = useState(false);
   const ucitsLoadedRef = useRef(false);
+  const [bondCache, setBondCache] = useState<any[]>([]);
+  const bondCacheLoadedRef = useRef(false);
   const [bondMeta, setBondMeta] = useState<any>(null);
   const [bondLookupLoading, setBondLookupLoading] = useState(false);
   const [bondLookupError, setBondLookupError] = useState(false);
@@ -166,6 +168,25 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
       .catch(() => { ucitsLoadedRef.current = false; });
   }, [currentType, ucitsCache.length]);
 
+  // Bond cache
+  useEffect(() => {
+    if (bondCacheLoadedRef.current || bondCache.length > 0) return;
+    const cached = sessionStorage.getItem('bond_metadata_list');
+    if (cached) {
+      try { setBondCache(JSON.parse(cached)); return; } catch {}
+    }
+    bondCacheLoadedRef.current = true;
+    fetch(`${PF_BACKEND_URL}/symbols/bonds`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data?.results) {
+          setBondCache(data.results);
+          try { sessionStorage.setItem('bond_metadata_list', JSON.stringify(data.results)); } catch {}
+        }
+      })
+      .catch(() => { bondCacheLoadedRef.current = false; });
+  }, [bondCache.length]);
+
   // Ricerca simboli con debounce
   const isIsinStr = useCallback((s: string) => /^[A-Z]{2}[A-Z0-9]{10}$/.test(s), []);
   useEffect(() => {
@@ -182,10 +203,19 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
     const run = async () => {
       setSymbolLoading(true);
       if (instrumentType === 'bond') {
-        setSymbolOptions([]);
+        await new Promise(r => setTimeout(r, 100));
+        if (controller.signal.aborted) return;
+        const q = ticker.toUpperCase();
+        const filtered = bondCache.filter((item: any) => {
+          const isin = (item.isin || '').toUpperCase();
+          const name = (item.name || '').toUpperCase();
+          const issuer = (item.issuer || '').toUpperCase();
+          return isin.startsWith(q) || (q.length >= 3 && (name.includes(q) || issuer.includes(q)));
+        }).slice(0, 15);
+        setSymbolOptions(filtered);
+        setSymbolSearchOpen(true);
         setSymbolLoading(false);
-        setSymbolSearchCompleted(false);
-        setSymbolSearchOpen(false);
+        setSymbolSearchCompleted(true);
         return;
       }
       if (instrumentType === 'etf') {
@@ -217,7 +247,7 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
     };
     const timer = setTimeout(run, 250);
     return () => { clearTimeout(timer); controller.abort(); };
-  }, [ticker, instrumentType, ucitsCache, isIsinStr]);
+  }, [ticker, instrumentType, ucitsCache, bondCache, isIsinStr]);
 
   const handleBondLookup = async () => {
     setBondLookupLoading(true);
@@ -236,6 +266,16 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
         ter: '',
         isin: ticker,
       });
+      // Aggiorna cache locale e sessionStorage
+      setBondCache(prev => {
+        const entry = { ...meta, isin: ticker };
+        const exists = prev.find((b: any) => b.isin === ticker);
+        const updated = exists ? prev.map((b: any) => b.isin === ticker ? entry : b) : [...prev, entry];
+        try { sessionStorage.setItem('bond_metadata_list', JSON.stringify(updated)); } catch {}
+        return updated;
+      });
+      setSymbolOptions([]);
+      setSymbolSearchOpen(false);
     } catch {
       setBondLookupError(true);
     } finally {
@@ -697,31 +737,75 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
             {/* Dropdown risultati */}
             {symbolSearchOpen && ticker.length >= 2 && !symbolLoading && symbolSearchCompleted && (
               <div className="absolute z-20 mt-1 w-64 border border-gray-200 dark:border-gray-700 rounded-lg max-h-52 overflow-auto bg-white dark:bg-gray-900 shadow-xl">
-                {symbolOptions.length > 0 ? symbolOptions.map((opt: any) => (
-                  <button
-                    key={`${opt.symbol}-${opt.exchange || ''}`}
-                    type="button"
-                    onMouseDown={() => {
-                      setTicker(opt.symbol);
-                      setSelectedSymbolInfo({ name: opt.name || '', exchange: opt.exchange || '', currency: opt.currency || '', ter: opt.ter || '', isin: opt.isin || '' });
-                      setSymbolOptions([]);
-                      setSymbolSearchOpen(false);
-                      skipSymbolSearchRef.current = true;
-                    }}
-                    className="w-full flex items-center justify-between px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-800 text-left border-b border-gray-100 dark:border-gray-800 last:border-0"
-                  >
-                    <div className="min-w-0">
-                      <span className="font-mono font-bold text-sm text-gray-900 dark:text-gray-100">{opt.symbol}</span>
-                      {opt.name && <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{opt.name}</p>}
-                    </div>
-                    <div className="flex flex-col items-end gap-0.5 ml-2 shrink-0 text-xs text-gray-400">
-                      {opt.exchange && <span>{opt.exchange}</span>}
-                      {opt.currency && <span className="font-medium">{opt.currency}</span>}
-                    </div>
-                  </button>
-                )) : (
+                {symbolOptions.length > 0 ? symbolOptions.map((opt: any) => {
+                  const isBond = instrumentType === 'bond';
+                  const key = isBond ? opt.isin : `${opt.symbol}-${opt.exchange || ''}`;
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      onMouseDown={() => {
+                        if (isBond) {
+                          setTicker(opt.isin);
+                          setSelectedSymbolInfo({ name: opt.name || opt.issuer || '', exchange: 'MOT/EuroMOT', currency: opt.currency || 'EUR', ter: '', isin: opt.isin });
+                          setBondMeta(opt);
+                        } else {
+                          setTicker(opt.symbol);
+                          setSelectedSymbolInfo({ name: opt.name || '', exchange: opt.exchange || '', currency: opt.currency || '', ter: opt.ter || '', isin: opt.isin || '' });
+                        }
+                        setSymbolOptions([]);
+                        setSymbolSearchOpen(false);
+                        skipSymbolSearchRef.current = true;
+                      }}
+                      className="w-full flex items-center justify-between px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-800 text-left border-b border-gray-100 dark:border-gray-800 last:border-0"
+                    >
+                      {isBond ? (
+                        <>
+                          <div className="min-w-0">
+                            <p className="font-bold text-sm text-gray-900 dark:text-gray-100 truncate">{opt.name || opt.isin}</p>
+                            {opt.issuer && <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{opt.issuer}</p>}
+                          </div>
+                          <div className="flex flex-col items-end gap-0.5 ml-2 shrink-0 text-xs text-gray-400">
+                            {opt.maturity && <span>Scad. {opt.maturity}</span>}
+                            {opt.coupon != null && <span className="font-medium">{opt.coupon}%</span>}
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="min-w-0">
+                            <span className="font-mono font-bold text-sm text-gray-900 dark:text-gray-100">{opt.symbol}</span>
+                            {opt.name && <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{opt.name}</p>}
+                          </div>
+                          <div className="flex flex-col items-end gap-0.5 ml-2 shrink-0 text-xs text-gray-400">
+                            {opt.exchange && <span>{opt.exchange}</span>}
+                            {opt.currency && <span className="font-medium">{opt.currency}</span>}
+                          </div>
+                        </>
+                      )}
+                    </button>
+                  );
+                }) : (
                   <div className="px-3 py-3 text-center text-xs text-gray-500 dark:text-gray-400">
-                    {isIsinStr(ticker) ? (
+                    {instrumentType === 'bond' && isIsinStr(ticker) ? (
+                      <div className="flex flex-col items-center gap-2">
+                        <span>Obbligazione non in cache</span>
+                        {bondLookupError && <span className="text-red-500">Non trovata su Borsa Italiana</span>}
+                        <button
+                          type="button"
+                          onMouseDown={handleBondLookup}
+                          disabled={bondLookupLoading}
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-60 transition text-xs"
+                        >
+                          {bondLookupLoading && (
+                            <svg className="animate-spin h-3 w-3" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                            </svg>
+                          )}
+                          {bondLookupLoading ? t('transactions.searching') : 'Cerca obbligazione'}
+                        </button>
+                      </div>
+                    ) : isIsinStr(ticker) ? (
                       <div className="flex flex-col items-center gap-2">
                         <span>{t('transactions.isinNotCached')}</span>
                         {isinLookupError && <span className="text-red-500">{t('transactions.isinNotFound')}</span>}
@@ -743,27 +827,6 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
                     ) : t('transactions.noResults')}
                   </div>
                 )}
-              </div>
-            )}
-
-            {/* Bond lookup button */}
-            {instrumentType === 'bond' && isIsinStr(ticker) && !bondMeta && (
-              <div className="mt-2 flex flex-col items-start gap-1">
-                {bondLookupError && <span className="text-red-500 text-xs">Non trovato (Börse Frankfurt)</span>}
-                <button
-                  type="button"
-                  onMouseDown={handleBondLookup}
-                  disabled={bondLookupLoading}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-60 transition text-xs"
-                >
-                  {bondLookupLoading && (
-                    <svg className="animate-spin h-3 w-3" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
-                    </svg>
-                  )}
-                  {bondLookupLoading ? t('transactions.searching') : 'Cerca obbligazione'}
-                </button>
               </div>
             )}
 
