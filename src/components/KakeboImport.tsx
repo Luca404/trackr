@@ -154,6 +154,11 @@ export default function KakeboImport({ onClose }: Props) {
 
       setStep('options');
     } catch (e: any) {
+      // Chunk load failure after a new deploy → reload to get fresh bundle
+      if (/failed to (fetch|load|import)/i.test(e?.message || '')) {
+        window.location.reload();
+        return;
+      }
       setError((e.message || String(e)));
     }
   };
