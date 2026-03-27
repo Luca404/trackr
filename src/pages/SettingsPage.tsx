@@ -254,17 +254,19 @@ export default function SettingsPage() {
 
             {/* Aggiungi profilo */}
             {showAddProfile ? (
-              <div className="flex gap-2 mt-1">
+              <div className="flex flex-col gap-2 mt-1">
                 <input
-                  className="flex-1 px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                  className="w-full px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                   placeholder={t('settings.profileNamePlaceholder')}
                   value={newProfileName}
                   onChange={e => setNewProfileName(e.target.value)}
                   onKeyDown={e => { if (e.key === 'Enter') handleAddProfile(); if (e.key === 'Escape') setShowAddProfile(false); }}
                   autoFocus
                 />
-                <button onClick={() => setShowAddProfile(false)} className="btn-secondary text-sm px-3">{t('common.cancel')}</button>
-                <button onClick={handleAddProfile} disabled={profileLoading || !newProfileName.trim()} className="btn-primary text-sm px-3">{t('common.add')}</button>
+                <div className="flex gap-2">
+                <button onClick={() => setShowAddProfile(false)} className="btn-secondary text-sm flex-1">{t('common.cancel')}</button>
+                <button onClick={handleAddProfile} disabled={profileLoading || !newProfileName.trim()} className="btn-primary text-sm flex-1">{t('common.add')}</button>
+                </div>
               </div>
             ) : (
               <button
