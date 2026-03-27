@@ -81,26 +81,43 @@ function isInvestmentName(name: string): boolean {
 interface InvGroupCardProps {
   group: InvGroup;
   contoName: string;
-  ucitsCache: any[];
   onChange: (groupKey: string, updates: Partial<Pick<InvGroup, 'instrumentType' | 'ticker' | 'quantity' | 'price'>>) => void;
 }
 
-function InvGroupCard({ group, contoName, ucitsCache, onChange }: InvGroupCardProps) {
+function InvGroupCard({ group, contoName, onChange }: InvGroupCardProps) {
   const { t } = useTranslation();
+  const [ucitsCache, setUcitsCache] = useState<any[]>([]);
   const [symbolOptions, setSymbolOptions] = useState<any[]>([]);
   const [symbolLoading, setSymbolLoading] = useState(false);
   const [symbolSearchOpen, setSymbolSearchOpen] = useState(false);
+  const [symbolSearchCompleted, setSymbolSearchCompleted] = useState(false);
+  const ucitsLoadedRef = useRef(false);
   const skipNextSearch = useRef(false);
 
-  const isIsin = /^[A-Z]{2}[A-Z0-9]{10}$/.test(group.ticker);
+  // Load UCITS cache (sessionStorage → API) when ETF mode
+  useEffect(() => {
+    if (ucitsLoadedRef.current || ucitsCache.length > 0 || group.instrumentType !== 'etf') return;
+    const cached = sessionStorage.getItem('ucits_etf_list');
+    if (cached) { setUcitsCache(JSON.parse(cached)); return; }
+    ucitsLoadedRef.current = true;
+    fetch(`${PF_BACKEND_URL}/symbols/ucits`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data?.etfs) {
+          setUcitsCache(data.etfs);
+          sessionStorage.setItem('ucits_etf_list', JSON.stringify(data.etfs));
+        }
+      })
+      .catch(() => { ucitsLoadedRef.current = false; });
+  }, [group.instrumentType, ucitsCache.length]);
 
+  // Symbol search with debounce
   useEffect(() => {
     if (skipNextSearch.current) { skipNextSearch.current = false; return; }
-    if (!group.ticker || group.ticker.length < 1) {
-      setSymbolOptions([]); setSymbolLoading(false); return;
+    if (!group.ticker || group.ticker.length < 2) {
+      setSymbolOptions([]); setSymbolSearchCompleted(false); setSymbolSearchOpen(false); return;
     }
-    if (isIsin) { setSymbolOptions([]); setSymbolLoading(false); return; }
-
+    setSymbolSearchCompleted(false);
     const controller = new AbortController();
     const run = async () => {
       setSymbolLoading(true);
@@ -111,13 +128,13 @@ function InvGroupCard({ group, contoName, ucitsCache, onChange }: InvGroupCardPr
         const filtered = ucitsCache.filter(item => {
           const sym = (item.symbol || '').toUpperCase();
           const isin = (item.isin || '').toUpperCase();
-          const name = (item.name || '').toUpperCase();
-          return sym.startsWith(q) || isin.startsWith(q) || name.includes(q);
-        }).slice(0, 8);
+          return sym.startsWith(q) || isin.startsWith(q);
+        }).slice(0, 25);
         if (!controller.signal.aborted) {
           setSymbolOptions(filtered);
-          setSymbolSearchOpen(filtered.length > 0);
+          setSymbolSearchOpen(true);
           setSymbolLoading(false);
+          setSymbolSearchCompleted(true);
         }
       } else {
         try {
@@ -125,19 +142,17 @@ function InvGroupCard({ group, contoName, ucitsCache, onChange }: InvGroupCardPr
             `${PF_BACKEND_URL}/symbols/search?q=${encodeURIComponent(group.ticker)}&instrument_type=stock`,
             { signal: controller.signal }
           );
-          if (!res.ok) throw new Error();
-          const data = await res.json();
-          if (!controller.signal.aborted) {
-            setSymbolOptions(data.results || []);
-            setSymbolSearchOpen((data.results || []).length > 0);
-            setSymbolLoading(false);
-          }
-        } catch { if (!controller.signal.aborted) setSymbolLoading(false); }
+          if (res.ok) { const data = await res.json(); setSymbolOptions(data.results || []); setSymbolSearchOpen(true); }
+        } catch (err: any) {
+          if (err.name !== 'AbortError') console.error(err);
+        } finally {
+          if (!controller.signal.aborted) { setSymbolLoading(false); setSymbolSearchCompleted(true); }
+        }
       }
     };
     const timer = setTimeout(run, 250);
     return () => { clearTimeout(timer); controller.abort(); };
-  }, [group.ticker, group.instrumentType, ucitsCache, isIsin]);
+  }, [group.ticker, group.instrumentType, ucitsCache]);
 
   const selectSymbol = (item: any) => {
     skipNextSearch.current = true;
@@ -210,7 +225,7 @@ function InvGroupCard({ group, contoName, ucitsCache, onChange }: InvGroupCardPr
             </svg>
           )}
         </div>
-        {symbolSearchOpen && symbolOptions.length > 0 && (
+        {symbolSearchOpen && group.ticker.length >= 2 && !symbolLoading && symbolSearchCompleted && (
           <div className="absolute z-20 left-0 right-0 top-full mt-1 bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden max-h-44 overflow-y-auto">
             {symbolOptions.map((item: any, i: number) => (
               <button
@@ -285,31 +300,11 @@ export default function KakeboImport({ onClose }: Props) {
   const [invContoIds, setInvContoIds] = useState<Set<number>>(new Set());
   const [investmentCatIds, setInvestmentCatIds] = useState<Set<number>>(new Set());
   const [invGroups, setInvGroups] = useState<InvGroup[]>([]);
-  const [ucitsCache, setUcitsCache] = useState<any[]>([]);
-  const ucitsLoadedRef = useRef(false);
-
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<{
     accounts: number; transactions: number; investments: number; transfers: number; orders: number; skipped: number;
   } | null>(null);
   const [progress, setProgress] = useState('');
-
-  // Load UCITS ETF cache from sessionStorage or API when inv_details step is entered
-  useEffect(() => {
-    if (step !== 'inv_details' || ucitsLoadedRef.current || ucitsCache.length > 0) return;
-    const cached = sessionStorage.getItem('ucits_etf_list');
-    if (cached) { setUcitsCache(JSON.parse(cached)); return; }
-    ucitsLoadedRef.current = true;
-    fetch(`${PF_BACKEND_URL}/symbols/ucits`)
-      .then(r => r.ok ? r.json() : null)
-      .then(data => {
-        if (data?.etfs) {
-          setUcitsCache(data.etfs);
-          sessionStorage.setItem('ucits_etf_list', JSON.stringify(data.etfs));
-        }
-      })
-      .catch(() => { ucitsLoadedRef.current = false; });
-  }, [step, ucitsCache.length]);
 
   // ── step 1: parse file ──────────────────────────────────────────────────────
 
@@ -809,7 +804,6 @@ export default function KakeboImport({ onClose }: Props) {
                   key={group.groupKey}
                   group={group}
                   contoName={conto?.nome.trim() ?? '—'}
-                  ucitsCache={ucitsCache}
                   onChange={updateInvGroup}
                 />
               );
