@@ -93,7 +93,12 @@ function TickerCard({
   const [symbolSearchOpen, setSymbolSearchOpen] = useState(false);
   const [symbolSearchCompleted, setSymbolSearchCompleted] = useState(false);
   const ucitsLoadedRef = useRef(false);
+  const bondCacheLoadedRef = useRef(false);
   const skipNextSearch = useRef(false);
+  const [bondCache, setBondCache] = useState<any[]>([]);
+  const [selectedInfo, setSelectedInfo] = useState<{ name: string; exchange?: string; currency?: string } | null>(null);
+  const [bondLookupLoading, setBondLookupLoading] = useState(false);
+  const [bondLookupError, setBondLookupError] = useState(false);
 
   // Load UCITS cache for ETF (sessionStorage → API) — same approach as TransactionForm
   useEffect(() => {
@@ -114,15 +119,48 @@ function TickerCard({
       .catch(() => { ucitsLoadedRef.current = false; });
   }, [instrumentType, ucitsCache.length]);
 
+  // Load bond cache (sessionStorage → API)
+  useEffect(() => {
+    if (instrumentType !== 'bond' || bondCacheLoadedRef.current || bondCache.length > 0) return;
+    const cached = sessionStorage.getItem('bondCache');
+    if (cached) {
+      try { setBondCache(JSON.parse(cached)); bondCacheLoadedRef.current = true; return; } catch {}
+    }
+    bondCacheLoadedRef.current = true;
+    fetch(`${PF_BACKEND_URL}/symbols/bonds`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data?.results) {
+          setBondCache(data.results);
+          try { sessionStorage.setItem('bondCache', JSON.stringify(data.results)); } catch {}
+        }
+      })
+      .catch(() => { bondCacheLoadedRef.current = false; });
+  }, [instrumentType, bondCache.length]);
+
   // Symbol search with debounce
   useEffect(() => {
     if (skipNextSearch.current) { skipNextSearch.current = false; return; }
     if (!ticker || ticker.length < 2) {
       setSymbolOptions([]); setSymbolSearchCompleted(false); setSymbolSearchOpen(false); return;
     }
-    // Bond: no search, manual input only
+    // Bond: search local cache
     if (instrumentType === 'bond') {
-      setSymbolOptions([]); setSymbolLoading(false); setSymbolSearchCompleted(false); setSymbolSearchOpen(false); return;
+      if (bondCache.length === 0) { setSymbolLoading(false); return; }
+      const q = ticker.toUpperCase();
+      const isIsin = /^[A-Z]{2}[A-Z0-9]{0,10}$/.test(q);
+      const ql = ticker.toLowerCase();
+      const filtered = bondCache.filter(b => {
+        const isin = (b.isin || '').toUpperCase();
+        const name = (b.name || '').toLowerCase();
+        const issuer = (b.issuer || '').toLowerCase();
+        return isIsin ? isin.startsWith(q) : (name.includes(ql) || issuer.includes(ql));
+      }).slice(0, 20);
+      setSymbolOptions(filtered);
+      setSymbolSearchOpen(filtered.length > 0);
+      setSymbolLoading(false);
+      setSymbolSearchCompleted(true);
+      return;
     }
     // ETF: wait for cache
     if (instrumentType === 'etf' && ucitsCache.length === 0) return;
@@ -163,12 +201,41 @@ function TickerCard({
     };
     const timer = setTimeout(run, 250);
     return () => { clearTimeout(timer); controller.abort(); };
-  }, [ticker, instrumentType, ucitsCache]);
+  }, [ticker, instrumentType, ucitsCache, bondCache]);
 
   const selectSymbol = (item: any) => {
     skipNextSearch.current = true;
-    onChange(id, { ticker: (item.symbol || '').toUpperCase() });
+    if (instrumentType === 'bond') {
+      onChange(id, { ticker: item.isin || '' });
+      setSelectedInfo({ name: item.name || item.issuer || '', exchange: 'MOT/EuroMOT', currency: item.currency || 'EUR' });
+    } else {
+      onChange(id, { ticker: (item.symbol || '').toUpperCase() });
+      setSelectedInfo({ name: item.name || '', exchange: item.exchange || '', currency: item.currency || '' });
+    }
     setSymbolOptions([]); setSymbolSearchOpen(false);
+  };
+
+  const handleBondLookup = async () => {
+    const isin = ticker.toUpperCase().trim();
+    if (!isin) return;
+    setBondLookupLoading(true); setBondLookupError(false);
+    try {
+      const res = await fetch(`${PF_BACKEND_URL}/symbols/bond-lookup?isin=${encodeURIComponent(isin)}`);
+      if (!res.ok) throw new Error('not found');
+      const data = await res.json();
+      if (data.listings?.length > 0) {
+        const first = data.listings[0];
+        const entry = { isin, name: first.name || '', issuer: first.name || '', coupon: null, maturity: null, currency: first.currency || 'EUR' };
+        const updated = [...bondCache.filter(b => b.isin !== isin), entry];
+        setBondCache(updated);
+        try { sessionStorage.setItem('bondCache', JSON.stringify(updated)); } catch {}
+        skipNextSearch.current = true;
+        onChange(id, { ticker: isin });
+        setSelectedInfo({ name: first.name || isin, exchange: first.exchange || 'MOT', currency: first.currency || 'EUR' });
+        setSymbolOptions([]); setSymbolSearchOpen(false);
+      } else { setBondLookupError(true); }
+    } catch { setBondLookupError(true); }
+    finally { setBondLookupLoading(false); }
   };
 
   const missing = showValidation && (!ticker.trim() || !quantity.trim() || !price.trim());
@@ -219,7 +286,7 @@ function TickerCard({
           <button
             key={typ}
             type="button"
-            onClick={() => { onChange(id, { instrumentType: typ, ticker: '' }); setSymbolOptions([]); setSymbolSearchOpen(false); setSymbolSearchCompleted(false); }}
+            onClick={() => { onChange(id, { instrumentType: typ, ticker: '' }); setSymbolOptions([]); setSymbolSearchOpen(false); setSymbolSearchCompleted(false); setSelectedInfo(null); setBondLookupError(false); }}
             className={`flex-1 py-1.5 text-xs font-medium transition-colors ${instrumentType === typ ? 'bg-blue-500 text-white' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400'}`}
           >
             {typ === 'etf' ? 'ETF' : typ === 'stock' ? 'Stock' : 'Bond'}
@@ -237,7 +304,7 @@ function TickerCard({
             className="w-full px-2 py-1.5 text-xs rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent uppercase font-mono"
             placeholder={instrumentType === 'etf' ? 'VWCE, SWDA, IE00...' : instrumentType === 'bond' ? 'BTP, XS12...' : 'AAPL, MSFT...'}
             value={ticker}
-            onChange={e => onChange(id, { ticker: e.target.value.toUpperCase() })}
+            onChange={e => { onChange(id, { ticker: e.target.value.toUpperCase() }); setSelectedInfo(null); setBondLookupError(false); }}
             onFocus={() => { if (symbolOptions.length > 0) setSymbolSearchOpen(true); }}
             onBlur={() => setTimeout(() => setSymbolSearchOpen(false), 150)}
           />
@@ -257,17 +324,52 @@ function TickerCard({
                 onMouseDown={() => selectSymbol(item)}
                 className="w-full text-left px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-700 border-b border-gray-100 dark:border-gray-700 last:border-0"
               >
-                <div className="flex items-center gap-2">
-                  <span className="font-mono font-bold text-xs text-gray-900 dark:text-gray-100">{item.symbol}</span>
-                  {item.exchange && <span className="text-xs text-gray-400">{item.exchange}</span>}
-                  {item.currency && <span className="text-xs text-blue-500">{item.currency}</span>}
-                </div>
-                {item.name && <div className="text-xs text-gray-500 dark:text-gray-400 truncate">{item.name}</div>}
+                {instrumentType === 'bond' ? (
+                  <>
+                    <div className="font-mono font-bold text-xs text-gray-900 dark:text-gray-100">{item.isin}</div>
+                    {(item.name || item.issuer) && <div className="text-xs text-gray-500 dark:text-gray-400 truncate">{item.name || item.issuer}</div>}
+                    <div className="flex gap-2 text-xs text-gray-400 mt-0.5">
+                      {item.maturity && <span>Sc. {item.maturity}</span>}
+                      {item.coupon != null && <span>{item.coupon}%</span>}
+                      {item.currency && <span className="text-blue-500">{item.currency}</span>}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono font-bold text-xs text-gray-900 dark:text-gray-100">{item.symbol}</span>
+                      {item.exchange && <span className="text-xs text-gray-400">{item.exchange}</span>}
+                      {item.currency && <span className="text-xs text-blue-500">{item.currency}</span>}
+                    </div>
+                    {item.name && <div className="text-xs text-gray-500 dark:text-gray-400 truncate">{item.name}</div>}
+                  </>
+                )}
               </button>
             ))}
           </div>
         )}
+        {instrumentType === 'bond' && ticker.length >= 10 && symbolSearchCompleted && symbolOptions.length === 0 && (
+          <div className="absolute z-20 left-0 right-0 top-full mt-1 bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+            <button
+              type="button"
+              onMouseDown={handleBondLookup}
+              disabled={bondLookupLoading}
+              className="w-full px-3 py-2 text-xs text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 text-left disabled:opacity-50"
+            >
+              {bondLookupLoading ? 'Ricerca...' : `Cerca obbligazione: ${ticker}`}
+            </button>
+            {bondLookupError && <div className="px-3 py-1.5 text-xs text-red-500">Non trovato</div>}
+          </div>
+        )}
       </div>
+
+      {selectedInfo?.name && (
+        <div className="px-2.5 py-1.5 bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-lg text-xs flex flex-wrap gap-x-3 gap-y-0.5">
+          <span className="font-medium text-gray-800 dark:text-gray-200 truncate">{selectedInfo.name}</span>
+          {selectedInfo.exchange && <span className="text-gray-400">{selectedInfo.exchange}</span>}
+          {selectedInfo.currency && <span className="text-blue-500">{selectedInfo.currency}</span>}
+        </div>
+      )}
 
       {/* Qty + Price */}
       <div className="grid grid-cols-2 gap-2">
