@@ -91,7 +91,12 @@ export default function PortfoliosPage() {
         portfolios.map(p =>
           fetch(`${PF_BACKEND_URL}/portfolios/${p.id}/summary`, {
             headers: { Authorization: `Bearer ${token}` },
-          }).then(r => r.ok ? r.json() : null)
+          }).then(async r => {
+            const body = await r.json().catch(() => null);
+            if (!r.ok) console.warn(`[portfolios] summary ${p.id} HTTP ${r.status}:`, body);
+            else console.log(`[portfolios] summary ${p.id}:`, body);
+            return r.ok ? body : null;
+          })
         )
       );
       const map: Record<number, PortfolioSummary> = {};
