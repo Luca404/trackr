@@ -1,4 +1,4 @@
-import { type ReactNode, useState } from 'react';
+import { type ReactNode, useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useData } from '../../contexts/DataContext';
@@ -16,9 +16,33 @@ export default function Layout({ children }: LayoutProps) {
   const { refreshAll } = useData();
   const [isRefreshing, setIsRefreshing] = useState(false);
   const { t } = useTranslation();
+  const swUpdateAvailableRef = useRef(false);
+
+  useEffect(() => {
+    if (!('serviceWorker' in navigator)) return;
+    const onControllerChange = () => { swUpdateAvailableRef.current = true; };
+    navigator.serviceWorker.addEventListener('controllerchange', onControllerChange);
+    return () => navigator.serviceWorker.removeEventListener('controllerchange', onControllerChange);
+  }, []);
 
   const handleRefresh = async () => {
+    if (swUpdateAvailableRef.current) {
+      window.location.reload();
+      return;
+    }
     setIsRefreshing(true);
+    // Controlla se c'è un nuovo SW in attesa
+    if ('serviceWorker' in navigator) {
+      const reg = await navigator.serviceWorker.getRegistration();
+      if (reg) {
+        await reg.update();
+        if (reg.waiting) {
+          reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+          window.location.reload();
+          return;
+        }
+      }
+    }
     await refreshAll();
     window.dispatchEvent(new CustomEvent('trackr:refresh'));
     setIsRefreshing(false);
