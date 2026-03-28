@@ -88,17 +88,24 @@ export default function PortfoliosPage() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.access_token) return;
       const token = session.access_token;
-      const results = await Promise.allSettled(
-        portfolios.map(p =>
-          fetch(`${PF_BACKEND_URL}/portfolios/${p.id}/summary`, {
-            headers: { Authorization: `Bearer ${token}` },
-          }).then(r => r.ok ? r.json() : null)
-        )
-      );
-      const map: Record<number, PortfolioSummary> = {};
-      results.forEach((r, i) => {
-        if (r.status === 'fulfilled' && r.value) map[portfolios[i].id] = r.value;
+      const res = await fetch(`${PF_BACKEND_URL}/portfolios`, {
+        headers: { Authorization: `Bearer ${token}` },
       });
+      const json = res.ok ? await res.json() : null;
+      const map: Record<number, PortfolioSummary> = {};
+      if (json?.portfolios) {
+        for (const p of json.portfolios) {
+          map[p.id] = {
+            total_value: p.total_value ?? 0,
+            total_cost: p.total_cost ?? 0,
+            total_gain_loss: p.total_gain_loss ?? 0,
+            total_gain_loss_pct: p.total_gain_loss_pct ?? 0,
+            positions_count: p.positions_count ?? 0,
+            xirr: p.xirr ?? null,
+            reference_currency: p.reference_currency ?? 'EUR',
+          };
+        }
+      }
       setSummaries(map);
       try {
         localStorage.setItem(SUMMARIES_CACHE_KEY, JSON.stringify({ time: Date.now(), data: map }));
