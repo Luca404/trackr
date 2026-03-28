@@ -258,6 +258,7 @@ export function DataProvider({ children }: DataProviderProps) {
   const switchProfile = async (profile: UserProfile) => {
     apiService.setActiveProfile(profile.id);
     setActiveProfile(profile);
+    localStorage.removeItem('pf_summaries_cache');
     // Ricarica tutti i dati per il nuovo profilo
     setAccounts([]);
     setCategories([]);
