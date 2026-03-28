@@ -38,26 +38,18 @@ export default function ConfirmDialog({
 
         <div className="flex gap-3">
           {resolvedCancelText && (
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 h-12 rounded-lg border-2 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors flex items-center justify-center text-2xl"
-              title={resolvedCancelText}
-            >
-              ✕
+            <button type="button" onClick={onClose} className="flex-1 btn-secondary">
+              {resolvedCancelText}
             </button>
           )}
           <button
             type="button"
             onClick={handleConfirm}
-            className={`flex-1 h-12 rounded-lg text-white transition-colors flex items-center justify-center text-2xl ${
-              isDestructive
-                ? 'bg-red-500 hover:bg-red-600'
-                : 'bg-primary-500 hover:bg-primary-600'
+            className={`flex-1 py-3 rounded-xl font-medium text-white transition-colors ${
+              isDestructive ? 'bg-red-500 hover:bg-red-600' : 'bg-primary-500 hover:bg-primary-600'
             }`}
-            title={resolvedConfirmText}
           >
-            {isDestructive ? '🗑️' : '✓'}
+            {resolvedConfirmText}
           </button>
         </div>
       </div>

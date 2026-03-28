@@ -6,6 +6,7 @@ import Layout from '../components/layout/Layout';
 import Modal from '../components/common/Modal';
 import { SkeletonPortfolioCard } from '../components/common/SkeletonLoader';
 import { useSkeletonCount } from '../hooks/useSkeletonCount';
+import { useConfirm } from '../hooks/useConfirm';
 import type { Portfolio, PortfolioFormData, Order, OrderFormData, Category } from '../types';
 import { useTranslation } from 'react-i18next';
 import { useSettings } from '../contexts/SettingsContext';
@@ -35,11 +36,15 @@ export default function PortfoliosPage() {
   const { formatCurrency } = useSettings();
   const { portfolios, categories, isLoading, isInitialized, addPortfolio, updatePortfolio, deletePortfolio } = useData();
   const skeletonCount = useSkeletonCount('portfolios', portfolios.length, isLoading, 3);
+  const { confirm: confirmDialog, dialog: confirmDialogEl } = useConfirm();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const portfolioDirtyRef = useRef(false);
-  const guardedModalClose = () => {
-    if (portfolioDirtyRef.current && !window.confirm('Hai modifiche non salvate. Chiudere comunque?')) return;
-    portfolioDirtyRef.current = false;
+  const guardedModalClose = async () => {
+    if (portfolioDirtyRef.current) {
+      const ok = await confirmDialog('Hai modifiche non salvate. Chiudere comunque?', { title: 'Modifiche non salvate', confirmText: 'Chiudi', cancelText: 'Annulla' });
+      if (!ok) return;
+      portfolioDirtyRef.current = false;
+    }
     setIsModalOpen(false);
   };
   useEffect(() => { if (!isModalOpen) portfolioDirtyRef.current = false; }, [isModalOpen]);
@@ -166,7 +171,8 @@ export default function PortfoliosPage() {
   };
 
   const handleDelete = async (id: number) => {
-    if (confirm(t('portfolios.deletePortfolio'))) {
+    const ok = await confirmDialog(t('portfolios.confirmDeletePortfolio', 'Eliminare questo portafoglio? L\'azione non può essere annullata.'), { title: t('portfolios.deletePortfolio'), confirmText: t('common.delete', 'Elimina'), isDestructive: true });
+    if (ok) {
       await apiService.deletePortfolio(id);
       deletePortfolio(id);
       setIsModalOpen(false);
@@ -342,6 +348,7 @@ export default function PortfoliosPage() {
             isLoadingOrders={isLoadingOrders}
           />
         </Modal>
+        {confirmDialogEl}
       </div>
     </Layout>
   );
@@ -362,6 +369,7 @@ interface PortfolioFormProps {
 function PortfolioForm({ onSubmit, onDelete, onCancel, onDirtyChange, initialData, isEditMode, investmentCategories, orders, isLoadingOrders }: PortfolioFormProps) {
   const { t } = useTranslation();
   const { formatCurrency } = useSettings();
+  const { confirm: confirmDialog, dialog: confirmDialogEl } = useConfirm();
   const [name, setName] = useState(initialData?.name || '');
   const [description, setDescription] = useState(initialData?.description || '');
   const [currency, setCurrency] = useState(initialData?.reference_currency || 'EUR');
@@ -502,7 +510,7 @@ function PortfolioForm({ onSubmit, onDelete, onCancel, onDirtyChange, initialDat
                   </div>
                   <button
                     type="button"
-                    onClick={() => { if (window.confirm('Rimuovere questa posizione?')) { setInitialPositions(prev => prev.filter((_, j) => j !== i)); markDirty(); } }}
+                    onClick={async () => { if (await confirmDialog('Rimuovere questa posizione?', { title: 'Rimuovi posizione', confirmText: 'Rimuovi', isDestructive: true })) { setInitialPositions(prev => prev.filter((_, j) => j !== i)); markDirty(); } }}
                     className="text-red-400 dark:text-red-500 text-xs ml-2 shrink-0"
                   >
                     ✕
@@ -588,6 +596,7 @@ function PortfolioForm({ onSubmit, onDelete, onCancel, onDirtyChange, initialDat
         onCancel={() => setIsPositionModalOpen(false)}
       />
     </Modal>
+    {confirmDialogEl}
   </>);
 }
 

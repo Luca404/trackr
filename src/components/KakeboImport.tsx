@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { useConfirm } from '../hooks/useConfirm';
 import { useTranslation } from 'react-i18next';
 import { supabase } from '../services/supabase';
 import { apiService } from '../services/api';
@@ -411,6 +412,7 @@ type InvMode = 'orders' | 'positions';
 export default function KakeboImport({ onClose, onDirtyChange }: Props) {
   const { t } = useTranslation();
   const { refreshAll } = useData();
+  const { confirm: confirmDialog, dialog: confirmDialogEl } = useConfirm();
   const fileRef = useRef<HTMLInputElement>(null);
 
   const [step, setStep] = useState<Step>('upload');
@@ -992,7 +994,7 @@ export default function KakeboImport({ onClose, onDirtyChange }: Props) {
                         price={pos.avgPrice}
                         qtyLabel="Quantità totale"
                         priceLabel="Prezzo medio di carico"
-                        onRemove={positions.length > 1 ? () => { if (window.confirm('Rimuovere questa posizione?')) removePosition(pos.id); } : undefined}
+                        onRemove={positions.length > 1 ? async () => { if (await confirmDialog('Rimuovere questa posizione?', { title: 'Rimuovi posizione', confirmText: 'Rimuovi', isDestructive: true })) removePosition(pos.id); } : undefined}
                         onChange={(_, updates) => updatePosition(pos.id, {
                           ...(updates.instrumentType !== undefined && { instrumentType: updates.instrumentType }),
                           ...(updates.ticker !== undefined && { ticker: updates.ticker }),
@@ -1050,6 +1052,7 @@ export default function KakeboImport({ onClose, onDirtyChange }: Props) {
           <button className="w-full btn-primary" onClick={onClose}>{t('common.close')}</button>
         </div>
       )}
+      {confirmDialogEl}
     </div>
   );
 }

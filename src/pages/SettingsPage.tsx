@@ -6,6 +6,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useData } from '../contexts/DataContext';
 import Modal from '../components/common/Modal';
 import KakeboImport from '../components/KakeboImport';
+import { useConfirm } from '../hooks/useConfirm';
 import { useTranslation } from 'react-i18next';
 import i18n from '../i18n';
 import { useSettings } from '../contexts/SettingsContext';
@@ -39,6 +40,7 @@ export default function SettingsPage() {
   const { logout, user } = useAuth();
   const { t } = useTranslation();
   const { numberFormat, setNumberFormat } = useSettings();
+  const { confirm: confirmDialog, dialog: confirmDialogEl } = useConfirm();
   const { userProfiles, activeProfile, switchProfile, createUserProfile, updateUserProfile, deleteUserProfile } = useData();
   const [theme, setTheme] = useState<'dark' | 'light' | 'system'>(getTheme);
   const [currentLang, setCurrentLang] = useState<string>(() => {
@@ -65,9 +67,12 @@ export default function SettingsPage() {
   const [exportMessage, setExportMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [showKakeboImport, setShowKakeboImport] = useState(false);
   const kakeboDirtyRef = useRef(false);
-  const guardedKakeboClose = () => {
-    if (kakeboDirtyRef.current && !window.confirm('Hai modifiche non salvate. Chiudere comunque?')) return;
-    kakeboDirtyRef.current = false;
+  const guardedKakeboClose = async () => {
+    if (kakeboDirtyRef.current) {
+      const ok = await confirmDialog('Hai modifiche non salvate. Chiudere comunque?', { title: 'Modifiche non salvate', confirmText: 'Chiudi', cancelText: 'Annulla' });
+      if (!ok) return;
+      kakeboDirtyRef.current = false;
+    }
     setShowKakeboImport(false);
   };
 
@@ -529,6 +534,7 @@ export default function SettingsPage() {
       <Modal isOpen={showKakeboImport} onClose={guardedKakeboClose} title={t('settings.importKakebo')} noBottomOffset>
         <KakeboImport onClose={guardedKakeboClose} onDirtyChange={dirty => { kakeboDirtyRef.current = dirty; }} />
       </Modal>
+      {confirmDialogEl}
     </div>
   );
 }
