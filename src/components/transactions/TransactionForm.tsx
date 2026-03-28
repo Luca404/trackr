@@ -403,6 +403,11 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
         quantity: qty || undefined,
         price: price || undefined,
         portfolio_id: selectedPortfolio?.id,
+        isin: selectedSymbolInfo?.isin || undefined,
+        instrument_name: selectedSymbolInfo?.name || undefined,
+        exchange: selectedSymbolInfo?.exchange || undefined,
+        instrument_type: instrumentType,
+        ter: selectedSymbolInfo?.ter ? parseFloat(selectedSymbolInfo.ter) || undefined : undefined,
       };
     } else {
       if (!selectedCategory) { setError(t('transactions.errorSelectCategory')); return; }

@@ -128,6 +128,11 @@ export default function TransactionsPage() {
         apiService.createOrder({
           portfolio_id: data.portfolio_id,
           symbol: data.ticker,
+          isin: data.isin,
+          name: data.instrument_name,
+          exchange: data.exchange,
+          instrument_type: data.instrument_type,
+          ter: data.ter,
           currency: 'EUR',
           quantity: qty,
           price: price,

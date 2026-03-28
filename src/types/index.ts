@@ -90,6 +90,11 @@ export interface TransactionFormData {
   ticker?: string;
   quantity?: number;
   price?: number;
+  isin?: string;
+  instrument_name?: string;
+  exchange?: string;
+  instrument_type?: 'etf' | 'stock' | 'bond';
+  ter?: number;
 
   recurrence?: RecurringFrequency; // solo per nuove transazioni
   recurring_id?: number;           // impostato internamente al salvataggio

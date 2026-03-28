@@ -445,7 +445,7 @@ class ApiService {
   async createTransaction(formData: TransactionFormData): Promise<Transaction> {
     const userId = await getCurrentUserId();
     const profileId = this.getActiveProfileId();
-    const { recurrence: _, portfolio_id: _pid, ...dbData } = formData;
+    const { recurrence: _, portfolio_id: _pid, isin: _isin, instrument_name: _iname, exchange: _exch, instrument_type: _itype, ter: _ter, ...dbData } = formData;
     const { data, error } = await supabase
       .from('transactions')
       .insert({ ...dbData, user_id: userId, profile_id: profileId })
@@ -515,7 +515,7 @@ class ApiService {
   }
 
   async updateTransaction(id: number, formData: Partial<TransactionFormData>): Promise<Transaction> {
-    const { recurrence: _, portfolio_id: _pid, ...dbData } = formData as TransactionFormData;
+    const { recurrence: _, portfolio_id: _pid, isin: _isin, instrument_name: _iname, exchange: _exch, instrument_type: _itype, ter: _ter, ...dbData } = formData as TransactionFormData;
     const { data, error } = await supabase
       .from('transactions')
       .update(dbData)
