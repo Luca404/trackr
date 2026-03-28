@@ -17,6 +17,7 @@ interface InitialPosition {
   quantity: number;
   price: number;
   date: string;
+  instrumentType?: 'etf' | 'stock' | 'bond';
 }
 
 interface PortfolioSummary {
@@ -35,6 +36,13 @@ export default function PortfoliosPage() {
   const { portfolios, categories, isLoading, isInitialized, addPortfolio, updatePortfolio, deletePortfolio } = useData();
   const skeletonCount = useSkeletonCount('portfolios', portfolios.length, isLoading, 3);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const portfolioDirtyRef = useRef(false);
+  const guardedModalClose = () => {
+    if (portfolioDirtyRef.current && !window.confirm('Hai modifiche non salvate. Chiudere comunque?')) return;
+    portfolioDirtyRef.current = false;
+    setIsModalOpen(false);
+  };
+  useEffect(() => { if (!isModalOpen) portfolioDirtyRef.current = false; }, [isModalOpen]);
   const [isEditMode, setIsEditMode] = useState(false);
   const [selectedPortfolio, setSelectedPortfolio] = useState<Portfolio | null>(null);
   const [portfolioOrders, setPortfolioOrders] = useState<Order[]>([]);
@@ -135,7 +143,7 @@ export default function PortfoliosPage() {
       addPortfolio(created);
       if (initialPositions && initialPositions.length > 0) {
         const currency = data.reference_currency || 'EUR';
-        await Promise.allSettled(
+        await Promise.all(
           initialPositions.map(pos =>
             apiService.createOrder({
               portfolio_id: created.id,
@@ -146,6 +154,7 @@ export default function PortfoliosPage() {
               commission: 0,
               order_type: 'buy',
               date: pos.date,
+              instrument_type: pos.instrumentType,
             } as OrderFormData)
           )
         );
@@ -312,13 +321,14 @@ export default function PortfoliosPage() {
 
         <Modal
           isOpen={isModalOpen}
-          onClose={() => setIsModalOpen(false)}
+          onClose={guardedModalClose}
           title={isEditMode ? (selectedPortfolio?.name || t('portfolios.newPortfolio')) : t('portfolios.newPortfolio')}
         >
           <PortfolioForm
             onSubmit={handleSubmit}
             onDelete={isEditMode && selectedPortfolio ? () => handleDelete(selectedPortfolio.id) : undefined}
-            onCancel={() => setIsModalOpen(false)}
+            onCancel={guardedModalClose}
+            onDirtyChange={dirty => { portfolioDirtyRef.current = dirty; }}
             initialData={selectedPortfolio ? {
               name: selectedPortfolio.name,
               description: selectedPortfolio.description,
@@ -341,6 +351,7 @@ interface PortfolioFormProps {
   onSubmit: (data: PortfolioFormData, initialPositions?: InitialPosition[]) => Promise<void>;
   onDelete?: () => Promise<void>;
   onCancel: () => void;
+  onDirtyChange?: (dirty: boolean) => void;
   initialData?: PortfolioFormData;
   isEditMode?: boolean;
   investmentCategories: Category[];
@@ -348,7 +359,7 @@ interface PortfolioFormProps {
   isLoadingOrders: boolean;
 }
 
-function PortfolioForm({ onSubmit, onDelete, onCancel, initialData, isEditMode, investmentCategories, orders, isLoadingOrders }: PortfolioFormProps) {
+function PortfolioForm({ onSubmit, onDelete, onCancel, onDirtyChange, initialData, isEditMode, investmentCategories, orders, isLoadingOrders }: PortfolioFormProps) {
   const { t } = useTranslation();
   const { formatCurrency } = useSettings();
   const [name, setName] = useState(initialData?.name || '');
@@ -359,6 +370,7 @@ function PortfolioForm({ onSubmit, onDelete, onCancel, initialData, isEditMode, 
   const [error, setError] = useState('');
   const [initialPositions, setInitialPositions] = useState<InitialPosition[]>([]);
   const [isPositionModalOpen, setIsPositionModalOpen] = useState(false);
+  const markDirty = () => { onDirtyChange?.(true); };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -384,7 +396,7 @@ function PortfolioForm({ onSubmit, onDelete, onCancel, initialData, isEditMode, 
         <input
           type="text"
           value={name}
-          onChange={(e) => setName(e.target.value)}
+          onChange={(e) => { setName(e.target.value); markDirty(); }}
           className="input-field"
           placeholder="Es: Fineco, TradeRepublic..."
           autoComplete="off" autoCorrect="off" spellCheck={false}
@@ -397,7 +409,7 @@ function PortfolioForm({ onSubmit, onDelete, onCancel, initialData, isEditMode, 
         <input
           type="text"
           value={description}
-          onChange={(e) => setDescription(e.target.value)}
+          onChange={(e) => { setDescription(e.target.value); markDirty(); }}
           className="input-field"
           placeholder={t('portfolios.description')}
           autoComplete="off" autoCorrect="off" spellCheck={false}
@@ -411,7 +423,7 @@ function PortfolioForm({ onSubmit, onDelete, onCancel, initialData, isEditMode, 
             <button
               key={c.code}
               type="button"
-              onClick={() => setCurrency(c.code)}
+              onClick={() => { setCurrency(c.code); markDirty(); }}
               className={`flex-1 py-2 rounded-lg text-sm font-medium border-2 transition-colors ${
                 currency === c.code
                   ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-300'
@@ -432,7 +444,7 @@ function PortfolioForm({ onSubmit, onDelete, onCancel, initialData, isEditMode, 
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
-              onClick={() => setCategoryId(undefined)}
+              onClick={() => { setCategoryId(undefined); markDirty(); }}
               className={`px-3 py-1.5 rounded-lg text-sm border-2 transition-colors ${
                 categoryId === undefined
                   ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-300'
@@ -445,7 +457,7 @@ function PortfolioForm({ onSubmit, onDelete, onCancel, initialData, isEditMode, 
               <button
                 key={cat.id}
                 type="button"
-                onClick={() => setCategoryId(cat.id)}
+                onClick={() => { setCategoryId(cat.id); markDirty(); }}
                 className={`px-3 py-1.5 rounded-lg text-sm border-2 transition-colors flex items-center gap-1.5 ${
                   categoryId === cat.id
                     ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-300'
@@ -490,7 +502,7 @@ function PortfolioForm({ onSubmit, onDelete, onCancel, initialData, isEditMode, 
                   </div>
                   <button
                     type="button"
-                    onClick={() => setInitialPositions(prev => prev.filter((_, j) => j !== i))}
+                    onClick={() => { if (window.confirm('Rimuovere questa posizione?')) { setInitialPositions(prev => prev.filter((_, j) => j !== i)); markDirty(); } }}
                     className="text-red-400 dark:text-red-500 text-xs ml-2 shrink-0"
                   >
                     ✕
@@ -570,6 +582,7 @@ function PortfolioForm({ onSubmit, onDelete, onCancel, initialData, isEditMode, 
         currency={currency}
         onAdd={(pos) => {
           setInitialPositions(prev => [...prev, pos]);
+          markDirty();
           setIsPositionModalOpen(false);
         }}
         onCancel={() => setIsPositionModalOpen(false)}
@@ -596,8 +609,9 @@ function PositionForm({ currency, onAdd, onCancel }: PositionFormProps) {
   const currSymbol = currSymbols[currency] || currency;
 
   // Ticker search
-  const [instrumentType, setInstrumentType] = useState<'etf' | 'stock'>('etf');
+  const [instrumentType, setInstrumentType] = useState<'etf' | 'stock' | 'bond'>('etf');
   const [ucitsCache, setUcitsCache] = useState<any[]>([]);
+  const [bondCache, setBondCache] = useState<any[]>([]);
   const [symbolOptions, setSymbolOptions] = useState<any[]>([]);
   const [symbolLoading, setSymbolLoading] = useState(false);
   const [symbolSearchOpen, setSymbolSearchOpen] = useState(false);
@@ -605,7 +619,10 @@ function PositionForm({ currency, onAdd, onCancel }: PositionFormProps) {
   const skipSymbolSearchRef = useRef(false);
   const [isinLookupLoading, setIsinLookupLoading] = useState(false);
   const [isinLookupError, setIsinLookupError] = useState(false);
+  const [bondLookupLoading, setBondLookupLoading] = useState(false);
+  const [bondLookupError, setBondLookupError] = useState(false);
   const ucitsLoadedRef = useRef(false);
+  const bondCacheLoadedRef = useRef(false);
   const isIsinStr = useCallback((s: string) => /^[A-Z]{2}[A-Z0-9]{10}$/.test(s), []);
 
   useEffect(() => {
@@ -627,11 +644,47 @@ function PositionForm({ currency, onAdd, onCancel }: PositionFormProps) {
   }, [instrumentType, ucitsCache.length]);
 
   useEffect(() => {
+    if (instrumentType !== 'bond' || bondCacheLoadedRef.current || bondCache.length > 0) return;
+    const cached = sessionStorage.getItem('bondCache');
+    if (cached) {
+      try { setBondCache(JSON.parse(cached)); bondCacheLoadedRef.current = true; return; } catch {}
+    }
+    bondCacheLoadedRef.current = true;
+    fetch(`${PF_BACKEND_URL}/symbols/bonds`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data?.results) {
+          setBondCache(data.results);
+          try { sessionStorage.setItem('bondCache', JSON.stringify(data.results)); } catch {}
+        }
+      })
+      .catch(() => { bondCacheLoadedRef.current = false; });
+  }, [instrumentType, bondCache.length]);
+
+  useEffect(() => {
     if (skipSymbolSearchRef.current) { skipSymbolSearchRef.current = false; return; }
     if (!symbol || symbol.length < 2) {
       setSymbolOptions([]);
       setSymbolSearchCompleted(false);
       setSymbolSearchOpen(false);
+      return;
+    }
+    // Bond: search local cache
+    if (instrumentType === 'bond') {
+      if (bondCache.length === 0) { setSymbolLoading(false); return; }
+      const q = symbol.toUpperCase();
+      const isIsin = /^[A-Z]{2}[A-Z0-9]{0,10}$/.test(q);
+      const ql = symbol.toLowerCase();
+      const filtered = bondCache.filter(b => {
+        const isin = (b.isin || '').toUpperCase();
+        const name = (b.name || '').toLowerCase();
+        const issuer = (b.issuer || '').toLowerCase();
+        return isIsin ? isin.startsWith(q) : (name.includes(ql) || issuer.includes(ql));
+      }).slice(0, 20);
+      setSymbolOptions(filtered);
+      setSymbolSearchOpen(filtered.length > 0);
+      setSymbolLoading(false);
+      setSymbolSearchCompleted(true);
       return;
     }
     setSymbolSearchCompleted(false);
@@ -667,7 +720,7 @@ function PositionForm({ currency, onAdd, onCancel }: PositionFormProps) {
     };
     const timer = setTimeout(run, 250);
     return () => { clearTimeout(timer); controller.abort(); };
-  }, [symbol, instrumentType, ucitsCache, isIsinStr]);
+  }, [symbol, instrumentType, ucitsCache, bondCache, isIsinStr]);
 
   const handleIsinLookup = async () => {
     setIsinLookupLoading(true);
@@ -690,6 +743,27 @@ function PositionForm({ currency, onAdd, onCancel }: PositionFormProps) {
     }
   };
 
+  const handleBondLookup = async () => {
+    const isin = symbol.toUpperCase().trim();
+    if (!isin) return;
+    setBondLookupLoading(true); setBondLookupError(false);
+    try {
+      const res = await fetch(`${PF_BACKEND_URL}/symbols/bond-lookup?isin=${encodeURIComponent(isin)}`);
+      if (!res.ok) throw new Error('not found');
+      const data = await res.json();
+      if (data.listings?.length > 0) {
+        const first = data.listings[0];
+        const entry = { isin, name: first.name || '', issuer: first.name || '', coupon: null, maturity: null, currency: first.currency || 'EUR' };
+        const updated = [...bondCache.filter(b => b.isin !== isin), entry];
+        setBondCache(updated);
+        try { sessionStorage.setItem('bondCache', JSON.stringify(updated)); } catch {}
+        skipSymbolSearchRef.current = true;
+        setSymbolOptions([]); setSymbolSearchOpen(false);
+      } else { setBondLookupError(true); }
+    } catch { setBondLookupError(true); }
+    finally { setBondLookupLoading(false); }
+  };
+
   const formatDisplayDate = (d: string) => {
     if (!d) return t('transactions.selectDate');
     const [y, m, day] = d.split('-');
@@ -701,22 +775,22 @@ function PositionForm({ currency, onAdd, onCancel }: PositionFormProps) {
     const qty = parseFloat(quantity.replace(',', '.'));
     const prc = parseFloat(price.replace(',', '.'));
     if (!symbol.trim() || !qty || !prc) return;
-    onAdd({ symbol: symbol.trim().toUpperCase(), quantity: qty, price: prc, date });
+    onAdd({ symbol: symbol.trim().toUpperCase(), quantity: qty, price: prc, date, instrumentType });
   };
 
   return (
     <form onSubmit={handleSubmit} autoComplete="off" className="space-y-4">
 
-      {/* ETF / Stock toggle */}
+      {/* ETF / Stock / Bond toggle */}
       <div className="flex rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700">
-        {(['etf', 'stock'] as const).map(typ => (
+        {(['etf', 'stock', 'bond'] as const).map(typ => (
           <button
             key={typ}
             type="button"
-            onClick={() => { setInstrumentType(typ); setSymbol(''); setSymbolOptions([]); setSymbolSearchCompleted(false); }}
+            onClick={() => { setInstrumentType(typ); setSymbol(''); setSymbolOptions([]); setSymbolSearchCompleted(false); setBondLookupError(false); setIsinLookupError(false); }}
             className={`flex-1 py-2 text-sm font-medium transition-colors ${instrumentType === typ ? 'bg-blue-500 text-white' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
           >
-            {typ === 'etf' ? 'ETF' : 'Stock'}
+            {typ === 'etf' ? 'ETF' : typ === 'stock' ? 'Stock' : 'Bond'}
           </button>
         ))}
       </div>
@@ -724,14 +798,14 @@ function PositionForm({ currency, onAdd, onCancel }: PositionFormProps) {
       {/* Ticker */}
       <div className="relative">
         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-          {instrumentType === 'etf' ? t('transactions.tickerOrIsin') : t('transactions.tickerOrName')}
+          {instrumentType === 'etf' ? t('transactions.tickerOrIsin') : instrumentType === 'stock' ? t('transactions.tickerOrName') : 'ISIN'}
         </label>
         <div className="relative">
           <input
             type="text"
             value={symbol}
             onChange={(e) => { setSymbol(e.target.value.toUpperCase()); setIsinLookupError(false); }}
-            placeholder={instrumentType === 'etf' ? 'VWCE, SWDA, IE00...' : 'AAPL, MSFT...'}
+            placeholder={instrumentType === 'etf' ? 'VWCE, SWDA, IE00...' : instrumentType === 'stock' ? 'AAPL, MSFT...' : 'IT0005..., XS12...'}
             className={'input-field uppercase tracking-wider font-mono font-bold text-lg' + (symbolLoading ? ' pr-8' : '')}
             onFocus={() => { if (symbolOptions.length > 0) setSymbolSearchOpen(true); }}
             onBlur={() => setTimeout(() => setSymbolSearchOpen(false), 150)}
@@ -749,55 +823,82 @@ function PositionForm({ currency, onAdd, onCancel }: PositionFormProps) {
           )}
         </div>
 
-        {symbolSearchOpen && symbol.length >= 2 && !symbolLoading && symbolSearchCompleted && (
+        {symbolSearchOpen && symbol.length >= 2 && !symbolLoading && symbolSearchCompleted && symbolOptions.length > 0 && (
           <div className="absolute z-20 mt-1 w-full border border-gray-200 dark:border-gray-700 rounded-lg max-h-52 overflow-auto bg-white dark:bg-gray-900 shadow-xl">
-            {symbolOptions.length > 0 ? symbolOptions.map((opt: any) => (
+            {symbolOptions.map((opt: any, i: number) => (
               <button
-                key={`${opt.symbol}-${opt.exchange || ''}`}
+                key={i}
                 type="button"
                 onMouseDown={() => {
-                  setSymbol(opt.symbol);
+                  setSymbol(instrumentType === 'bond' ? (opt.isin || '') : opt.symbol);
                   setSymbolOptions([]);
                   setSymbolSearchOpen(false);
                   skipSymbolSearchRef.current = true;
                 }}
                 className="w-full flex items-center justify-between px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-800 text-left border-b border-gray-100 dark:border-gray-800 last:border-0"
               >
-                <div className="min-w-0">
-                  <span className="font-mono font-bold text-sm text-gray-900 dark:text-gray-100">{opt.symbol}</span>
-                  {opt.name && <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{opt.name}</p>}
-                </div>
-                <div className="flex flex-col items-end gap-0.5 ml-2 shrink-0 text-xs text-gray-400">
-                  {opt.exchange && <span>{opt.exchange}</span>}
-                  {opt.currency && <span className="font-medium">{opt.currency}</span>}
-                </div>
-              </button>
-            )) : (
-              <div className="px-3 py-3 text-center text-xs text-gray-500 dark:text-gray-400">
-                {isIsinStr(symbol) ? (
-                  <div className="flex flex-col items-center gap-2">
-                    <span>{t('transactions.isinNotCached')}</span>
-                    {isinLookupError && <span className="text-red-500">{t('transactions.isinNotFound')}</span>}
-                    <button
-                      type="button"
-                      onMouseDown={handleIsinLookup}
-                      disabled={isinLookupLoading}
-                      className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-60 transition text-xs"
-                    >
-                      {isinLookupLoading && (
-                        <svg className="animate-spin h-3 w-3" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
-                        </svg>
-                      )}
-                      {isinLookupLoading ? t('transactions.searching') : t('transactions.searchJustEtf')}
-                    </button>
+                {instrumentType === 'bond' ? (
+                  <div className="min-w-0">
+                    <span className="font-mono font-bold text-sm text-gray-900 dark:text-gray-100">{opt.isin}</span>
+                    {(opt.name || opt.issuer) && <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{opt.name || opt.issuer}</p>}
+                    <div className="flex gap-2 text-xs text-gray-400 mt-0.5">
+                      {opt.maturity && <span>Sc. {opt.maturity}</span>}
+                      {opt.coupon != null && <span>{opt.coupon}%</span>}
+                      {opt.currency && <span className="text-blue-500">{opt.currency}</span>}
+                    </div>
                   </div>
                 ) : (
-                  <span>{t('transactions.noResults')}</span>
+                  <>
+                    <div className="min-w-0">
+                      <span className="font-mono font-bold text-sm text-gray-900 dark:text-gray-100">{opt.symbol}</span>
+                      {opt.name && <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{opt.name}</p>}
+                    </div>
+                    <div className="flex flex-col items-end gap-0.5 ml-2 shrink-0 text-xs text-gray-400">
+                      {opt.exchange && <span>{opt.exchange}</span>}
+                      {opt.currency && <span className="font-medium">{opt.currency}</span>}
+                    </div>
+                  </>
                 )}
-              </div>
-            )}
+              </button>
+            ))}
+          </div>
+        )}
+        {/* ETF ISIN lookup (empty state) */}
+        {instrumentType !== 'bond' && symbolSearchOpen && symbol.length >= 2 && !symbolLoading && symbolSearchCompleted && symbolOptions.length === 0 && (
+          <div className="absolute z-20 mt-1 w-full border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 shadow-xl">
+            <div className="px-3 py-3 text-center text-xs text-gray-500 dark:text-gray-400">
+              {isIsinStr(symbol) ? (
+                <div className="flex flex-col items-center gap-2">
+                  <span>{t('transactions.isinNotCached')}</span>
+                  {isinLookupError && <span className="text-red-500">{t('transactions.isinNotFound')}</span>}
+                  <button
+                    type="button"
+                    onMouseDown={handleIsinLookup}
+                    disabled={isinLookupLoading}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-60 transition text-xs"
+                  >
+                    {isinLookupLoading && <svg className="animate-spin h-3 w-3" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>}
+                    {isinLookupLoading ? t('transactions.searching') : t('transactions.searchJustEtf')}
+                  </button>
+                </div>
+              ) : (
+                <span>{t('transactions.noResults')}</span>
+              )}
+            </div>
+          </div>
+        )}
+        {/* Bond lookup (on-demand, when ISIN not in cache) */}
+        {instrumentType === 'bond' && symbol.length >= 10 && symbolSearchCompleted && symbolOptions.length === 0 && (
+          <div className="absolute z-20 mt-1 w-full border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 shadow-xl overflow-hidden">
+            <button
+              type="button"
+              onMouseDown={handleBondLookup}
+              disabled={bondLookupLoading}
+              className="w-full px-3 py-2 text-xs text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 text-left disabled:opacity-50"
+            >
+              {bondLookupLoading ? 'Ricerca...' : `Cerca obbligazione: ${symbol}`}
+            </button>
+            {bondLookupError && <div className="px-3 py-1.5 text-xs text-red-500">Non trovato</div>}
           </div>
         )}
       </div>
