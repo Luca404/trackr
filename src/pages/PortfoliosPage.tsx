@@ -15,8 +15,12 @@ const PF_BACKEND_URL = import.meta.env.VITE_PF_BACKEND_URL || 'https://portfolio
 
 interface InitialPosition {
   symbol: string;
+  isin?: string;
+  name?: string;
+  exchange?: string;
   quantity: number;
   price: number;
+  commission: number;
   date: string;
   instrumentType?: 'etf' | 'stock' | 'bond';
 }
@@ -145,7 +149,6 @@ export default function PortfoliosPage() {
       updatePortfolio(updated);
     } else {
       const created = await apiService.createPortfolio({ ...data, initial_capital: 0 });
-      addPortfolio(created);
       if (initialPositions && initialPositions.length > 0) {
         const currency = data.reference_currency || 'EUR';
         await Promise.all(
@@ -153,19 +156,22 @@ export default function PortfoliosPage() {
             apiService.createOrder({
               portfolio_id: created.id,
               symbol: pos.symbol.trim().toUpperCase(),
+              isin: pos.isin,
+              name: pos.name,
+              exchange: pos.exchange,
               currency,
               quantity: pos.quantity,
               price: pos.price,
-              commission: 0,
+              commission: pos.commission,
               order_type: 'buy',
               date: pos.date,
               instrument_type: pos.instrumentType,
             } as OrderFormData)
           )
         );
-        // Invalida cache summaries così al prossimo caricamento fa fetch fresco
         localStorage.removeItem(SUMMARIES_CACHE_KEY);
       }
+      addPortfolio(created);
     }
     setIsModalOpen(false);
   };
@@ -630,6 +636,8 @@ function PositionForm({ currency, onAdd, onCancel }: PositionFormProps) {
   const [isinLookupError, setIsinLookupError] = useState(false);
   const [bondLookupLoading, setBondLookupLoading] = useState(false);
   const [bondLookupError, setBondLookupError] = useState(false);
+  const [commission, setCommission] = useState('');
+  const [selectedInfo, setSelectedInfo] = useState<{ isin?: string; name?: string; exchange?: string } | null>(null);
   const ucitsLoadedRef = useRef(false);
   const bondCacheLoadedRef = useRef(false);
   const isIsinStr = useCallback((s: string) => /^[A-Z]{2}[A-Z0-9]{10}$/.test(s), []);
@@ -767,6 +775,7 @@ function PositionForm({ currency, onAdd, onCancel }: PositionFormProps) {
         setBondCache(updated);
         try { sessionStorage.setItem('bondCache', JSON.stringify(updated)); } catch {}
         skipSymbolSearchRef.current = true;
+        setSelectedInfo({ isin, name: first.name || '', exchange: first.exchange || 'MOT' });
         setSymbolOptions([]); setSymbolSearchOpen(false);
       } else { setBondLookupError(true); }
     } catch { setBondLookupError(true); }
@@ -784,7 +793,18 @@ function PositionForm({ currency, onAdd, onCancel }: PositionFormProps) {
     const qty = parseFloat(quantity.replace(',', '.'));
     const prc = parseFloat(price.replace(',', '.'));
     if (!symbol.trim() || !qty || !prc) return;
-    onAdd({ symbol: symbol.trim().toUpperCase(), quantity: qty, price: prc, date, instrumentType });
+    const comm = parseFloat((commission || '0').replace(',', '.')) || 0;
+    onAdd({
+      symbol: symbol.trim().toUpperCase(),
+      isin: selectedInfo?.isin,
+      name: selectedInfo?.name,
+      exchange: selectedInfo?.exchange,
+      quantity: qty,
+      price: prc,
+      commission: comm,
+      date,
+      instrumentType,
+    });
   };
 
   return (
@@ -796,7 +816,7 @@ function PositionForm({ currency, onAdd, onCancel }: PositionFormProps) {
           <button
             key={typ}
             type="button"
-            onClick={() => { setInstrumentType(typ); setSymbol(''); setSymbolOptions([]); setSymbolSearchCompleted(false); setBondLookupError(false); setIsinLookupError(false); }}
+            onClick={() => { setInstrumentType(typ); setSymbol(''); setSymbolOptions([]); setSymbolSearchCompleted(false); setBondLookupError(false); setIsinLookupError(false); setSelectedInfo(null); }}
             className={`flex-1 py-2 text-sm font-medium transition-colors ${instrumentType === typ ? 'bg-blue-500 text-white' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
           >
             {typ === 'etf' ? 'ETF' : typ === 'stock' ? 'Stock' : 'Bond'}
@@ -813,7 +833,7 @@ function PositionForm({ currency, onAdd, onCancel }: PositionFormProps) {
           <input
             type="text"
             value={symbol}
-            onChange={(e) => { setSymbol(e.target.value.toUpperCase()); setIsinLookupError(false); }}
+            onChange={(e) => { setSymbol(e.target.value.toUpperCase()); setIsinLookupError(false); setBondLookupError(false); setSelectedInfo(null); }}
             placeholder={instrumentType === 'etf' ? 'VWCE, SWDA, IE00...' : instrumentType === 'stock' ? 'AAPL, MSFT...' : 'IT0005..., XS12...'}
             className={'input-field uppercase tracking-wider font-mono font-bold text-lg' + (symbolLoading ? ' pr-8' : '')}
             onFocus={() => { if (symbolOptions.length > 0) setSymbolSearchOpen(true); }}
@@ -839,7 +859,13 @@ function PositionForm({ currency, onAdd, onCancel }: PositionFormProps) {
                 key={i}
                 type="button"
                 onMouseDown={() => {
-                  setSymbol(instrumentType === 'bond' ? (opt.isin || '') : opt.symbol);
+                  if (instrumentType === 'bond') {
+                    setSymbol(opt.isin || '');
+                    setSelectedInfo({ isin: opt.isin, name: opt.name || opt.issuer || '', exchange: 'MOT/EuroMOT' });
+                  } else {
+                    setSymbol(opt.symbol);
+                    setSelectedInfo({ isin: opt.isin, name: opt.name || '', exchange: opt.exchange || '' });
+                  }
                   setSymbolOptions([]);
                   setSymbolSearchOpen(false);
                   skipSymbolSearchRef.current = true;
@@ -912,6 +938,14 @@ function PositionForm({ currency, onAdd, onCancel }: PositionFormProps) {
         )}
       </div>
 
+      {selectedInfo?.name && (
+        <div className="px-2.5 py-1.5 bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-lg text-xs flex flex-wrap gap-x-3 gap-y-0.5">
+          <span className="font-medium text-gray-800 dark:text-gray-200 truncate">{selectedInfo.name}</span>
+          {selectedInfo.exchange && <span className="text-gray-400">{selectedInfo.exchange}</span>}
+          {selectedInfo.isin && <span className="text-gray-400 font-mono">{selectedInfo.isin}</span>}
+        </div>
+      )}
+
       {/* Quantità e Prezzo */}
       <div className="grid grid-cols-2 gap-3">
         <div>
@@ -941,6 +975,33 @@ function PositionForm({ currency, onAdd, onCancel }: PositionFormProps) {
           />
         </div>
       </div>
+
+      {/* Commissione */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Commissione ({currSymbol})</label>
+        <input
+          type="text"
+          inputMode="decimal"
+          value={commission}
+          onChange={e => setCommission(e.target.value)}
+          className="input-field"
+          placeholder="0.00"
+        />
+      </div>
+      {/* Totale calcolato */}
+      {(() => {
+        const qty = parseFloat(quantity.replace(',', '.'));
+        const prc = parseFloat(price.replace(',', '.'));
+        const comm = parseFloat((commission || '0').replace(',', '.'));
+        if (!qty || !prc) return null;
+        const total = qty * prc + (comm || 0);
+        return (
+          <div className="flex items-center justify-between px-3 py-2 bg-gray-50 dark:bg-gray-800/50 rounded-lg text-sm">
+            <span className="text-gray-500 dark:text-gray-400">Totale</span>
+            <span className="font-semibold text-gray-900 dark:text-gray-100">{currSymbol} {total.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+          </div>
+        );
+      })()}
 
       {/* Data */}
       <div>
