@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiService } from '../services/api';
 import { supabase } from '../services/supabase';
@@ -64,6 +64,12 @@ export default function SettingsPage() {
 
   const [exportMessage, setExportMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [showKakeboImport, setShowKakeboImport] = useState(false);
+  const kakeboDirtyRef = useRef(false);
+  const guardedKakeboClose = () => {
+    if (kakeboDirtyRef.current && !window.confirm('Hai modifiche non salvate. Chiudere comunque?')) return;
+    kakeboDirtyRef.current = false;
+    setShowKakeboImport(false);
+  };
 
   useEffect(() => { applyTheme(theme); }, [theme]);
 
@@ -520,8 +526,8 @@ export default function SettingsPage() {
 
       </div>
 
-      <Modal isOpen={showKakeboImport} onClose={() => setShowKakeboImport(false)} title={t('settings.importKakebo')} noBottomOffset>
-        <KakeboImport onClose={() => setShowKakeboImport(false)} />
+      <Modal isOpen={showKakeboImport} onClose={guardedKakeboClose} title={t('settings.importKakebo')} noBottomOffset>
+        <KakeboImport onClose={guardedKakeboClose} onDirtyChange={dirty => { kakeboDirtyRef.current = dirty; }} />
       </Modal>
     </div>
   );

@@ -404,11 +404,11 @@ function TickerCard({
 
 // ── main component ─────────────────────────────────────────────────────────────
 
-interface Props { onClose: () => void; }
+interface Props { onClose: () => void; onDirtyChange?: (dirty: boolean) => void; }
 type Step = 'upload' | 'options' | 'inv_details' | 'importing' | 'done';
 type InvMode = 'orders' | 'positions';
 
-export default function KakeboImport({ onClose }: Props) {
+export default function KakeboImport({ onClose, onDirtyChange }: Props) {
   const { t } = useTranslation();
   const { refreshAll } = useData();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -422,6 +422,9 @@ export default function KakeboImport({ onClose }: Props) {
   const [invDetails, setInvDetails] = useState<InvDetail[]>([]);    // mode A
   const [invPositions, setInvPositions] = useState<InvPosition[]>([]); // mode B
   const [validated, setValidated] = useState(false);
+
+  const markDirty = () => { onDirtyChange?.(true); };
+  const clearDirty = () => { onDirtyChange?.(false); };
 
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<{
@@ -516,14 +519,17 @@ export default function KakeboImport({ onClose }: Props) {
   };
 
   const updateDetail = (movimentoId: number, updates: Partial<Pick<InvDetail, 'instrumentType' | 'ticker' | 'quantity' | 'price'>>) => {
+    markDirty();
     setInvDetails(prev => prev.map(d => d.movimentoId === movimentoId ? { ...d, ...updates } : d));
   };
 
   const updatePosition = (posId: string, updates: Partial<Pick<InvPosition, 'instrumentType' | 'ticker' | 'totalQty' | 'avgPrice'>>) => {
+    markDirty();
     setInvPositions(prev => prev.map(p => p.id === posId ? { ...p, ...updates } : p));
   };
 
   const addPosition = (contoId: number) => {
+    markDirty();
     const ref = invPositions.find(p => p.contoId === contoId)!;
     setInvPositions(prev => [...prev, {
       id: `${contoId}-${Date.now()}`,
@@ -539,6 +545,7 @@ export default function KakeboImport({ onClose }: Props) {
   };
 
   const removePosition = (posId: string) => {
+    markDirty();
     setInvPositions(prev => prev.filter(p => p.id !== posId));
   };
 
@@ -728,9 +735,11 @@ export default function KakeboImport({ onClose }: Props) {
             symbol: detail.ticker.trim().toUpperCase(), currency: 'EUR',
             quantity: parseFloat(detail.quantity), price: parseFloat(detail.price),
             commission: 0, order_type: 'buy', date: detail.date,
+            instrument_type: detail.instrumentType,
             name: detail.description || undefined,
           });
-          if (!ordErr) orderCount++;
+          if (ordErr) throw ordErr;
+          orderCount++;
         }
       } else {
         // Mode B: one order per portfolio position (current state)
@@ -743,12 +752,15 @@ export default function KakeboImport({ onClose }: Props) {
             symbol: pos.ticker.trim().toUpperCase(), currency: 'EUR',
             quantity: parseFloat(pos.totalQty), price: parseFloat(pos.avgPrice),
             commission: 0, order_type: 'buy', date: pos.lastDate,
+            instrument_type: pos.instrumentType,
           });
-          if (!ordErr) orderCount++;
+          if (ordErr) throw ordErr;
+          orderCount++;
         }
       }
 
       setProgress('');
+      clearDirty();
       setResult({ accounts: Object.keys(contoIdMap).length, transactions: txCount, investments: invCount, transfers: trCount, orders: orderCount, skipped });
       setStep('done');
       await refreshAll();
@@ -980,7 +992,7 @@ export default function KakeboImport({ onClose }: Props) {
                         price={pos.avgPrice}
                         qtyLabel="Quantità totale"
                         priceLabel="Prezzo medio di carico"
-                        onRemove={positions.length > 1 ? () => removePosition(pos.id) : undefined}
+                        onRemove={positions.length > 1 ? () => { if (window.confirm('Rimuovere questa posizione?')) removePosition(pos.id); } : undefined}
                         onChange={(_, updates) => updatePosition(pos.id, {
                           ...(updates.instrumentType !== undefined && { instrumentType: updates.instrumentType }),
                           ...(updates.ticker !== undefined && { ticker: updates.ticker }),
@@ -1005,7 +1017,7 @@ export default function KakeboImport({ onClose }: Props) {
           {error && <p className="text-sm text-red-500 dark:text-red-400">{error}</p>}
 
           <div className="flex gap-2">
-            <button className="flex-1 btn-secondary text-sm" onClick={() => { setError(null); setStep('options'); }}>{t('common.cancel')}</button>
+            <button className="flex-1 btn-secondary text-sm" onClick={() => { setError(null); clearDirty(); setStep('options'); }}>{t('common.cancel')}</button>
             <button className="flex-1 btn-primary text-sm" onClick={() => handleImport()}>{t('kakebo.import')}</button>
           </div>
         </div>

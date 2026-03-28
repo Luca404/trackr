@@ -216,6 +216,12 @@ Formato esportato da `SettingsPage.tsx`:
 ## Note importanti
 - Le categorie nel TransactionForm vengono filtrate per `category_type === currentType` — le categorie con `category_type = null` non appaiono in nessun tab
 - Per `type=investment`, il TransactionForm salta la griglia categorie (auto-seleziona la prima categoria investment) e mostra un form testuale con campi ticker, quantità, prezzo/unità, commissioni → il totale viene calcolato automaticamente. I campi ticker/quantity/price vengono salvati su `transactions` oltre all'importo totale.
+- **Instrument type** (solo per investment): selector Stock / ETF / Bond. Cambia il comportamento del symbol search:
+  - **Stock/ETF**: cerca tramite backend `/symbols/search?instrument_type=stock|etf`; dropdown con risultati
+  - **Bond**: cerca prima in `bondCache` locale (ISIN prefix o substring su name/issuer); dropdown con nome/emittente/scadenza/cedola; se non trovato mostra "Cerca obbligazione" (chiama `/symbols/bond-lookup?isin=...`)
+- **Bond cache**: caricata all'avvio della sessione dal backend (`/symbols/bonds`), tenuta in `bondCache` state con backup in `sessionStorage['bondCache']`. All'on-demand lookup il bond trovato viene aggiunto alla cache locale e a sessionStorage.
+- **Info panel**: dopo la selezione di un asset (stock/ETF/bond) compare un card `bg-gray-50 dark:bg-gray-800` con: nome, exchange, valuta, TER, e per i bond: cedola, scadenza, YTM lordo/netto, duration.
+- **Prezzo**: sempre diretto in valuta (es. €/unit) per tutti i tipi inclusi i bond — formula `qty × price + commissione`. Non più percentuale del nominale.
 - Per `type=transfer`, il TransactionForm mostra un form Da→A con tastierino. Al submit chiama `apiService.createTransfer()` (tabella `transfers`) — nessuna riga viene inserita in `transactions`.
 - `TransactionsPage` mostra una lista unificata: `transactions` + `transfers` merged e ordinati per data. I trasferimenti mostrano "Conto A → Conto B" come sottotitolo.
 - `account_id` nelle transazioni è un `number` (ID Supabase), non una stringa
@@ -234,3 +240,4 @@ Formato esportato da `SettingsPage.tsx`:
 ## TODO funzionalità
 - [ ] **Eliminazione categoria con transazioni associate**: ora eliminare una categoria lascia le transazioni con `category` = nome stringa orfano. Possibili approcci: (a) bloccare l'eliminazione se ci sono transazioni associate mostrando il conteggio; (b) chiedere all'utente a quale categoria spostare le transazioni prima di eliminare; (c) assegnare automaticamente le transazioni a una categoria "Senza categoria". Stessa problematica per le sottocategorie. Da implementare in `confirmDeleteCategory` / `confirmDeleteSubcategory` in `CategoriesPage.tsx`.
 - [ ] **Logo app**: rifinire il logo (icon-512.png, icon-192.png) e aggiornare icon.svg coerentemente — logo attuale provvisorio generato con AI
+- [ ] **Lingua categorie default**: le categorie predefinite vengono create usando `i18n.language` al momento del primo login. Se l'utente ha impostato la lingua dell'app diversa da quella del browser (o non l'ha ancora impostata), le categorie potrebbero essere create nella lingua sbagliata. Verificare il flusso: `DataContext.fetchAllData` → `lang = i18n.language?.slice(0,2)` → `apiService.createDefaultCategories(lang)`. Possibile fix: mostrare un dialog alla prima apertura che chiede la lingua prima di creare i default, oppure ricreare le categorie default (rinominandole) quando l'utente cambia lingua.
