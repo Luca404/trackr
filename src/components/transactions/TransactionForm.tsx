@@ -830,19 +830,6 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
               </div>
             )}
 
-            {/* Info asset selezionato */}
-            {selectedSymbolInfo?.name && (
-              <div className="mt-2 p-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
-                <div><span className="text-gray-400">Nome</span><div className="font-medium text-gray-900 dark:text-gray-100 truncate">{selectedSymbolInfo.name}</div></div>
-                {selectedSymbolInfo.exchange && <div><span className="text-gray-400">Exchange</span><div className="font-medium text-gray-900 dark:text-gray-100">{selectedSymbolInfo.exchange}</div></div>}
-                {selectedSymbolInfo.currency && <div><span className="text-gray-400">Valuta</span><div className="font-medium text-gray-900 dark:text-gray-100">{selectedSymbolInfo.currency}</div></div>}
-                {selectedSymbolInfo.ter && <div><span className="text-gray-400">TER</span><div className="font-medium text-gray-900 dark:text-gray-100">{selectedSymbolInfo.ter}%</div></div>}
-                {bondMeta?.coupon != null && <div><span className="text-gray-400">Cedola</span><div className="font-medium text-gray-900 dark:text-gray-100">{bondMeta.coupon}%</div></div>}
-                {(bondMeta?.maturity || bondMeta?.maturity_bi) && <div><span className="text-gray-400">Scadenza</span><div className="font-medium text-gray-900 dark:text-gray-100">{bondMeta.maturity_bi || bondMeta.maturity}</div></div>}
-                {bondMeta?.ytm_gross != null && <div><span className="text-gray-400">YTM lordo</span><div className="font-medium text-gray-900 dark:text-gray-100">{bondMeta.ytm_gross}%</div></div>}
-                {bondMeta?.ytm_net != null && <div><span className="text-gray-400">YTM netto</span><div className="font-medium text-gray-900 dark:text-gray-100">{bondMeta.ytm_net}%</div></div>}
-              </div>
-            )}
           </div>
 
           <div>
@@ -860,6 +847,20 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
             />
           </div>
         </div>
+
+        {/* Info asset selezionato */}
+        {selectedSymbolInfo?.name && (
+          <div className="p-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
+            <div><span className="text-gray-400">Nome</span><div className="font-medium text-gray-900 dark:text-gray-100 truncate">{selectedSymbolInfo.name}</div></div>
+            {selectedSymbolInfo.exchange && <div><span className="text-gray-400">Exchange</span><div className="font-medium text-gray-900 dark:text-gray-100">{selectedSymbolInfo.exchange}</div></div>}
+            {selectedSymbolInfo.currency && <div><span className="text-gray-400">Valuta</span><div className="font-medium text-gray-900 dark:text-gray-100">{selectedSymbolInfo.currency}</div></div>}
+            {selectedSymbolInfo.ter && <div><span className="text-gray-400">TER</span><div className="font-medium text-gray-900 dark:text-gray-100">{selectedSymbolInfo.ter}%</div></div>}
+            {bondMeta?.coupon != null && <div><span className="text-gray-400">Cedola</span><div className="font-medium text-gray-900 dark:text-gray-100">{bondMeta.coupon}%</div></div>}
+            {(bondMeta?.maturity || bondMeta?.maturity_bi) && <div><span className="text-gray-400">Scadenza</span><div className="font-medium text-gray-900 dark:text-gray-100">{bondMeta.maturity_bi || bondMeta.maturity}</div></div>}
+            {bondMeta?.ytm_gross != null && <div><span className="text-gray-400">YTM lordo</span><div className="font-medium text-gray-900 dark:text-gray-100">{bondMeta.ytm_gross}%</div></div>}
+            {bondMeta?.ytm_net != null && <div><span className="text-gray-400">YTM netto</span><div className="font-medium text-gray-900 dark:text-gray-100">{bondMeta.ytm_net}%</div></div>}
+          </div>
+        )}
 
         {/* Prezzo + Commissioni */}
         <div className="grid grid-cols-2 gap-3">

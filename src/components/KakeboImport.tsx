@@ -348,7 +348,7 @@ function TickerCard({
             ))}
           </div>
         )}
-        {instrumentType === 'bond' && ticker.length >= 10 && symbolSearchCompleted && symbolOptions.length === 0 && (
+        {instrumentType === 'bond' && ticker.length >= 10 && symbolSearchCompleted && symbolOptions.length === 0 && !selectedInfo && (
           <div className="absolute z-20 left-0 right-0 top-full mt-1 bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
             <button
               type="button"
