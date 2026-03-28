@@ -18,6 +18,7 @@ interface InitialPosition {
   isin?: string;
   name?: string;
   exchange?: string;
+  ter?: number;
   quantity: number;
   price: number;
   commission: number;
@@ -159,6 +160,7 @@ export default function PortfoliosPage() {
               isin: pos.isin,
               name: pos.name,
               exchange: pos.exchange,
+              ter: pos.ter,
               currency,
               quantity: pos.quantity,
               price: pos.price,
@@ -637,7 +639,7 @@ function PositionForm({ currency, onAdd, onCancel }: PositionFormProps) {
   const [bondLookupLoading, setBondLookupLoading] = useState(false);
   const [bondLookupError, setBondLookupError] = useState(false);
   const [commission, setCommission] = useState('');
-  const [selectedInfo, setSelectedInfo] = useState<{ isin?: string; name?: string; exchange?: string } | null>(null);
+  const [selectedInfo, setSelectedInfo] = useState<{ isin?: string; name?: string; exchange?: string; ter?: number } | null>(null);
   const ucitsLoadedRef = useRef(false);
   const bondCacheLoadedRef = useRef(false);
   const isIsinStr = useCallback((s: string) => /^[A-Z]{2}[A-Z0-9]{10}$/.test(s), []);
@@ -799,6 +801,7 @@ function PositionForm({ currency, onAdd, onCancel }: PositionFormProps) {
       isin: selectedInfo?.isin,
       name: selectedInfo?.name,
       exchange: selectedInfo?.exchange,
+      ter: selectedInfo?.ter,
       quantity: qty,
       price: prc,
       commission: comm,
@@ -864,7 +867,7 @@ function PositionForm({ currency, onAdd, onCancel }: PositionFormProps) {
                     setSelectedInfo({ isin: opt.isin, name: opt.name || opt.issuer || '', exchange: 'MOT/EuroMOT' });
                   } else {
                     setSymbol(opt.symbol);
-                    setSelectedInfo({ isin: opt.isin, name: opt.name || '', exchange: opt.exchange || '' });
+                    setSelectedInfo({ isin: opt.isin, name: opt.name || '', exchange: opt.exchange || '', ter: opt.ter });
                   }
                   setSymbolOptions([]);
                   setSymbolSearchOpen(false);
