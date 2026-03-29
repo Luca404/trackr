@@ -712,6 +712,11 @@ class ApiService {
     if (error) throw error;
   }
 
+  async deleteOrderByTransactionId(transactionId: number): Promise<void> {
+    const { error } = await supabase.from('orders').delete().eq('transaction_id', transactionId);
+    if (error) throw error;
+  }
+
   // ==================== PORTFOLIOS ====================
 
   async getPortfolios(): Promise<Portfolio[]> {
