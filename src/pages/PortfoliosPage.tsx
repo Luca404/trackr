@@ -223,7 +223,7 @@ export default function PortfoliosPage() {
             <>
               {/* Banner Investimenti totali */}
               {portfolios.length > 0 && (
-                <div className="sticky top-0 z-10 -mx-4 px-4 pt-1 pb-3 bg-gray-50 dark:bg-gray-900 relative">
+                <div className="sticky top-0 z-20 -mx-4 px-4 pt-1 pb-3 bg-gray-50 dark:bg-gray-900 relative">
                   <div className="card py-5">
                     <div className="text-sm text-gray-500 dark:text-gray-400 mb-1 text-center">{t('portfolios.totalInvestments')}</div>
                     <div className="flex items-center justify-center">

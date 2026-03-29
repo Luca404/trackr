@@ -220,7 +220,7 @@ export default function AccountsPage() {
       <div className="space-y-6">
         {/* Totale liquidità */}
         {(isLoading || accounts.length > 0) && (
-          <div className="sticky top-0 z-10 -mx-4 px-4 pt-1 pb-3 bg-gray-50 dark:bg-gray-900 relative">
+          <div className="sticky top-0 z-20 -mx-4 px-4 pt-1 pb-6 bg-gray-50 dark:bg-gray-900 relative">
           <div className="card py-6">
             <div className="text-sm text-gray-500 dark:text-gray-400 mb-1 text-center">{t('accounts.totalLiquidity')}</div>
             <div className="flex items-center justify-center">
@@ -244,7 +244,7 @@ export default function AccountsPage() {
             </div>
           </div>
           {/* Gradient fade */}
-          <div className="absolute left-0 right-0 h-6 bg-gradient-to-b from-gray-50 dark:from-gray-900 to-transparent pointer-events-none" style={{ top: '100%' }} />
+          <div className="absolute left-0 right-0 h-8 bg-gradient-to-b from-gray-50 dark:from-gray-900 to-transparent pointer-events-none" style={{ top: '100%' }} />
           </div>
         )}
 
