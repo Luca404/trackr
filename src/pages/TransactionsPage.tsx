@@ -175,11 +175,11 @@ export default function TransactionsPage() {
       return;
     }
     if (selectedTransaction) {
-      await apiService.deleteTransaction(selectedTransaction.id);
       if (selectedTransaction.type === 'investment') {
-        apiService.deleteOrderByTransactionId(selectedTransaction.id).catch(console.error);
+        await apiService.deleteOrderByTransactionId(selectedTransaction.id).catch(console.error);
         localStorage.removeItem('pf_summaries_cache');
       }
+      await apiService.deleteTransaction(selectedTransaction.id);
       deleteTransactionCache(selectedTransaction.id);
       closeModal();
     }
