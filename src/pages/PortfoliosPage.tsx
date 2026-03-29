@@ -109,9 +109,14 @@ export default function PortfoliosPage() {
       }
       setSummaries(map);
       try {
-        const allZero = Object.values(map).length > 0 && Object.values(map).every(s => s.total_value === 0);
-        const ttl = allZero ? SUMMARIES_CACHE_TTL_EMPTY : SUMMARIES_CACHE_TTL;
-        localStorage.setItem(SUMMARIES_CACHE_KEY, JSON.stringify({ time: Date.now(), ttl, data: map }));
+        // Se almeno un portafoglio ha total_cost > 0 ma total_value === 0, il fetch prezzi è fallito
+        // (es. Railway cold start o JustETF/yfinance lento). Non cachare il risultato per riprovare subito.
+        const priceFetchFailed = Object.values(map).some(s => s.total_value === 0 && s.total_cost > 0);
+        if (!priceFetchFailed) {
+          const allTrulyEmpty = Object.values(map).length > 0 && Object.values(map).every(s => s.total_value === 0);
+          const ttl = allTrulyEmpty ? SUMMARIES_CACHE_TTL_EMPTY : SUMMARIES_CACHE_TTL;
+          localStorage.setItem(SUMMARIES_CACHE_KEY, JSON.stringify({ time: Date.now(), ttl, data: map }));
+        }
       } catch (_) {}
     } catch (e) {
       console.error('Error fetching portfolio summaries:', e);
