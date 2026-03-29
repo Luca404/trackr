@@ -1,4 +1,4 @@
-import { type ReactNode, useState, useEffect } from 'react';
+import { type ReactNode, useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useData } from '../../contexts/DataContext';
@@ -18,7 +18,16 @@ export default function Layout({ children }: LayoutProps) {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const { t } = useTranslation();
 
-  const { needRefresh: [needRefresh], updateServiceWorker } = useRegisterSW();
+  const swRegistrationRef = useRef<ServiceWorkerRegistration | undefined>(undefined);
+  const { needRefresh: [needRefresh], updateServiceWorker } = useRegisterSW({
+    onRegisteredSW(_swUrl, registration) {
+      swRegistrationRef.current = registration;
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') registration?.update();
+      });
+      setInterval(() => registration?.update(), 60 * 60 * 1000);
+    }
+  });
   const [newCommitMsg, setNewCommitMsg] = useState<string | null>(null);
   useEffect(() => {
     if (!needRefresh) return;
@@ -30,6 +39,7 @@ export default function Layout({ children }: LayoutProps) {
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
+    swRegistrationRef.current?.update();
     await refreshAll();
     window.dispatchEvent(new CustomEvent('trackr:refresh'));
     setIsRefreshing(false);
