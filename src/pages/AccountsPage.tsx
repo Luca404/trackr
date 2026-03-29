@@ -220,7 +220,7 @@ export default function AccountsPage() {
       <div className="space-y-6">
         {/* Totale liquidità */}
         {(isLoading || accounts.length > 0) && (
-          <div className="sticky top-0 z-20 -mx-4 px-4 -mt-3 pt-4 pb-6 bg-gray-50 dark:bg-gray-900 relative">
+          <div className="sticky -top-3 z-20 -mx-4 px-4 -mt-3 pt-4 pb-6 bg-gray-50 dark:bg-gray-900 relative">
           <div className="card py-6">
             <div className="text-sm text-gray-500 dark:text-gray-400 mb-1 text-center">{t('accounts.totalLiquidity')}</div>
             <div className="flex items-center justify-center">

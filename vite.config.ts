@@ -7,7 +7,7 @@ import { resolve } from 'path'
 
 const APP_MAJOR = 1
 const APP_MINOR = 0
-const APP_PATCH = 7  // Incrementare manualmente ad ogni commit
+const APP_PATCH = 8  // Incrementare manualmente ad ogni commit
 
 function getCommitMsg() {
   try {
