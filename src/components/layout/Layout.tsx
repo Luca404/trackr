@@ -19,6 +19,14 @@ export default function Layout({ children }: LayoutProps) {
   const { t } = useTranslation();
 
   const { needRefresh: [needRefresh], updateServiceWorker } = useRegisterSW();
+  const [newVersion, setNewVersion] = useState<string | null>(null);
+  useEffect(() => {
+    if (!needRefresh) return;
+    fetch('/version.json', { cache: 'no-store' })
+      .then(r => r.json())
+      .then(d => setNewVersion(d.version))
+      .catch(() => {});
+  }, [needRefresh]);
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
@@ -107,7 +115,9 @@ export default function Layout({ children }: LayoutProps) {
           <div className="bg-gray-900 dark:bg-gray-700 text-white rounded-xl shadow-lg px-4 py-3 flex items-center gap-3">
             <span className="text-lg flex-shrink-0">🔄</span>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium leading-tight">Nuova versione disponibile</p>
+              <p className="text-sm font-medium leading-tight">
+                {newVersion ? `v${newVersion} disponibile` : 'Nuova versione disponibile'}
+              </p>
               {__LAST_COMMIT_MSG__ && (
                 <p className="text-xs text-gray-400 dark:text-gray-300 truncate mt-0.5">{__LAST_COMMIT_MSG__}</p>
               )}

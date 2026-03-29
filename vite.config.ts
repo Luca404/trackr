@@ -2,6 +2,8 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 import { execSync } from 'child_process'
+import { writeFileSync } from 'fs'
+import { resolve } from 'path'
 
 const APP_MAJOR = 1
 const APP_MINOR = 0
@@ -18,6 +20,8 @@ function getGitInfo() {
 
 const { commitCount, commitMsg } = getGitInfo()
 const appVersion = `${APP_MAJOR}.${APP_MINOR}.${commitCount}`
+
+writeFileSync(resolve(__dirname, 'public/version.json'), JSON.stringify({ version: appVersion }))
 
 // https://vite.dev/config/
 export default defineConfig({

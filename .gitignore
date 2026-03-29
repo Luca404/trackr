@@ -2,6 +2,7 @@
 # Dependencies
 # ========================
 node_modules/
+public/version.json
 .pnp
 .pnp.js
 
