@@ -713,8 +713,7 @@ class ApiService {
   }
 
   async deleteOrderByTransactionId(transactionId: number): Promise<void> {
-    const { data, error } = await supabase.from('orders').delete().eq('transaction_id', transactionId).select();
-    console.log('[deleteOrderByTransactionId]', { transactionId, deleted: data, error });
+    const { error } = await supabase.from('orders').delete().eq('transaction_id', transactionId);
     if (error) throw error;
   }
 
