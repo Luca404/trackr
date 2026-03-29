@@ -10,6 +10,7 @@ interface ConfirmDialogProps {
   confirmText?: string;
   cancelText?: string;
   isDestructive?: boolean;
+  noBottomOffset?: boolean;
 }
 
 export default function ConfirmDialog({
@@ -21,6 +22,7 @@ export default function ConfirmDialog({
   confirmText,
   cancelText,
   isDestructive = false,
+  noBottomOffset = false,
 }: ConfirmDialogProps) {
   const { t } = useTranslation();
   const resolvedConfirmText = confirmText ?? t('common.confirm');
@@ -32,7 +34,7 @@ export default function ConfirmDialog({
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={title}>
+    <Modal isOpen={isOpen} onClose={onClose} title={title} noBottomOffset={noBottomOffset}>
       <div className="space-y-6">
         <p className="text-gray-700 dark:text-gray-300">{message}</p>
 

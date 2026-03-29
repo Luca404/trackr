@@ -6,6 +6,7 @@ interface ConfirmOptions {
   confirmText?: string;
   cancelText?: string;
   isDestructive?: boolean;
+  noBottomOffset?: boolean;
 }
 
 interface ConfirmState {
@@ -45,6 +46,7 @@ export function useConfirm() {
       confirmText={state.options.confirmText}
       cancelText={state.options.cancelText}
       isDestructive={state.options.isDestructive}
+      noBottomOffset={state.options.noBottomOffset}
     />
   );
 

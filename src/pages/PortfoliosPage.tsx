@@ -330,7 +330,7 @@ export default function PortfoliosPage() {
               {/* Add button — only when there are portfolios */}
               {portfolios.length > 0 && (
                 <div
-                  className="card flex items-center justify-center py-6 border-2 border-dashed border-gray-200 dark:border-gray-700 cursor-pointer outline-none select-none"
+                  className="card flex items-center justify-center py-10 border-2 border-dashed border-gray-200 dark:border-gray-700 cursor-pointer outline-none select-none"
                   style={{ WebkitTapHighlightColor: 'transparent' }}
                   onClick={handleCreatePortfolio}
                 >
