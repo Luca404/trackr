@@ -10,7 +10,7 @@ const PF_BACKEND_URL = import.meta.env.VITE_PF_BACKEND_URL || 'https://portfolio
 
 // ── Kakebo internal types ──────────────────────────────────────────────────────
 
-interface KConto { id: number; nome: string; tipo: number; }
+interface KConto { id: number; nome: string; tipo: number; variazioneSaldo1: number; }
 interface KCategoria { id: number; padreId: number | null; tipoMovimento: number; nome: string; }
 interface KMovimento {
   id: number; contoId: number; categoriaId: number | null; sottocategoriaId: number | null;
@@ -29,6 +29,10 @@ interface InvDetail {
   ticker: string;
   quantity: string;
   price: string;
+  isin: string;
+  name: string;
+  exchange: string;
+  ter: string;
 }
 
 // Mode B: one entry per position (multiple per portfolio allowed)
@@ -42,6 +46,10 @@ interface InvPosition {
   ticker: string;
   totalQty: string;
   avgPrice: string;
+  isin: string;
+  name: string;
+  exchange: string;
+  ter: string;
 }
 
 // ── helpers ────────────────────────────────────────────────────────────────────
@@ -79,7 +87,7 @@ interface TickerCardProps {
   priceLabel: string;
   showValidation?: boolean;
   onRemove?: () => void;
-  onChange: (id: string, updates: Partial<{ instrumentType: 'etf' | 'stock' | 'bond'; ticker: string; quantity: string; price: string }>) => void;
+  onChange: (id: string, updates: Partial<{ instrumentType: 'etf' | 'stock' | 'bond'; ticker: string; quantity: string; price: string; isin: string; name: string; exchange: string; ter: string }>) => void;
 }
 
 function TickerCard({
@@ -207,11 +215,16 @@ function TickerCard({
   const selectSymbol = (item: any) => {
     skipNextSearch.current = true;
     if (instrumentType === 'bond') {
-      onChange(id, { ticker: item.isin || '' });
-      setSelectedInfo({ name: item.name || item.issuer || '', exchange: 'MOT/EuroMOT', currency: item.currency || 'EUR' });
+      const symName = item.name || item.issuer || '';
+      onChange(id, { ticker: item.isin || '', isin: item.isin || '', name: symName, exchange: 'MOT/EuroMOT', ter: '' });
+      setSelectedInfo({ name: symName, exchange: 'MOT/EuroMOT', currency: item.currency || 'EUR' });
     } else {
-      onChange(id, { ticker: (item.symbol || '').toUpperCase() });
-      setSelectedInfo({ name: item.name || '', exchange: item.exchange || '', currency: item.currency || '' });
+      const symName = item.name || '';
+      const symExchange = item.exchange || '';
+      const symIsin = item.isin || '';
+      const symTer = item.ter != null ? String(item.ter) : '';
+      onChange(id, { ticker: (item.symbol || '').toUpperCase(), isin: symIsin, name: symName, exchange: symExchange, ter: symTer });
+      setSelectedInfo({ name: symName, exchange: symExchange, currency: item.currency || '' });
     }
     setSymbolOptions([]); setSymbolSearchOpen(false);
   };
@@ -231,7 +244,7 @@ function TickerCard({
         setBondCache(updated);
         try { sessionStorage.setItem('bondCache', JSON.stringify(updated)); } catch {}
         skipNextSearch.current = true;
-        onChange(id, { ticker: isin });
+        onChange(id, { ticker: isin, isin, name: first.name || isin, exchange: first.exchange || 'MOT', ter: '' });
         setSelectedInfo({ name: first.name || isin, exchange: first.exchange || 'MOT', currency: first.currency || 'EUR' });
         setSymbolOptions([]); setSymbolSearchOpen(false);
       } else { setBondLookupError(true); }
@@ -444,8 +457,9 @@ export default function KakeboImport({ onClose, onDirtyChange }: Props) {
       const buf = await file.arrayBuffer();
       const db = new SQL.Database(new Uint8Array(buf));
 
-      const conti = queryAll<any>(db, 'SELECT id, nome, tipo FROM Conto').map(r => ({
+      const conti = queryAll<any>(db, 'SELECT id, nome, tipo, variazioneSaldo1 FROM Conto').map(r => ({
         id: r.id as number, nome: (r.nome as string) || '', tipo: r.tipo as number,
+        variazioneSaldo1: (r.variazioneSaldo1 as number) || 0,
       }));
       const categorie = queryAll<any>(db, 'SELECT id, padreId, tipoMovimento, nome FROM Categoria').map(r => ({
         id: r.id as number, padreId: r.padreId as number | null,
@@ -492,6 +506,10 @@ export default function KakeboImport({ onClose, onDirtyChange }: Props) {
         ticker: '',
         quantity: '',
         price: '',
+        isin: '',
+        name: '',
+        exchange: '',
+        ter: '',
       }));
     setInvDetails(details);
 
@@ -516,16 +534,20 @@ export default function KakeboImport({ onClose, onDirtyChange }: Props) {
       ticker: '',
       totalQty: '',
       avgPrice: '',
+      isin: '',
+      name: '',
+      exchange: '',
+      ter: '',
     })));
     setStep('inv_details');
   };
 
-  const updateDetail = (movimentoId: number, updates: Partial<Pick<InvDetail, 'instrumentType' | 'ticker' | 'quantity' | 'price'>>) => {
+  const updateDetail = (movimentoId: number, updates: Partial<Pick<InvDetail, 'instrumentType' | 'ticker' | 'quantity' | 'price' | 'isin' | 'name' | 'exchange' | 'ter'>>) => {
     markDirty();
     setInvDetails(prev => prev.map(d => d.movimentoId === movimentoId ? { ...d, ...updates } : d));
   };
 
-  const updatePosition = (posId: string, updates: Partial<Pick<InvPosition, 'instrumentType' | 'ticker' | 'totalQty' | 'avgPrice'>>) => {
+  const updatePosition = (posId: string, updates: Partial<Pick<InvPosition, 'instrumentType' | 'ticker' | 'totalQty' | 'avgPrice' | 'isin' | 'name' | 'exchange' | 'ter'>>) => {
     markDirty();
     setInvPositions(prev => prev.map(p => p.id === posId ? { ...p, ...updates } : p));
   };
@@ -543,6 +565,10 @@ export default function KakeboImport({ onClose, onDirtyChange }: Props) {
       ticker: '',
       totalQty: '',
       avgPrice: '',
+      isin: '',
+      name: '',
+      exchange: '',
+      ter: '',
     }]);
   };
 
@@ -608,12 +634,45 @@ export default function KakeboImport({ onClose, onDirtyChange }: Props) {
       }
 
       // 2. Create accounts for non-investment kakebo accounts
+      // Pre-compute net transaction effects per conto (to set initial_balance = variazioneSaldo1 - net)
+      const netPerConto: Record<number, number> = {};
+      for (const m of parsed.movimenti) {
+        const amount = Math.abs(m.importo1);
+        if (m.tipo === -1) {
+          if (invContoIds.has(m.contoId)) {
+            // Regular → Investment: source regular account loses amount
+            if (m.contoPrelievoId != null && !invContoIds.has(m.contoPrelievoId)) {
+              netPerConto[m.contoPrelievoId] = (netPerConto[m.contoPrelievoId] ?? 0) - amount;
+            }
+          } else {
+            const fromIsInv = m.contoPrelievoId != null && invContoIds.has(m.contoPrelievoId);
+            if (fromIsInv) {
+              // Investment → Regular: destination gains amount
+              netPerConto[m.contoId] = (netPerConto[m.contoId] ?? 0) + amount;
+            } else {
+              // Regular → Regular transfer
+              netPerConto[m.contoId] = (netPerConto[m.contoId] ?? 0) + amount;
+              if (m.contoPrelievoId != null) {
+                netPerConto[m.contoPrelievoId] = (netPerConto[m.contoPrelievoId] ?? 0) - amount;
+              }
+            }
+          }
+        } else {
+          // expense (importo1 < 0) or income (importo1 > 0)
+          if (!invContoIds.has(m.contoId)) {
+            netPerConto[m.contoId] = (netPerConto[m.contoId] ?? 0) + m.importo1;
+          }
+        }
+      }
+
       const contoIdMap: Record<number, number> = {};
       for (const c of parsed.conti) {
         if (invContoIds.has(c.id)) continue;
+        const net = netPerConto[c.id] ?? 0;
+        const initial_balance = c.variazioneSaldo1 - net;
         const { data, error: accErr } = await supabase
           .from('accounts')
-          .insert({ user_id: userId, profile_id: profileId, name: c.nome.trim(), icon: '🏦', initial_balance: 0 })
+          .insert({ user_id: userId, profile_id: profileId, name: c.nome.trim(), icon: '🏦', initial_balance })
           .select().single();
         if (accErr) throw accErr;
         contoIdMap[c.id] = data.id;
@@ -679,15 +738,25 @@ export default function KakeboImport({ onClose, onDirtyChange }: Props) {
 
         if (m.tipo === -1) {
           if (invContoIds.has(m.contoId)) {
+            // Regular → Investment: deduct from source regular account
             const accountId = m.contoPrelievoId != null ? contoIdMap[m.contoPrelievoId] : undefined;
             if (!accountId) { skipped++; continue; }
             const catName = invContoToCategoryName[m.contoId] ?? 'Investimenti';
             txRows.push({ user_id: userId, profile_id: profileId, account_id: accountId, type: 'investment', category: catName, subcategory: null, amount, description, date, _movId: m.id });
           } else {
-            const fromId = m.contoPrelievoId != null ? contoIdMap[m.contoPrelievoId] : undefined;
-            const toId = contoIdMap[m.contoId];
-            if (!fromId || !toId) { skipped++; continue; }
-            trRows.push({ user_id: userId, profile_id: profileId, from_account_id: fromId, to_account_id: toId, amount, description, date });
+            const fromIsInv = m.contoPrelievoId != null && invContoIds.has(m.contoPrelievoId);
+            if (fromIsInv) {
+              // Investment → Regular: credit the destination regular account
+              const toId = contoIdMap[m.contoId];
+              if (!toId) { skipped++; continue; }
+              const catName = invContoToCategoryName[m.contoPrelievoId!] ?? 'Investimenti';
+              txRows.push({ user_id: userId, profile_id: profileId, account_id: toId, type: 'income', category: catName, subcategory: null, amount, description, date });
+            } else {
+              const fromId = m.contoPrelievoId != null ? contoIdMap[m.contoPrelievoId] : undefined;
+              const toId = contoIdMap[m.contoId];
+              if (!fromId || !toId) { skipped++; continue; }
+              trRows.push({ user_id: userId, profile_id: profileId, from_account_id: fromId, to_account_id: toId, amount, description, date });
+            }
           }
         } else {
           const accountId = contoIdMap[m.contoId];
@@ -732,7 +801,10 @@ export default function KakeboImport({ onClose, onDirtyChange }: Props) {
             quantity: parseFloat(detail.quantity), price: parseFloat(detail.price),
             commission: 0, order_type: 'buy', date: detail.date,
             instrument_type: detail.instrumentType,
-            name: detail.description || undefined,
+            isin: detail.isin || undefined,
+            name: detail.name || undefined,
+            exchange: detail.exchange || undefined,
+            ter: detail.ter || undefined,
           });
           if (ordErr) throw ordErr;
           orderCount++;
@@ -749,6 +821,10 @@ export default function KakeboImport({ onClose, onDirtyChange }: Props) {
             quantity: parseFloat(pos.totalQty), price: parseFloat(pos.avgPrice),
             commission: 0, order_type: 'buy', date: pos.lastDate,
             instrument_type: pos.instrumentType,
+            isin: pos.isin || undefined,
+            name: pos.name || undefined,
+            exchange: pos.exchange || undefined,
+            ter: pos.ter || undefined,
           });
           if (ordErr) throw ordErr;
           orderCount++;
@@ -994,6 +1070,10 @@ export default function KakeboImport({ onClose, onDirtyChange }: Props) {
                           ...(updates.ticker !== undefined && { ticker: updates.ticker }),
                           ...(updates.quantity !== undefined && { totalQty: updates.quantity }),
                           ...(updates.price !== undefined && { avgPrice: updates.price }),
+                          ...(updates.isin !== undefined && { isin: updates.isin }),
+                          ...(updates.name !== undefined && { name: updates.name }),
+                          ...(updates.exchange !== undefined && { exchange: updates.exchange }),
+                          ...(updates.ter !== undefined && { ter: updates.ter }),
                         })}
                       />
                     ))}
