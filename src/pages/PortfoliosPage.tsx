@@ -68,14 +68,16 @@ export default function PortfoliosPage() {
 
   const SUMMARIES_CACHE_KEY = 'pf_summaries_cache';
   const SUMMARIES_CACHE_TTL = 24 * 60 * 60 * 1000; // 24h
+  const SUMMARIES_CACHE_TTL_EMPTY = 5 * 60 * 1000; // 5min se tutti i valori sono 0
 
   const loadSummariesFromServer = async (forceRefresh = false) => {
     if (!forceRefresh) {
       try {
         const raw = localStorage.getItem(SUMMARIES_CACHE_KEY);
         if (raw) {
-          const { time, data } = JSON.parse(raw);
-          if (Date.now() - time < SUMMARIES_CACHE_TTL) {
+          const { time, ttl, data } = JSON.parse(raw);
+          const effectiveTtl = ttl ?? SUMMARIES_CACHE_TTL;
+          if (Date.now() - time < effectiveTtl) {
             setSummaries(data);
             return;
           }
@@ -107,7 +109,9 @@ export default function PortfoliosPage() {
       }
       setSummaries(map);
       try {
-        localStorage.setItem(SUMMARIES_CACHE_KEY, JSON.stringify({ time: Date.now(), data: map }));
+        const allZero = Object.values(map).length > 0 && Object.values(map).every(s => s.total_value === 0);
+        const ttl = allZero ? SUMMARIES_CACHE_TTL_EMPTY : SUMMARIES_CACHE_TTL;
+        localStorage.setItem(SUMMARIES_CACHE_KEY, JSON.stringify({ time: Date.now(), ttl, data: map }));
       } catch (_) {}
     } catch (e) {
       console.error('Error fetching portfolio summaries:', e);
