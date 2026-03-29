@@ -670,7 +670,7 @@ export default function CategoriesPage() {
                 {t('categories.color')}
               </label>
               <div className="flex items-center gap-3">
-                <div className="flex gap-2 overflow-x-auto pb-1 flex-1" style={{ scrollbarWidth: 'none' }}>
+                <div className="flex gap-2 overflow-x-auto py-2 flex-1" style={{ scrollbarWidth: 'none' }}>
                   {PRESET_COLORS.map(c => (
                     <button
                       key={c}
