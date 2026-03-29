@@ -269,28 +269,47 @@ export default function StatsPage() {
                     </defs>
                     {(() => {
                       const totalLen = balanceTrendData.length;
-                      const svgPoints = visibleTrendData.map((point) => {
-                        const i = balanceTrendData.indexOf(point);
-                        const x = totalLen > 1 ? (i / (totalLen - 1)) * 100 : 50;
-                        const y = 100 - ((point.balance - dataMinBalance) / balanceRange) * 100;
-                        return { x, y };
-                      });
-                      const lastX = svgPoints.length > 0 ? svgPoints[svgPoints.length - 1].x : 0;
-                      const pointsStr = svgPoints.map(p => `${p.x},${p.y}`).join(' ');
+                      // Solo i punti con transazioni (giorni attivi)
+                      const svgPoints = visibleTrendData
+                        .filter(p => p.hasTransactions)
+                        .map((point) => {
+                          const i = balanceTrendData.indexOf(point);
+                          const x = totalLen > 1 ? (i / (totalLen - 1)) * 100 : 50;
+                          const y = 100 - ((point.balance - dataMinBalance) / balanceRange) * 100;
+                          return { x, y };
+                        });
+                      if (svgPoints.length === 0) return null;
+
+                      // Costruisce path smooth con curve di Bezier cubiche
+                      const smoothPath = (pts: { x: number; y: number }[]) => {
+                        if (pts.length === 1) return `M ${pts[0].x} ${pts[0].y}`;
+                        let d = `M ${pts[0].x} ${pts[0].y}`;
+                        for (let i = 0; i < pts.length - 1; i++) {
+                          const cp1x = pts[i].x + (pts[i + 1].x - pts[i].x) * 0.5;
+                          const cp1y = pts[i].y;
+                          const cp2x = pts[i].x + (pts[i + 1].x - pts[i].x) * 0.5;
+                          const cp2y = pts[i + 1].y;
+                          d += ` C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${pts[i + 1].x} ${pts[i + 1].y}`;
+                        }
+                        return d;
+                      };
+
+                      const linePath = smoothPath(svgPoints);
+                      const firstX = svgPoints[0].x;
+                      const lastX = svgPoints[svgPoints.length - 1].x;
+                      const areaPath = `${linePath} L ${lastX} 100 L ${firstX} 100 Z`;
+
                       return (
                         <>
-                          <polygon
-                            fill="url(#balanceGradient)"
-                            points={[`0,100`, ...svgPoints.map(p => `${p.x},${p.y}`), `${lastX},100`].join(' ')}
-                          />
-                          <polyline
+                          <path fill="url(#balanceGradient)" d={areaPath} />
+                          <path
                             fill="none"
                             stroke="#0ea5e9"
                             strokeWidth="2"
                             strokeLinecap="round"
                             strokeLinejoin="round"
                             vectorEffect="non-scaling-stroke"
-                            points={pointsStr}
+                            d={linePath}
                           />
                         </>
                       );
@@ -344,7 +363,7 @@ export default function StatsPage() {
             <button
               key={f}
               onClick={() => setFilter(f)}
-              className={`px-4 py-2 rounded-lg font-medium whitespace-nowrap transition-colors ${
+              className={`flex-1 min-w-0 py-2 rounded-lg font-medium text-sm transition-colors truncate ${
                 filter === f
                   ? f === 'expense' ? 'bg-red-500 text-white'
                     : f === 'income' ? 'bg-green-500 text-white'
