@@ -20,11 +20,12 @@ export default function Layout({ children }: LayoutProps) {
 
   const { needRefresh: [needRefresh], updateServiceWorker } = useRegisterSW();
   const [newVersion, setNewVersion] = useState<string | null>(null);
+  const [newCommitMsg, setNewCommitMsg] = useState<string | null>(null);
   useEffect(() => {
     if (!needRefresh) return;
     fetch('/version.json', { cache: 'no-store' })
       .then(r => r.json())
-      .then(d => setNewVersion(d.version))
+      .then(d => { setNewVersion(d.version); setNewCommitMsg(d.commitMsg || null); })
       .catch(() => {});
   }, [needRefresh]);
 
@@ -118,8 +119,8 @@ export default function Layout({ children }: LayoutProps) {
               <p className="text-sm font-medium leading-tight">
                 {newVersion ? `v${newVersion} disponibile` : 'Nuova versione disponibile'}
               </p>
-              {__LAST_COMMIT_MSG__ && (
-                <p className="text-xs text-gray-400 dark:text-gray-300 truncate mt-0.5">{__LAST_COMMIT_MSG__}</p>
+              {(newCommitMsg || __LAST_COMMIT_MSG__) && (
+                <p className="text-xs text-gray-400 dark:text-gray-300 truncate mt-0.5">{newCommitMsg || __LAST_COMMIT_MSG__}</p>
               )}
             </div>
             <button
