@@ -138,6 +138,7 @@ function mapPortfolio(row: any): Portfolio {
     user_id: row.user_id,
     name: row.name,
     icon: row.icon ?? '📈',
+    color: row.color ?? '#0ea5e9',
     initial_capital: row.initial_capital ?? 0,
     reference_currency: row.reference_currency ?? 'EUR',
     risk_free_source: row.risk_free_source ?? '',

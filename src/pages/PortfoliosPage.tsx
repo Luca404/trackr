@@ -282,7 +282,10 @@ export default function PortfoliosPage() {
                 >
                   <div className="flex items-start justify-between mb-1">
                     <div className="flex-1 min-w-0 flex items-center gap-2">
-                      <span className="text-2xl">{portfolio.icon ?? '📈'}</span>
+                      <span
+                        className="text-2xl w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+                        style={{ backgroundColor: (portfolio.color ?? '#0ea5e9') + '22' }}
+                      >{portfolio.icon ?? '📈'}</span>
                       <div className="font-medium text-gray-900 dark:text-gray-100">{portfolio.name}</div>
                     </div>
                     <div className="text-sm text-gray-400 dark:text-gray-500 ml-2 shrink-0">{portfolio.reference_currency}</div>
@@ -365,6 +368,7 @@ export default function PortfoliosPage() {
             initialData={selectedPortfolio ? {
               name: selectedPortfolio.name,
               icon: selectedPortfolio.icon,
+              color: selectedPortfolio.color,
               initial_capital: selectedPortfolio.initial_capital,
               reference_currency: selectedPortfolio.reference_currency,
             } : undefined}
@@ -395,8 +399,10 @@ function PortfolioForm({ onSubmit, onDelete, onCancel, onDirtyChange, initialDat
   const { formatCurrency } = useSettings();
   const { confirm: confirmDialog, dialog: confirmDialogEl } = useConfirm();
   const PORTFOLIO_ICONS = ['📈','📉','💼','🏦','💰','💵','💶','💷','🪙','💳','🏧','📊','🏛️','🌍','🌎','🌏','⭐','🔑','🎯','🚀','💡','🛡️','⚡','🌱'];
+  const PORTFOLIO_COLORS = ['#0ea5e9','#6366f1','#8b5cf6','#ec4899','#ef4444','#f97316','#eab308','#22c55e','#14b8a6','#64748b','#1d4ed8','#7c3aed'];
   const [name, setName] = useState(initialData?.name || '');
   const [icon, setIcon] = useState(initialData?.icon || '📈');
+  const [color, setColor] = useState(initialData?.color || '#0ea5e9');
   const [currency, setCurrency] = useState(initialData?.reference_currency || 'EUR');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
@@ -412,6 +418,7 @@ function PortfolioForm({ onSubmit, onDelete, onCancel, onDirtyChange, initialDat
       await onSubmit({
         name,
         icon,
+        color,
         reference_currency: currency,
       }, initialPositions.length > 0 ? initialPositions : undefined);
     } catch (err: any) {
@@ -451,6 +458,21 @@ function PortfolioForm({ onSubmit, onDelete, onCancel, onDirtyChange, initialDat
             >
               {ic}
             </button>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Colore</label>
+        <div className="flex gap-2 flex-wrap">
+          {PORTFOLIO_COLORS.map(c => (
+            <button
+              key={c}
+              type="button"
+              onClick={() => { setColor(c); markDirty(); }}
+              className={`w-8 h-8 rounded-full border-4 transition-all ${color === c ? 'border-gray-900 dark:border-white scale-110' : 'border-transparent'}`}
+              style={{ backgroundColor: c }}
+            />
           ))}
         </div>
       </div>

@@ -186,6 +186,7 @@ export interface Portfolio {
   user_id: number;
   name: string;
   icon?: string;
+  color?: string;
   initial_capital: number;
   reference_currency: string;
   risk_free_source: string;
@@ -200,6 +201,7 @@ export interface Portfolio {
 export interface PortfolioFormData {
   name: string;
   icon?: string;
+  color?: string;
   initial_capital?: number;
   reference_currency?: string;
   risk_free_source?: string;
