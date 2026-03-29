@@ -670,13 +670,13 @@ export default function CategoriesPage() {
                 {t('categories.color')}
               </label>
               <div className="flex items-center gap-3">
-                <div className="grid grid-cols-8 gap-1.5 flex-1">
+                <div className="flex gap-2 overflow-x-auto pb-1 flex-1" style={{ scrollbarWidth: 'none' }}>
                   {PRESET_COLORS.map(c => (
                     <button
                       key={c}
                       type="button"
                       onClick={() => setCategoryFormData(prev => ({ ...prev, color: c }))}
-                      className={`w-7 h-7 rounded-full transition-transform ${categoryFormData.color === c ? 'scale-125 ring-2 ring-offset-1 ring-gray-400 dark:ring-gray-500' : 'hover:scale-110'}`}
+                      className={`flex-shrink-0 w-7 h-7 rounded-full transition-transform ${categoryFormData.color === c ? 'scale-125 ring-2 ring-offset-1 ring-gray-400 dark:ring-gray-500' : 'hover:scale-110'}`}
                       style={{ backgroundColor: c }}
                     />
                   ))}
@@ -691,7 +691,7 @@ export default function CategoriesPage() {
               </div>
             </div>
 
-            <div>
+            <div className="mt-1">
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 {t('categories.icon')}
               </label>

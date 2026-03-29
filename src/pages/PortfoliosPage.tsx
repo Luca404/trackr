@@ -466,13 +466,13 @@ function PortfolioForm({ onSubmit, onDelete, onCancel, onDirtyChange, initialDat
 
       <div>
         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Colore</label>
-        <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
+        <div className="flex gap-2 overflow-x-auto pb-1 py-1" style={{ scrollbarWidth: 'none' }}>
           {PORTFOLIO_COLORS.map(c => (
             <button
               key={c}
               type="button"
               onClick={() => { setColor(c); markDirty(); }}
-              className={`flex-shrink-0 w-8 h-8 rounded-full border-4 transition-all ${color === c ? 'border-gray-900 dark:border-white scale-110' : 'border-transparent'}`}
+              className={`flex-shrink-0 w-7 h-7 rounded-full transition-transform ${color === c ? 'scale-125 ring-2 ring-offset-1 ring-gray-400 dark:ring-gray-500' : 'hover:scale-110'}`}
               style={{ backgroundColor: c }}
             />
           ))}
