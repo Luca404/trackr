@@ -13,18 +13,21 @@ const APP_MINOR_BASE_COMMIT = 0
 
 function getGitInfo() {
   try {
-    // Vercel fa shallow clone: unshallow per avere il conteggio completo dei commit
-    try { execSync('git fetch --unshallow', { stdio: 'ignore' }) } catch { /* già full clone */ }
-    const commitCount = parseInt(execSync('git rev-list --count HEAD').toString().trim(), 10)
     const commitMsg = execSync('git log -1 --pretty=%s').toString().trim()
-    return { commitCount, commitMsg }
+    // Su Vercel: VERCEL_GIT_COMMIT_SHA è iniettato come env var (shallow clone inaffidabile)
+    const vercelSha = process.env.VERCEL_GIT_COMMIT_SHA
+    if (vercelSha) {
+      return { patch: vercelSha.slice(0, 7), commitMsg }
+    }
+    // Locale: usa il conteggio completo dei commit
+    const commitCount = parseInt(execSync('git rev-list --count HEAD').toString().trim(), 10)
+    return { patch: String(commitCount - APP_MINOR_BASE_COMMIT), commitMsg }
   } catch {
-    return { commitCount: 0, commitMsg: '' }
+    return { patch: '0', commitMsg: '' }
   }
 }
 
-const { commitCount, commitMsg } = getGitInfo()
-const patch = commitCount - APP_MINOR_BASE_COMMIT
+const { patch, commitMsg } = getGitInfo()
 const appVersion = `${APP_MAJOR}.${APP_MINOR}.${patch}`
 
 writeFileSync(resolve(__dirname, 'public/version.json'), JSON.stringify({ version: appVersion, commitMsg }))
