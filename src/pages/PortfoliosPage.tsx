@@ -216,7 +216,7 @@ export default function PortfoliosPage() {
 
   return (
     <Layout>
-      <div className="space-y-3">
+      <div className="space-y-3 isolate">
         {showSkeleton
           ? Array.from({ length: skeletonCount }).map((_, i) => <SkeletonPortfolioCard key={i} />)
           : (
