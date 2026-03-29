@@ -428,7 +428,7 @@ export default function CategoriesPage() {
         <div className="flex gap-2">
           <button
             onClick={() => setFilter('expense')}
-            className={`px-4 py-2 rounded-lg font-medium whitespace-nowrap transition-colors ${
+            className={`flex-1 py-2 rounded-lg font-medium text-sm transition-colors ${
               filter === 'expense'
                 ? 'bg-red-500 text-white'
                 : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
@@ -438,7 +438,7 @@ export default function CategoriesPage() {
           </button>
           <button
             onClick={() => setFilter('income')}
-            className={`px-4 py-2 rounded-lg font-medium whitespace-nowrap transition-colors ${
+            className={`flex-1 py-2 rounded-lg font-medium text-sm transition-colors ${
               filter === 'income'
                 ? 'bg-green-500 text-white'
                 : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
