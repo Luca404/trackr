@@ -39,7 +39,7 @@ interface PortfolioSummary {
 export default function PortfoliosPage() {
   const { t } = useTranslation();
   const { formatCurrency } = useSettings();
-  const { portfolios, isLoading, isInitialized, addPortfolio, updatePortfolio, deletePortfolio } = useData();
+  const { portfolios, isLoading, isInitialized, addPortfolio, updatePortfolio, deletePortfolio, activeProfile } = useData();
   const skeletonCount = useSkeletonCount('portfolios', portfolios.length, isLoading, 3);
   const { confirm: confirmDialog, dialog: confirmDialogEl } = useConfirm();
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -89,7 +89,11 @@ export default function PortfoliosPage() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.access_token) return;
       const token = session.access_token;
-      const res = await fetch(`${PF_BACKEND_URL}/portfolios`, {
+      const profileId = activeProfile?.id;
+      const url = profileId
+        ? `${PF_BACKEND_URL}/portfolios?profile_id=${profileId}`
+        : `${PF_BACKEND_URL}/portfolios`;
+      const res = await fetch(url, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const json = res.ok ? await res.json() : null;
