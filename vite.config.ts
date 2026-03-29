@@ -7,28 +7,18 @@ import { resolve } from 'path'
 
 const APP_MAJOR = 1
 const APP_MINOR = 0
-// Numero di commit al momento dell'ultimo incremento di MINOR.
-// Quando si incrementa APP_MINOR, aggiornare questo valore al conteggio commit corrente.
-const APP_MINOR_BASE_COMMIT = 0
+const APP_PATCH = 2  // Incrementare manualmente ad ogni commit
 
-function getGitInfo() {
+function getCommitMsg() {
   try {
-    const commitMsg = execSync('git log -1 --pretty=%s').toString().trim()
-    // Su Vercel: VERCEL_GIT_COMMIT_SHA è iniettato come env var (shallow clone inaffidabile)
-    const vercelSha = process.env.VERCEL_GIT_COMMIT_SHA
-    if (vercelSha) {
-      return { patch: vercelSha.slice(0, 7), commitMsg }
-    }
-    // Locale: usa il conteggio completo dei commit
-    const commitCount = parseInt(execSync('git rev-list --count HEAD').toString().trim(), 10)
-    return { patch: String(commitCount - APP_MINOR_BASE_COMMIT), commitMsg }
+    return execSync('git log -1 --pretty=%s').toString().trim()
   } catch {
-    return { patch: '0', commitMsg: '' }
+    return ''
   }
 }
 
-const { patch, commitMsg } = getGitInfo()
-const appVersion = `${APP_MAJOR}.${APP_MINOR}.${patch}`
+const commitMsg = getCommitMsg()
+const appVersion = `${APP_MAJOR}.${APP_MINOR}.${APP_PATCH}`
 
 writeFileSync(resolve(__dirname, 'public/version.json'), JSON.stringify({ version: appVersion, commitMsg }))
 
