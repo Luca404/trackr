@@ -217,7 +217,7 @@ export default function AccountsPage() {
 
   return (
     <Layout>
-      <div className="space-y-6 isolate">
+      <div className="space-y-6">
         {/* Totale liquidità */}
         {(isLoading || accounts.length > 0) && (
           <div className="sticky top-0 z-20 -mx-4 px-4 pt-1 pb-6 bg-gray-50 dark:bg-gray-900 relative">

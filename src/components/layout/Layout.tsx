@@ -109,14 +109,17 @@ export default function Layout({ children }: LayoutProps) {
       {/* Main Content */}
       <main
         className="flex-1 max-w-7xl w-full mx-auto px-4 py-3 overflow-y-auto overscroll-y-none"
-        style={{
-          paddingBottom: '6rem',
-          transition: isSwipingHorizontally ? 'none' : 'transform 0.3s ease-out, opacity 0.3s ease-out',
-          transform: `translateX(${Math.max(-30, Math.min(30, swipeOffset * 0.2))}px)`,
-          opacity: isSwipingHorizontally ? Math.max(0.7, 1 - Math.abs(swipeOffset) / 800) : 1
-        }}
+        style={{ paddingBottom: '6rem' }}
       >
-        {children}
+        <div
+          style={{
+            transition: isSwipingHorizontally ? 'none' : 'transform 0.3s ease-out, opacity 0.3s ease-out',
+            transform: `translateX(${Math.max(-30, Math.min(30, swipeOffset * 0.2))}px)`,
+            opacity: isSwipingHorizontally ? Math.max(0.7, 1 - Math.abs(swipeOffset) / 800) : 1
+          }}
+        >
+          {children}
+        </div>
       </main>
 
       {/* Update banner */}
