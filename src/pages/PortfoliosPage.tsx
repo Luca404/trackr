@@ -107,6 +107,7 @@ export default function PortfoliosPage() {
           };
         }
       }
+      console.log('[portfolios] GET /portfolios response:', json);
       setSummaries(map);
       try {
         // Se almeno un portafoglio ha total_cost > 0 ma total_value === 0, il fetch prezzi è fallito
