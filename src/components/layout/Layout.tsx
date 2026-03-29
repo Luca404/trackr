@@ -131,7 +131,7 @@ export default function Layout({ children }: LayoutProps) {
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium leading-tight">Nuova versione disponibile{newVersion ? ` (v${newVersion})` : ''}</p>
               {(newCommitMsg || __LAST_COMMIT_MSG__) && (
-                <p className="text-xs text-gray-400 dark:text-gray-300 truncate mt-0.5">{newCommitMsg || __LAST_COMMIT_MSG__}</p>
+                <p className="text-xs text-gray-400 dark:text-gray-300 mt-0.5 break-words">{newCommitMsg || __LAST_COMMIT_MSG__}</p>
               )}
             </div>
             <button
