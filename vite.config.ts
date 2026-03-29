@@ -1,13 +1,34 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
+import { execSync } from 'child_process'
+
+const APP_MAJOR = 1
+const APP_MINOR = 0
+
+function getGitInfo() {
+  try {
+    const commitCount = execSync('git rev-list --count HEAD').toString().trim()
+    const commitMsg = execSync('git log -1 --pretty=%s').toString().trim()
+    return { commitCount, commitMsg }
+  } catch {
+    return { commitCount: '0', commitMsg: '' }
+  }
+}
+
+const { commitCount, commitMsg } = getGitInfo()
+const appVersion = `${APP_MAJOR}.${APP_MINOR}.${commitCount}`
 
 // https://vite.dev/config/
 export default defineConfig({
+  define: {
+    __APP_VERSION__: JSON.stringify(appVersion),
+    __LAST_COMMIT_MSG__: JSON.stringify(commitMsg),
+  },
   plugins: [
     react(),
     VitePWA({
-      registerType: 'autoUpdate',
+      registerType: 'prompt',
       includeAssets: ['icon.svg', 'icon-192.png', 'icon-512.png'],
       manifest: {
         name: 'Trackr - Gestione Spese',

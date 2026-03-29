@@ -1,9 +1,10 @@
-import { type ReactNode, useState, useEffect, useRef } from 'react';
+import { type ReactNode, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useData } from '../../contexts/DataContext';
 import { useSwipeNavigation } from '../../hooks/useSwipeNavigation';
 import { useTranslation } from 'react-i18next';
+import { useRegisterSW } from 'virtual:pwa-register/react';
 
 interface LayoutProps {
   children: ReactNode;
@@ -16,33 +17,11 @@ export default function Layout({ children }: LayoutProps) {
   const { refreshAll } = useData();
   const [isRefreshing, setIsRefreshing] = useState(false);
   const { t } = useTranslation();
-  const swUpdateAvailableRef = useRef(false);
 
-  useEffect(() => {
-    if (!('serviceWorker' in navigator)) return;
-    const onControllerChange = () => { swUpdateAvailableRef.current = true; };
-    navigator.serviceWorker.addEventListener('controllerchange', onControllerChange);
-    return () => navigator.serviceWorker.removeEventListener('controllerchange', onControllerChange);
-  }, []);
+  const { needRefresh: [needRefresh], updateServiceWorker } = useRegisterSW();
 
   const handleRefresh = async () => {
-    if (swUpdateAvailableRef.current) {
-      window.location.reload();
-      return;
-    }
     setIsRefreshing(true);
-    // Controlla se c'è un nuovo SW in attesa
-    if ('serviceWorker' in navigator) {
-      const reg = await navigator.serviceWorker.getRegistration();
-      if (reg) {
-        await reg.update();
-        if (reg.waiting) {
-          reg.waiting.postMessage({ type: 'SKIP_WAITING' });
-          window.location.reload();
-          return;
-        }
-      }
-    }
     await refreshAll();
     window.dispatchEvent(new CustomEvent('trackr:refresh'));
     setIsRefreshing(false);
@@ -75,9 +54,12 @@ export default function Layout({ children }: LayoutProps) {
         <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
           <button
             onClick={() => navigate('/transactions')}
-            className="text-xl font-bold text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 transition-colors"
+            className="flex items-baseline gap-2 text-xl font-bold text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 transition-colors"
           >
             Trackr
+            <span className="text-xs font-normal text-gray-400 dark:text-gray-500">
+              v{__APP_VERSION__}
+            </span>
           </button>
           <div className="flex items-center gap-4">
             <span className="text-sm text-gray-600 dark:text-gray-400 hidden sm:inline">
@@ -118,6 +100,27 @@ export default function Layout({ children }: LayoutProps) {
       >
         {children}
       </main>
+
+      {/* Update banner */}
+      {needRefresh && (
+        <div className="fixed left-0 right-0 z-50 px-4" style={{ bottom: '4.5rem' }}>
+          <div className="bg-gray-900 dark:bg-gray-700 text-white rounded-xl shadow-lg px-4 py-3 flex items-center gap-3">
+            <span className="text-lg flex-shrink-0">🔄</span>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium leading-tight">Nuova versione disponibile</p>
+              {__LAST_COMMIT_MSG__ && (
+                <p className="text-xs text-gray-400 dark:text-gray-300 truncate mt-0.5">{__LAST_COMMIT_MSG__}</p>
+              )}
+            </div>
+            <button
+              onClick={() => updateServiceWorker(true)}
+              className="flex-shrink-0 bg-primary-500 hover:bg-primary-400 text-white text-sm font-medium px-3 py-1.5 rounded-lg transition-colors"
+            >
+              Ricarica
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Bottom Navigation */}
       <nav className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 safe-area-pb z-[60]">
