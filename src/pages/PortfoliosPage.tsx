@@ -327,14 +327,16 @@ export default function PortfoliosPage() {
                 </div>
               ))}
 
-              {/* Add button */}
-              <div
-                className="card flex items-center justify-center border-2 border-dashed border-gray-200 dark:border-gray-700 cursor-pointer outline-none select-none"
-                style={{ WebkitTapHighlightColor: 'transparent' }}
-                onClick={handleCreatePortfolio}
-              >
-                <div className="w-10 h-10 rounded-full border-2 border-gray-300 dark:border-gray-600 flex items-center justify-center text-gray-400 dark:text-gray-500 font-bold text-2xl">+</div>
-              </div>
+              {/* Add button — only when there are portfolios */}
+              {portfolios.length > 0 && (
+                <div
+                  className="card flex items-center justify-center py-6 border-2 border-dashed border-gray-200 dark:border-gray-700 cursor-pointer outline-none select-none"
+                  style={{ WebkitTapHighlightColor: 'transparent' }}
+                  onClick={handleCreatePortfolio}
+                >
+                  <div className="w-10 h-10 rounded-full border-2 border-gray-300 dark:border-gray-600 flex items-center justify-center text-gray-400 dark:text-gray-500 font-bold text-2xl">+</div>
+                </div>
+              )}
 
               {/* Analyze link */}
               {portfolios.length > 0 && (
