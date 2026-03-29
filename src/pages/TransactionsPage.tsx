@@ -27,6 +27,7 @@ export default function TransactionsPage() {
     transfers: allTransfers,
     accounts,
     categories,
+    portfolios,
     isLoading: dataLoading,
     addTransaction,
     updateTransaction: updateTransactionCache,
@@ -78,7 +79,11 @@ export default function TransactionsPage() {
     return account ? `${account.icon} ${account.name}` : `Conto #${accountId}`;
   };
 
-  const getCategoryIcon = (categoryName: string) => {
+  const getCategoryIcon = (categoryName: string, type?: string) => {
+    if (type === 'investment') {
+      const portfolio = portfolios.find((p) => p.name === categoryName);
+      if (portfolio?.icon) return portfolio.icon;
+    }
     const category = categories.find((c) => c.name === categoryName);
     return category?.icon || '📌';
   };
@@ -324,7 +329,7 @@ export default function TransactionsPage() {
                     onClick={() => handleItemClick(item)}
                   >
                     <div className="flex items-center gap-3 flex-1">
-                      <span className="text-2xl">{getCategoryIcon(transaction.category)}</span>
+                      <span className="text-2xl">{getCategoryIcon(transaction.category, transaction.type)}</span>
                       <div className="flex-1">
                         <div className="font-medium text-gray-900 dark:text-gray-100 flex items-center gap-1">
                           {transaction.category}

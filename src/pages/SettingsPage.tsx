@@ -155,6 +155,12 @@ export default function SettingsPage() {
 
   const handleDeleteProfile = async (id: string) => {
     if (userProfiles.length <= 1) return;
+    const profileName = userProfiles.find(p => p.id === id)?.name || '';
+    const confirmed = await confirmDialog(
+      `Eliminare il profilo "${profileName}"? Verranno cancellati definitivamente tutti i conti, le transazioni, le categorie e i portafogli associati.`,
+      { title: 'Elimina profilo', confirmText: 'Elimina', isDestructive: true }
+    );
+    if (!confirmed) return;
     setProfileLoading(true);
     try {
       if (activeProfile?.id === id) {

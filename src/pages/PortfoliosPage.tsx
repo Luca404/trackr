@@ -260,10 +260,17 @@ export default function PortfoliosPage() {
               )}
 
               {portfolios.length === 0 && (
-                <div className="text-center py-16 text-gray-500 dark:text-gray-400">
-                  <div className="text-5xl mb-4">📈</div>
-                  <div className="font-medium mb-1">{t('portfolios.noPortfolios')}</div>
-                  <div className="text-sm">{t('portfolios.noPortfoliosDesc')}</div>
+                <div
+                  className="card flex flex-col items-center justify-center py-14 cursor-pointer border-2 border-dashed border-primary-300 dark:border-primary-700 hover:border-primary-400 dark:hover:border-primary-600 transition-colors"
+                  onClick={handleCreatePortfolio}
+                  style={{ WebkitTapHighlightColor: 'transparent' }}
+                >
+                  <div className="w-16 h-16 rounded-full bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center text-3xl mb-4">📈</div>
+                  <div className="font-semibold text-gray-700 dark:text-gray-300 mb-1">{t('portfolios.noPortfolios')}</div>
+                  <div className="text-sm text-gray-500 dark:text-gray-400 mb-4">{t('portfolios.noPortfoliosDesc')}</div>
+                  <div className="flex items-center gap-2 bg-primary-500 hover:bg-primary-600 text-white px-5 py-2.5 rounded-xl font-medium text-sm transition-colors">
+                    <span className="text-lg">+</span> {t('portfolios.newPortfolio')}
+                  </div>
                 </div>
               )}
 
@@ -274,11 +281,9 @@ export default function PortfoliosPage() {
                   onClick={() => handleEditPortfolio(portfolio)}
                 >
                   <div className="flex items-start justify-between mb-1">
-                    <div className="flex-1 min-w-0">
+                    <div className="flex-1 min-w-0 flex items-center gap-2">
+                      <span className="text-2xl">{portfolio.icon ?? '📈'}</span>
                       <div className="font-medium text-gray-900 dark:text-gray-100">{portfolio.name}</div>
-                      {portfolio.description && (
-                        <div className="text-sm text-gray-500 dark:text-gray-400 mt-0.5 truncate">{portfolio.description}</div>
-                      )}
                     </div>
                     <div className="text-sm text-gray-400 dark:text-gray-500 ml-2 shrink-0">{portfolio.reference_currency}</div>
                   </div>
@@ -359,7 +364,7 @@ export default function PortfoliosPage() {
             onDirtyChange={dirty => { portfolioDirtyRef.current = dirty; }}
             initialData={selectedPortfolio ? {
               name: selectedPortfolio.name,
-              description: selectedPortfolio.description,
+              icon: selectedPortfolio.icon,
               initial_capital: selectedPortfolio.initial_capital,
               reference_currency: selectedPortfolio.reference_currency,
             } : undefined}
@@ -389,8 +394,9 @@ function PortfolioForm({ onSubmit, onDelete, onCancel, onDirtyChange, initialDat
   const { t } = useTranslation();
   const { formatCurrency } = useSettings();
   const { confirm: confirmDialog, dialog: confirmDialogEl } = useConfirm();
+  const PORTFOLIO_ICONS = ['📈','📉','💼','🏦','💰','💵','💶','💷','🪙','💳','🏧','📊','🏛️','🌍','🌎','🌏','⭐','🔑','🎯','🚀','💡','🛡️','⚡','🌱'];
   const [name, setName] = useState(initialData?.name || '');
-  const [description, setDescription] = useState(initialData?.description || '');
+  const [icon, setIcon] = useState(initialData?.icon || '📈');
   const [currency, setCurrency] = useState(initialData?.reference_currency || 'EUR');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
@@ -405,7 +411,7 @@ function PortfolioForm({ onSubmit, onDelete, onCancel, onDirtyChange, initialDat
     try {
       await onSubmit({
         name,
-        description: description || undefined,
+        icon,
         reference_currency: currency,
       }, initialPositions.length > 0 ? initialPositions : undefined);
     } catch (err: any) {
@@ -430,15 +436,23 @@ function PortfolioForm({ onSubmit, onDelete, onCancel, onDirtyChange, initialDat
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('portfolios.description')}</label>
-        <input
-          type="text"
-          value={description}
-          onChange={(e) => { setDescription(e.target.value); markDirty(); }}
-          className="input-field"
-          placeholder={t('portfolios.description')}
-          autoComplete="off" autoCorrect="off" spellCheck={false}
-        />
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{t('accounts.icon')}</label>
+        <div className="grid grid-cols-8 gap-1.5">
+          {PORTFOLIO_ICONS.map(ic => (
+            <button
+              key={ic}
+              type="button"
+              onClick={() => { setIcon(ic); markDirty(); }}
+              className={`aspect-square flex items-center justify-center text-xl rounded-lg border-2 transition-colors ${
+                icon === ic
+                  ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20'
+                  : 'border-transparent hover:border-gray-300 dark:hover:border-gray-600'
+              }`}
+            >
+              {ic}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div>

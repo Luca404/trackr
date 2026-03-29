@@ -137,7 +137,7 @@ function mapPortfolio(row: any): Portfolio {
     id: row.id,
     user_id: row.user_id,
     name: row.name,
-    description: row.description,
+    icon: row.icon ?? '📈',
     initial_capital: row.initial_capital ?? 0,
     reference_currency: row.reference_currency ?? 'EUR',
     risk_free_source: row.risk_free_source ?? '',
