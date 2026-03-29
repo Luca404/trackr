@@ -141,6 +141,7 @@ export default function TransactionsPage() {
           date: data.date,
           transaction_id: newTransaction.id,
         }).catch(console.error);
+        localStorage.removeItem('pf_summaries_cache');
       }
     }
   };
@@ -176,6 +177,7 @@ export default function TransactionsPage() {
     if (selectedTransaction) {
       await apiService.deleteTransaction(selectedTransaction.id);
       deleteTransactionCache(selectedTransaction.id);
+      if (selectedTransaction.type === 'investment') localStorage.removeItem('pf_summaries_cache');
       closeModal();
     }
   };

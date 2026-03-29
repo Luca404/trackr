@@ -237,6 +237,7 @@ export function DataProvider({ children }: DataProviderProps) {
   };
 
   const refreshAll = async () => {
+    localStorage.removeItem('pf_summaries_cache');
     await fetchAllData();
   };
 
