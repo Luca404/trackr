@@ -457,20 +457,20 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
   ];
 
   const tabSelector = (
-    <div className="flex gap-2 border-b border-gray-200 dark:border-gray-700">
+    <div className="flex border-b border-gray-200 dark:border-gray-700">
       {typeButtons.map(({ type, label, icon }) => (
         <button
           key={type}
           type="button"
           onClick={() => setCurrentType(type)}
-          className={`flex-1 px-3 py-2 font-medium text-sm transition-colors flex flex-col items-center ${
+          className={`flex-1 min-w-0 py-2 font-medium text-xs transition-colors flex flex-col items-center ${
             currentType === type
               ? 'border-b-2 border-primary-500 text-primary-600 dark:text-primary-400'
               : 'text-gray-600 dark:text-gray-400'
           }`}
         >
-          <span className="text-xl mb-0.5">{icon}</span>
-          <span>{label}</span>
+          <span className="text-xl mb-0.5 leading-none">{icon}</span>
+          <span className="truncate w-full text-center leading-tight">{label}</span>
         </button>
       ))}
     </div>

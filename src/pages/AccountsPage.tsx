@@ -342,7 +342,7 @@ export default function AccountsPage() {
                     key={icon}
                     type="button"
                     onClick={() => setFormData({ ...formData, icon })}
-                    className={`p-3 text-2xl rounded-lg border-2 transition-colors ${
+                    className={`aspect-square flex items-center justify-center text-2xl rounded-lg border-2 transition-colors ${
                       formData.icon === icon
                         ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20'
                         : 'border-gray-200 dark:border-gray-700 hover:border-primary-300'

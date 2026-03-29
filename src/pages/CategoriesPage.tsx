@@ -706,7 +706,7 @@ export default function CategoriesPage() {
                           key={icon}
                           type="button"
                           onClick={() => setCategoryFormData({ ...categoryFormData, icon })}
-                          className={`p-2 text-xl rounded-lg border-2 transition-colors ${
+                          className={`aspect-square flex items-center justify-center text-xl rounded-lg border-2 transition-colors ${
                             categoryFormData.icon === icon
                               ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20'
                               : 'border-transparent hover:border-gray-300 dark:hover:border-gray-600'
