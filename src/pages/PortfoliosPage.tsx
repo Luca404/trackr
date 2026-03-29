@@ -430,7 +430,7 @@ function PortfolioForm({ onSubmit, onDelete, onCancel, onDirtyChange, initialDat
   };
 
   return (<>
-    <form onSubmit={handleSubmit} autoComplete="off" className="space-y-4">
+    <form onSubmit={handleSubmit} autoComplete="off" className="space-y-3">
       <div>
         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('portfolios.name')}</label>
         <input
@@ -446,13 +446,13 @@ function PortfolioForm({ onSubmit, onDelete, onCancel, onDirtyChange, initialDat
 
       <div>
         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{t('accounts.icon')}</label>
-        <div className="grid grid-cols-8 gap-1.5">
+        <div className="flex gap-1.5 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
           {PORTFOLIO_ICONS.map(ic => (
             <button
               key={ic}
               type="button"
               onClick={() => { setIcon(ic); markDirty(); }}
-              className={`aspect-square flex items-center justify-center text-xl rounded-lg border-2 transition-colors ${
+              className={`flex-shrink-0 w-9 h-9 flex items-center justify-center text-xl rounded-lg border-2 transition-colors ${
                 icon === ic
                   ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20'
                   : 'border-transparent hover:border-gray-300 dark:hover:border-gray-600'
@@ -466,13 +466,13 @@ function PortfolioForm({ onSubmit, onDelete, onCancel, onDirtyChange, initialDat
 
       <div>
         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Colore</label>
-        <div className="flex gap-2 flex-wrap">
+        <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
           {PORTFOLIO_COLORS.map(c => (
             <button
               key={c}
               type="button"
               onClick={() => { setColor(c); markDirty(); }}
-              className={`w-8 h-8 rounded-full border-4 transition-all ${color === c ? 'border-gray-900 dark:border-white scale-110' : 'border-transparent'}`}
+              className={`flex-shrink-0 w-8 h-8 rounded-full border-4 transition-all ${color === c ? 'border-gray-900 dark:border-white scale-110' : 'border-transparent'}`}
               style={{ backgroundColor: c }}
             />
           ))}
