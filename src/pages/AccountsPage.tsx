@@ -59,7 +59,7 @@ export default function AccountsPage() {
       });
       // In modalità modifica, mostra il saldo corrente
       const currentBalance = account.current_balance ?? account.initial_balance;
-      setBalanceInput(currentBalance.toString());
+      setBalanceInput(parseFloat(currentBalance.toFixed(2)).toString());
     } else {
       setIsEditMode(false);
       setSelectedAccount(null);
