@@ -707,6 +707,11 @@ class ApiService {
     };
   }
 
+  async updateOrderByTransactionId(transactionId: number, fields: Partial<OrderFormData>): Promise<void> {
+    const { error } = await supabase.from('orders').update(fields).eq('transaction_id', transactionId);
+    if (error) throw error;
+  }
+
   async deleteOrder(id: number): Promise<void> {
     const { error } = await supabase.from('orders').delete().eq('id', id);
     if (error) throw error;

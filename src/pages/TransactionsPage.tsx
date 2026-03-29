@@ -163,6 +163,24 @@ export default function TransactionsPage() {
     if (selectedTransaction) {
       const updated = await apiService.updateTransaction(selectedTransaction.id, data);
       updateTransactionCache(updated);
+      // Aggiorna anche l'ordine associato se è un investimento
+      if (data.type === 'investment' && data.ticker) {
+        const qty = data.quantity ?? 0;
+        const price = data.price ?? 0;
+        const commission = data.amount - qty * price;
+        apiService.updateOrderByTransactionId(selectedTransaction.id, {
+          symbol: data.ticker,
+          isin: data.isin,
+          name: data.instrument_name,
+          exchange: data.exchange,
+          instrument_type: data.instrument_type,
+          ter: data.ter,
+          quantity: qty,
+          price: price,
+          commission: commission > 0 ? commission : 0,
+          date: data.date,
+        }).then(() => localStorage.removeItem('pf_summaries_cache')).catch(console.error);
+      }
       closeModal();
     }
   };
