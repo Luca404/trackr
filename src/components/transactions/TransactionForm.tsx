@@ -90,6 +90,12 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
     return registerBackHandler(() => setSelectedCategory(null));
   }, [selectedCategory, isEditMode]);
 
+  // Back gesture quando il portafoglio è selezionato in investment (solo nuova transazione)
+  useEffect(() => {
+    if (!selectedPortfolio || isEditMode || currentType !== 'investment') return;
+    return registerBackHandler(() => setSelectedPortfolio(null));
+  }, [selectedPortfolio, isEditMode, currentType]);
+
   // Account preferito di default
   useEffect(() => {
     if (!selectedAccount && allAccounts.length > 0) {
@@ -98,10 +104,11 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
     }
   }, [allAccounts, selectedAccount]);
 
-  // Reset categoria quando cambia tipo (non per investment → si auto-seleziona)
+  // Reset categoria/portafoglio quando cambia tipo
   useEffect(() => {
     setSelectedCategory(null);
     setSelectedSubcategory(null);
+    if (currentType !== 'investment') setSelectedPortfolio(null);
     // Per il trasferimento: auto-seleziona il primo conto diverso da quello di origine
     if (currentType === 'transfer' && !selectedToAccount && allAccounts.length >= 2) {
       const other = allAccounts.find(a => a.id !== selectedAccount?.id);
@@ -139,15 +146,16 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
     }
   }, [isEditMode, initialData, allAccounts]);
 
-  // Auto-seleziona portafoglio per investment
+  // In edit mode, pre-seleziona il portafoglio dalla transazione esistente
   useEffect(() => {
-    if (currentType !== 'investment' || allPortfolios.length === 0) return;
-    if (isEditMode && initialData?.portfolio_id) {
+    if (!isEditMode || currentType !== 'investment' || allPortfolios.length === 0) return;
+    if (initialData?.portfolio_id) {
       const p = allPortfolios.find(p => p.id === initialData.portfolio_id);
-      if (p) { setSelectedPortfolio(p); return; }
+      if (p) setSelectedPortfolio(p);
+    } else {
+      setSelectedPortfolio(allPortfolios[0] ?? null);
     }
-    setSelectedPortfolio(prev => prev ?? allPortfolios[0] ?? null);
-  }, [currentType, allPortfolios]);
+  }, [isEditMode, currentType, allPortfolios]);
 
   // Carica ETF UCITS cache (sessionStorage → API)
   useEffect(() => {
@@ -668,6 +676,42 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
     </>
   );
 
+  // ── Griglia selezione portafoglio (investment, nuova transazione) ─────────
+  if (currentType === 'investment' && !selectedPortfolio) {
+    return (
+      <div onTouchStart={handleCategorySwipeStart} onTouchEnd={handleCategorySwipeEnd} className="space-y-4">
+        {tabSelector}
+        <div>
+          <div className="text-sm text-gray-600 dark:text-gray-400 mb-3">{t('transactions.selectPortfolio', 'Seleziona portafoglio')}</div>
+          {allPortfolios.length === 0 ? (
+            <div className="flex flex-col items-center gap-4 py-8 text-center">
+              <span className="text-5xl">📭</span>
+              <div className="text-gray-600 dark:text-gray-400 text-sm">{t('transactions.noPortfolioWarning', 'Nessun portafoglio creato.')}</div>
+              <button type="button" onClick={() => { onCancel(); navigate('/portfolios'); }}
+                className="px-4 py-2 bg-primary-500 text-white rounded-lg font-medium text-sm">
+                {t('transactions.createPortfolio', 'Crea portafoglio')}
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-3 gap-3 max-h-[60vh] overflow-y-auto">
+              {allPortfolios.map((portfolio) => (
+                <button
+                  key={portfolio.id}
+                  type="button"
+                  onClick={() => setSelectedPortfolio(portfolio)}
+                  className="flex flex-col items-center justify-center p-4 rounded-xl border-2 border-gray-200 dark:border-gray-700 hover:border-primary-500 dark:hover:border-primary-500 hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-colors bg-white dark:bg-gray-800"
+                >
+                  <span className="text-4xl mb-2">📈</span>
+                  <span className="text-xs font-medium text-gray-700 dark:text-gray-300 text-center">{portfolio.name}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   // ── Form investimento ────────────────────────────────────────────────────
   if (currentType === 'investment') {
     const qty = parseFloat(investQty) || 0;
@@ -682,39 +726,26 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
     return (
       <form onSubmit={handleSubmit} autoComplete="off" className="space-y-4">
         {/* Portafoglio + Conto */}
-        {allPortfolios.length === 0 ? (
-          <div className="flex items-center gap-3 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg">
-            <span className="text-2xl">⚠️</span>
-            <div className="flex-1 text-sm text-amber-800 dark:text-amber-300">
-              {t('transactions.noPortfolioWarning', 'Nessun portafoglio creato.')}
+        <div className="flex gap-2">
+          <button type="button" onClick={() => setShowPortfolioPicker(true)}
+            className="flex-1 flex items-center gap-2 p-3 rounded-lg border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 hover:border-primary-500 transition-colors">
+            <span className="text-2xl">📈</span>
+            <div className="flex-1 text-left">
+              <div className="text-xs text-gray-500 dark:text-gray-400">{t('transactions.portfolio', 'Portafoglio')}</div>
+              <div className="font-medium text-gray-900 dark:text-gray-100">{selectedPortfolio?.name}</div>
             </div>
-            <button type="button" onClick={() => { onCancel(); navigate('/portfolios'); }}
-              className="shrink-0 text-sm font-medium text-primary-600 dark:text-primary-400 underline">
-              {t('transactions.createPortfolio', 'Crea')}
-            </button>
-          </div>
-        ) : (
-          <div className="flex gap-2">
-            <button type="button" onClick={() => setShowPortfolioPicker(true)}
-              className="flex-1 flex items-center gap-2 p-3 rounded-lg border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 hover:border-primary-500 transition-colors">
-              <span className="text-2xl">📈</span>
-              <div className="flex-1 text-left">
-                <div className="text-xs text-gray-500 dark:text-gray-400">{t('transactions.portfolio', 'Portafoglio')}</div>
-                <div className="font-medium text-gray-900 dark:text-gray-100">{selectedPortfolio?.name || t('transactions.select')}</div>
-              </div>
-              <span className="text-gray-400">›</span>
-            </button>
-            <button type="button" onClick={() => setShowAccountPicker(true)}
-              className="flex-1 flex items-center gap-2 p-3 rounded-lg border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 hover:border-primary-500 transition-colors">
-              <span className="text-2xl">{selectedAccount?.icon || '💳'}</span>
-              <div className="flex-1 text-left">
-                <div className="text-xs text-gray-500 dark:text-gray-400">{t('transactions.account')}</div>
-                <div className="font-medium text-gray-900 dark:text-gray-100">{selectedAccount?.name || t('transactions.select')}</div>
-              </div>
-              <span className="text-gray-400">›</span>
-            </button>
-          </div>
-        )}
+            <span className="text-gray-400">›</span>
+          </button>
+          <button type="button" onClick={() => setShowAccountPicker(true)}
+            className="flex-1 flex items-center gap-2 p-3 rounded-lg border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 hover:border-primary-500 transition-colors">
+            <span className="text-2xl">{selectedAccount?.icon || '💳'}</span>
+            <div className="flex-1 text-left">
+              <div className="text-xs text-gray-500 dark:text-gray-400">{t('transactions.account')}</div>
+              <div className="font-medium text-gray-900 dark:text-gray-100">{selectedAccount?.name || t('transactions.select')}</div>
+            </div>
+            <span className="text-gray-400">›</span>
+          </button>
+        </div>
 
         {/* ETF / Stock / Bond toggle */}
         <div className="flex rounded-lg overflow-hidden border border-gray-300 dark:border-gray-600">
