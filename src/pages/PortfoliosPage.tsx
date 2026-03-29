@@ -7,7 +7,7 @@ import Modal from '../components/common/Modal';
 import { SkeletonPortfolioCard } from '../components/common/SkeletonLoader';
 import { useSkeletonCount } from '../hooks/useSkeletonCount';
 import { useConfirm } from '../hooks/useConfirm';
-import type { Portfolio, PortfolioFormData, Order, OrderFormData, Category } from '../types';
+import type { Portfolio, PortfolioFormData, Order, OrderFormData } from '../types';
 import { useTranslation } from 'react-i18next';
 import { useSettings } from '../contexts/SettingsContext';
 
@@ -39,7 +39,7 @@ interface PortfolioSummary {
 export default function PortfoliosPage() {
   const { t } = useTranslation();
   const { formatCurrency } = useSettings();
-  const { portfolios, categories, isLoading, isInitialized, addPortfolio, updatePortfolio, deletePortfolio } = useData();
+  const { portfolios, isLoading, isInitialized, addPortfolio, updatePortfolio, deletePortfolio } = useData();
   const skeletonCount = useSkeletonCount('portfolios', portfolios.length, isLoading, 3);
   const { confirm: confirmDialog, dialog: confirmDialogEl } = useConfirm();
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -60,7 +60,6 @@ export default function PortfoliosPage() {
   const [summaries, setSummaries] = useState<Record<number, PortfolioSummary>>({});
   const [loadingSummaries, setLoadingSummaries] = useState(false);
 
-  const investmentCategories = categories.filter(c => c.category_type === 'investment');
   const [hideBalances, setHideBalances] = useState(() => localStorage.getItem('hideBalances') === 'true');
   const toggleHideBalances = () => {
     setHideBalances(h => { const next = !h; localStorage.setItem('hideBalances', String(next)); return next; });
@@ -266,12 +265,6 @@ export default function PortfoliosPage() {
                       {portfolio.description && (
                         <div className="text-sm text-gray-500 dark:text-gray-400 mt-0.5 truncate">{portfolio.description}</div>
                       )}
-                      {portfolio.category_id && (
-                        <div className="text-xs text-primary-600 dark:text-primary-400 mt-0.5">
-                          {investmentCategories.find(c => c.id === portfolio.category_id)?.icon}{' '}
-                          {investmentCategories.find(c => c.id === portfolio.category_id)?.name}
-                        </div>
-                      )}
                     </div>
                     <div className="text-sm text-gray-400 dark:text-gray-500 ml-2 shrink-0">{portfolio.reference_currency}</div>
                   </div>
@@ -355,10 +348,8 @@ export default function PortfoliosPage() {
               description: selectedPortfolio.description,
               initial_capital: selectedPortfolio.initial_capital,
               reference_currency: selectedPortfolio.reference_currency,
-              category_id: selectedPortfolio.category_id,
             } : undefined}
             isEditMode={isEditMode}
-            investmentCategories={investmentCategories}
             orders={portfolioOrders}
             isLoadingOrders={isLoadingOrders}
           />
@@ -376,19 +367,17 @@ interface PortfolioFormProps {
   onDirtyChange?: (dirty: boolean) => void;
   initialData?: PortfolioFormData;
   isEditMode?: boolean;
-  investmentCategories: Category[];
   orders: Order[];
   isLoadingOrders: boolean;
 }
 
-function PortfolioForm({ onSubmit, onDelete, onCancel, onDirtyChange, initialData, isEditMode, investmentCategories, orders, isLoadingOrders }: PortfolioFormProps) {
+function PortfolioForm({ onSubmit, onDelete, onCancel, onDirtyChange, initialData, isEditMode, orders, isLoadingOrders }: PortfolioFormProps) {
   const { t } = useTranslation();
   const { formatCurrency } = useSettings();
   const { confirm: confirmDialog, dialog: confirmDialogEl } = useConfirm();
   const [name, setName] = useState(initialData?.name || '');
   const [description, setDescription] = useState(initialData?.description || '');
   const [currency, setCurrency] = useState(initialData?.reference_currency || 'EUR');
-  const [categoryId, setCategoryId] = useState<number | undefined>(initialData?.category_id);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [initialPositions, setInitialPositions] = useState<InitialPosition[]>([]);
@@ -404,7 +393,6 @@ function PortfolioForm({ onSubmit, onDelete, onCancel, onDirtyChange, initialDat
         name,
         description: description || undefined,
         reference_currency: currency,
-        category_id: categoryId,
       }, initialPositions.length > 0 ? initialPositions : undefined);
     } catch (err: any) {
       setError('Errore durante il salvataggio');
@@ -459,41 +447,6 @@ function PortfolioForm({ onSubmit, onDelete, onCancel, onDirtyChange, initialDat
         </div>
       </div>
 
-      {investmentCategories.length > 0 && (
-        <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            {t('portfolios.investmentCategory')}
-          </label>
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => { setCategoryId(undefined); markDirty(); }}
-              className={`px-3 py-1.5 rounded-lg text-sm border-2 transition-colors ${
-                categoryId === undefined
-                  ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-300'
-                  : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400'
-              }`}
-            >
-              {t('portfolios.noCategory')}
-            </button>
-            {investmentCategories.map(cat => (
-              <button
-                key={cat.id}
-                type="button"
-                onClick={() => { setCategoryId(cat.id); markDirty(); }}
-                className={`px-3 py-1.5 rounded-lg text-sm border-2 transition-colors flex items-center gap-1.5 ${
-                  categoryId === cat.id
-                    ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-300'
-                    : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400'
-                }`}
-              >
-                <span>{cat.icon}</span>
-                <span>{cat.name}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* Posizioni iniziali (solo create mode) */}
       {!isEditMode && (

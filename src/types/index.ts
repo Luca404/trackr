@@ -191,7 +191,6 @@ export interface Portfolio {
   risk_free_source: string;
   market_benchmark: string;
   created_at: string;
-  category_id?: number;   // link opzionale a categoria investimento
   total_value?: number;
   total_cost?: number;
   total_gain_loss?: number;
@@ -205,7 +204,6 @@ export interface PortfolioFormData {
   reference_currency?: string;
   risk_free_source?: string;
   market_benchmark?: string;
-  category_id?: number;
 }
 
 export interface Order {

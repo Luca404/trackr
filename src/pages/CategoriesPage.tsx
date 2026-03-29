@@ -14,7 +14,7 @@ import type { CategoryWithStats, CategoryFormData, SubcategoryFormData } from '.
 import { useTranslation } from 'react-i18next';
 import { useSettings } from '../contexts/SettingsContext';
 
-type CategoryFilter = 'income' | 'expense' | 'investment';
+type CategoryFilter = 'income' | 'expense';
 type PeriodType = 'day' | 'week' | 'month' | 'year' | 'all' | 'custom';
 
 const ICON_GROUPS: { tKey: string; icons: string[] }[] = [
@@ -445,16 +445,6 @@ export default function CategoriesPage() {
             }`}
           >
             💰 {t('categories.income')}
-          </button>
-          <button
-            onClick={() => setFilter('investment')}
-            className={`px-4 py-2 rounded-lg font-medium whitespace-nowrap transition-colors ${
-              filter === 'investment'
-                ? 'bg-blue-500 text-white'
-                : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
-            }`}
-          >
-            📈 {t('categories.investment')}
           </button>
         </div>
 

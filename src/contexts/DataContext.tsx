@@ -167,8 +167,7 @@ export function DataProvider({ children }: DataProviderProps) {
       let finalCategories = categoriesData;
       const hasExpense = categoriesData.some(c => c.category_type === 'expense' || c.category_type == null);
       const hasIncome = categoriesData.some(c => c.category_type === 'income');
-      const hasInvestment = categoriesData.some(c => c.category_type === 'investment');
-      if (!hasExpense || !hasIncome || !hasInvestment) {
+      if (!hasExpense || !hasIncome) {
         finalCategories = await apiService.createDefaultCategories(categoriesData, lang);
       }
       setAccounts(finalAccounts);

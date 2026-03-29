@@ -597,16 +597,10 @@ export default function KakeboImport({ onClose, onDirtyChange }: Props) {
         const conto = parsed.conti.find(c => c.id === contoId);
         if (!conto) continue;
         const name = conto.nome.trim();
-        const { data: catData, error: catErr } = await supabase
-          .from('categories')
-          .insert({ user_id: userId, profile_id: profileId, name, icon: '📈', category_type: 'investment' })
-          .select().single();
-        if (catErr) throw catErr;
-        catCreated[`${name.toLowerCase()}|investment`] = catData.id;
 
         const { data: portData, error: portErr } = await supabase
           .from('portfolios')
-          .insert({ user_id: userId, profile_id: profileId, name, initial_capital: 0, reference_currency: 'EUR', risk_free_source: '', market_benchmark: '', category_id: catData.id })
+          .insert({ user_id: userId, profile_id: profileId, name, initial_capital: 0, reference_currency: 'EUR', risk_free_source: '', market_benchmark: '' })
           .select().single();
         if (portErr) throw portErr;
         invContoToPortfolioId[contoId] = portData.id;

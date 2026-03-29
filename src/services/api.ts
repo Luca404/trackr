@@ -143,7 +143,6 @@ function mapPortfolio(row: any): Portfolio {
     risk_free_source: row.risk_free_source ?? '',
     market_benchmark: row.market_benchmark ?? '',
     created_at: row.created_at,
-    category_id: row.category_id ?? undefined,
     total_value: row.total_value,
     total_cost: row.total_cost,
     total_gain_loss: row.total_gain_loss,
@@ -163,7 +162,6 @@ const DEFAULT_CATEGORIES: Record<Lang, { name: string; icon: string; color: stri
     { name: 'Svago',       icon: '🎮', color: '#a855f7', category_type: 'expense' },
     { name: 'Salute',      icon: '🏥', color: '#ef4444', category_type: 'expense' },
     { name: 'Shopping',    icon: '🛍️', color: '#ec4899', category_type: 'expense' },
-    { name: 'Investimento',icon: '📈', color: '#14b8a6', category_type: 'investment' },
     { name: 'Stipendio',   icon: '💵', color: '#22c55e', category_type: 'income' },
     { name: 'Bonus',       icon: '🎁', color: '#10b981', category_type: 'income' },
     { name: 'Altro',       icon: '📌', color: '#64748b', category_type: null },
@@ -175,7 +173,6 @@ const DEFAULT_CATEGORIES: Record<Lang, { name: string; icon: string; color: stri
     { name: 'Entertainment', icon: '🎮', color: '#a855f7', category_type: 'expense' },
     { name: 'Health',        icon: '🏥', color: '#ef4444', category_type: 'expense' },
     { name: 'Shopping',      icon: '🛍️', color: '#ec4899', category_type: 'expense' },
-    { name: 'Investment',    icon: '📈', color: '#14b8a6', category_type: 'investment' },
     { name: 'Salary',        icon: '💵', color: '#22c55e', category_type: 'income' },
     { name: 'Bonus',         icon: '🎁', color: '#10b981', category_type: 'income' },
     { name: 'Other',         icon: '📌', color: '#64748b', category_type: null },
@@ -187,7 +184,6 @@ const DEFAULT_CATEGORIES: Record<Lang, { name: string; icon: string; color: stri
     { name: 'Ocio',          icon: '🎮', color: '#a855f7', category_type: 'expense' },
     { name: 'Salud',         icon: '🏥', color: '#ef4444', category_type: 'expense' },
     { name: 'Compras',       icon: '🛍️', color: '#ec4899', category_type: 'expense' },
-    { name: 'Inversión',     icon: '📈', color: '#14b8a6', category_type: 'investment' },
     { name: 'Sueldo',        icon: '💵', color: '#22c55e', category_type: 'income' },
     { name: 'Bonus',         icon: '🎁', color: '#10b981', category_type: 'income' },
     { name: 'Otro',          icon: '📌', color: '#64748b', category_type: null },
@@ -345,13 +341,11 @@ class ApiService {
     const profileId = this.getActiveProfileId();
     const hasExpense = existing.some(c => c.category_type === 'expense' || c.category_type == null);
     const hasIncome = existing.some(c => c.category_type === 'income');
-    const hasInvestment = existing.some(c => c.category_type === 'investment');
 
     const toCreate = DEFAULT_CATEGORIES[lang].filter(cat => {
       const isExpense = cat.category_type === 'expense' || cat.category_type === null;
       const isIncome = cat.category_type === 'income';
-      const isInvestment = cat.category_type === 'investment';
-      return (isExpense && !hasExpense) || (isIncome && !hasIncome) || (isInvestment && !hasInvestment);
+      return (isExpense && !hasExpense) || (isIncome && !hasIncome);
     }).map(cat => ({ ...cat, user_id: userId, profile_id: profileId }));
 
     if (toCreate.length === 0) return existing;
