@@ -129,7 +129,8 @@ export default function TransactionsPage() {
       if (data.type === 'investment' && data.portfolio_id && data.ticker) {
         const qty = data.quantity ?? 0;
         const price = data.price ?? 0;
-        const commission = data.amount - qty * price;
+        const grossAmount = Math.abs(data.amount);
+        const commission = grossAmount - qty * price;
         apiService.createOrder({
           portfolio_id: data.portfolio_id,
           symbol: data.ticker,
@@ -142,7 +143,7 @@ export default function TransactionsPage() {
           quantity: qty,
           price: price,
           commission: commission > 0 ? commission : 0,
-          order_type: 'buy',
+          order_type: data.order_type || 'buy',
           date: data.date,
           transaction_id: newTransaction.id,
         }).catch(console.error);
@@ -172,7 +173,8 @@ export default function TransactionsPage() {
       if (data.type === 'investment' && data.ticker) {
         const qty = data.quantity ?? 0;
         const price = data.price ?? 0;
-        const commission = data.amount - qty * price;
+        const grossAmount = Math.abs(data.amount);
+        const commission = grossAmount - qty * price;
         apiService.updateOrderByTransactionId(selectedTransaction.id, {
           symbol: data.ticker,
           isin: data.isin,
@@ -183,6 +185,7 @@ export default function TransactionsPage() {
           quantity: qty,
           price: price,
           commission: commission > 0 ? commission : 0,
+          order_type: data.order_type || 'buy',
           date: data.date,
         }).then(() => localStorage.removeItem('pf_summaries_cache')).catch(console.error);
       }
@@ -259,6 +262,7 @@ export default function TransactionsPage() {
         ticker: selectedTransaction.ticker,
         quantity: selectedTransaction.quantity,
         price: selectedTransaction.price,
+        order_type: selectedTransaction.amount < 0 ? 'sell' : 'buy',
       };
     }
     return undefined;
@@ -363,7 +367,7 @@ export default function TransactionsPage() {
                           ? 'text-red-600 dark:text-red-400'
                           : 'text-blue-600 dark:text-blue-400'
                       }`}>
-                        {transaction.type === 'income' ? '+' : '-'}{formatCurrency(Math.abs(transaction.amount))}
+                        {transaction.type === 'income' ? '+' : transaction.amount < 0 ? '+' : '-'}{formatCurrency(Math.abs(transaction.amount))}
                       </div>
                       <div className="text-xs text-gray-500 dark:text-gray-400">
                         {formatDate(transaction.date)}
@@ -389,6 +393,7 @@ export default function TransactionsPage() {
             onDelete={isEditMode ? handleDeleteTransaction : undefined}
             isRecurring={isEditMode && !!selectedTransaction?.recurring_id}
             onDeleteRecurringRule={isEditMode && selectedTransaction?.recurring_id ? handleDeleteRecurringRule : undefined}
+            initialTransactionId={selectedTransaction?.id}
           />
         </Modal>
 

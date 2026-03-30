@@ -2,8 +2,9 @@ import { useState, useEffect, useMemo, useRef, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useSettings } from '../../contexts/SettingsContext';
-import type { TransactionFormData, TransactionType, Category, Subcategory, Account, Portfolio, RecurringFrequency } from '../../types';
+import type { TransactionFormData, TransactionType, Category, Subcategory, Account, Portfolio, RecurringFrequency, Order } from '../../types';
 import { useData } from '../../contexts/DataContext';
+import { apiService } from '../../services/api';
 import ConfirmDialog from '../common/ConfirmDialog';
 import Modal, { registerBackHandler } from '../common/Modal';
 import InvestmentOrderForm, { type InvestmentOrderInput } from '../investments/InvestmentOrderForm';
@@ -16,9 +17,10 @@ interface TransactionFormProps {
   onDelete?: () => Promise<void>;
   isRecurring?: boolean;
   onDeleteRecurringRule?: () => Promise<void>;
+  initialTransactionId?: number;
 }
 
-export default function TransactionForm({ onSubmit, onCancel, initialData, isEditMode, onDelete, isRecurring, onDeleteRecurringRule }: TransactionFormProps) {
+export default function TransactionForm({ onSubmit, onCancel, initialData, isEditMode, onDelete, isRecurring, onDeleteRecurringRule, initialTransactionId }: TransactionFormProps) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { formatCurrency, numberFormat } = useSettings();
@@ -54,11 +56,13 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
     price: initialData?.price || 0,
     commission: initialData?.quantity && initialData?.price ? Math.max(0, initialData.amount - (initialData.quantity * initialData.price)) : 0,
     date: initialData?.date || new Date().toISOString().split('T')[0],
+    orderType: initialData?.order_type || 'buy',
     instrumentType: initialData?.instrument_type || 'etf',
   });
   const [isInvestmentDraftValid, setIsInvestmentDraftValid] = useState(false);
 
   const [selectedPortfolio, setSelectedPortfolio] = useState<Portfolio | null>(null);
+  const [investmentOrders, setInvestmentOrders] = useState<Order[]>([]);
 
   const [recurrence, setRecurrence] = useState<RecurringFrequency | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -134,10 +138,34 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
     if (initialData?.portfolio_id) {
       const p = allPortfolios.find(p => p.id === initialData.portfolio_id);
       if (p) setSelectedPortfolio(p);
+    } else if (initialData?.category) {
+      const p = allPortfolios.find(p => p.name === initialData.category);
+      if (p) setSelectedPortfolio(p);
     } else {
       setSelectedPortfolio(allPortfolios[0] ?? null);
     }
-  }, [isEditMode, currentType, allPortfolios]);
+  }, [isEditMode, currentType, allPortfolios, initialData?.portfolio_id, initialData?.category]);
+
+  useEffect(() => {
+    if (currentType !== 'investment' || !selectedPortfolio) {
+      setInvestmentOrders([]);
+      return;
+    }
+    let cancelled = false;
+    apiService.getOrders(selectedPortfolio.id)
+      .then((orders) => {
+        if (!cancelled) setInvestmentOrders(orders);
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          console.error('Error loading investment orders:', error);
+          setInvestmentOrders([]);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [currentType, selectedPortfolio?.id]);
 
   useEffect(() => {
     if (currentType !== 'investment') return;
@@ -151,6 +179,7 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
       price: initialData?.price || 0,
       commission: initialData?.quantity && initialData?.price ? Math.max(0, initialData.amount - (initialData.quantity * initialData.price)) : 0,
       date: initialData?.date || new Date().toISOString().split('T')[0],
+      orderType: initialData?.order_type || 'buy',
       instrumentType: initialData?.instrument_type || 'etf',
     });
   }, [currentType, initialData]);
@@ -237,9 +266,10 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
     }
 
     if (currentType === 'investment') {
-      const { quantity, price, commission, symbol, isin, name, exchange, instrumentType, ter, date: investmentDate } = investmentDraft;
-      const total = quantity * price + commission;
-      if (!isInvestmentDraftValid || total <= 0) { setError(t('transactions.errorQtyPrice')); return; }
+      const { quantity, price, commission, symbol, isin, name, exchange, instrumentType, orderType, ter, date: investmentDate } = investmentDraft;
+      const grossAmount = quantity * price + commission;
+      const total = orderType === 'sell' ? -grossAmount : grossAmount;
+      if (!isInvestmentDraftValid || grossAmount <= 0) { setError(t('transactions.errorQtyPrice')); return; }
       submitData = {
         type: currentType,
         category: selectedPortfolio?.name || t('transactions.investment', 'Investment'),
@@ -255,6 +285,7 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
         instrument_name: name || undefined,
         exchange: exchange || undefined,
         instrument_type: instrumentType,
+        order_type: orderType,
         ter: ter || undefined,
       };
     } else {
@@ -557,12 +588,12 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
   if (currentType === 'investment') {
     const inputClass = "w-full px-3 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-base";
     const noFill = { autoComplete: "off", autoCorrect: "off", spellCheck: false } as const;
-    const total = investmentDraft.quantity * investmentDraft.price + investmentDraft.commission;
+    const grossAmount = investmentDraft.quantity * investmentDraft.price + investmentDraft.commission;
     const isInvestmentFormValid = Boolean(
       selectedAccount &&
       selectedPortfolio &&
       isInvestmentDraftValid &&
-      total > 0
+      grossAmount > 0
     );
 
     return (
@@ -592,6 +623,8 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
         <InvestmentOrderForm
           currency="EUR"
           showActions={false}
+          existingOrders={investmentOrders}
+          ignoreTransactionId={initialTransactionId}
           initialData={{
             symbol: initialData?.ticker || '',
             isin: initialData?.isin,
@@ -602,6 +635,7 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
             price: initialData?.price || 0,
             commission: initialData?.quantity && initialData?.price ? Math.max(0, initialData.amount - (initialData.quantity * initialData.price)) : 0,
             date: initialData?.date || new Date().toISOString().split('T')[0],
+            orderType: initialData?.order_type || 'buy',
             instrumentType: initialData?.instrument_type || 'etf',
           }}
           onChange={(draft, meta) => {

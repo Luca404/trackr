@@ -94,6 +94,7 @@ export interface TransactionFormData {
   instrument_name?: string;
   exchange?: string;
   instrument_type?: 'etf' | 'stock' | 'bond';
+  order_type?: 'buy' | 'sell';
   ter?: number;
 
   recurrence?: RecurringFrequency; // solo per nuove transazioni

@@ -175,7 +175,7 @@ export default function PortfoliosPage() {
               quantity: pos.quantity,
               price: pos.price,
               commission: pos.commission,
-              order_type: 'buy',
+              order_type: pos.orderType || 'buy',
               date: pos.date,
               instrument_type: pos.instrumentType,
             } as OrderFormData)
@@ -207,11 +207,13 @@ export default function PortfoliosPage() {
       quantity: data.quantity,
       price: data.price,
       commission: data.commission,
+      order_type: data.orderType || 'buy',
       date: data.date,
       instrument_type: data.instrumentType,
     });
     if (updated.transaction_id) {
-      const amount = updated.quantity * updated.price + updated.commission;
+      const grossAmount = updated.quantity * updated.price + updated.commission;
+      const amount = updated.order_type === 'sell' ? -grossAmount : grossAmount;
       const updatedTransaction = await apiService.updateTransaction(updated.transaction_id, {
         amount,
         date: updated.date,
@@ -639,6 +641,7 @@ function PortfolioForm({ onSubmit, onDelete, onCancel, onDirtyChange, initialDat
     <Modal isOpen={isPositionModalOpen} onClose={() => setIsPositionModalOpen(false)} title={t('portfolios.newPosition')}>
       <InvestmentOrderForm
         currency={currency}
+        existingOrders={initialPositions}
         onSubmit={(pos) => {
           setInitialPositions(prev => [...prev, pos]);
           markDirty();
@@ -651,6 +654,8 @@ function PortfolioForm({ onSubmit, onDelete, onCancel, onDirtyChange, initialDat
       {editingOrder && (
         <InvestmentOrderForm
           currency={editingOrder.currency}
+          existingOrders={orders}
+          ignoreOrderId={editingOrder.id}
           initialData={{
             symbol: editingOrder.symbol,
             isin: editingOrder.isin,
@@ -661,6 +666,7 @@ function PortfolioForm({ onSubmit, onDelete, onCancel, onDirtyChange, initialDat
             price: editingOrder.price,
             commission: editingOrder.commission,
             date: editingOrder.date,
+            orderType: editingOrder.order_type as 'buy' | 'sell',
             instrumentType: editingOrder.instrument_type as 'etf' | 'stock' | 'bond' | undefined,
           }}
           submitLabel={t('common.save')}

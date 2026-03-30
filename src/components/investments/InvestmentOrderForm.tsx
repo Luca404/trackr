@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-
 const PF_BACKEND_URL = import.meta.env.VITE_PF_BACKEND_URL || 'https://portfolio-tracker-production-3bd4.up.railway.app';
 
 export interface InvestmentOrderInput {
@@ -13,6 +12,7 @@ export interface InvestmentOrderInput {
   price: number;
   commission: number;
   date: string;
+  orderType?: 'buy' | 'sell';
   instrumentType?: 'etf' | 'stock' | 'bond';
 }
 
@@ -24,6 +24,16 @@ interface InvestmentOrderFormProps {
   submitLabel?: string;
   onChange?: (order: InvestmentOrderInput, meta: { isValid: boolean }) => void;
   showActions?: boolean;
+  existingOrders?: Array<{
+    id?: number;
+    transaction_id?: number;
+    symbol: string;
+    quantity: number;
+    order_type?: string;
+    orderType?: 'buy' | 'sell';
+  }>;
+  ignoreOrderId?: number;
+  ignoreTransactionId?: number;
 }
 
 export default function InvestmentOrderForm({
@@ -34,6 +44,9 @@ export default function InvestmentOrderForm({
   submitLabel,
   onChange,
   showActions = true,
+  existingOrders = [],
+  ignoreOrderId,
+  ignoreTransactionId,
 }: InvestmentOrderFormProps) {
   const { t } = useTranslation();
   const today = new Date().toISOString().split('T')[0];
@@ -41,6 +54,7 @@ export default function InvestmentOrderForm({
   const [quantity, setQuantity] = useState(initialData ? String(initialData.quantity) : '');
   const [price, setPrice] = useState(initialData ? String(initialData.price) : '');
   const [date, setDate] = useState(initialData?.date || today);
+  const [orderType, setOrderType] = useState<'buy' | 'sell'>(initialData?.orderType || 'buy');
   const dateRef = useRef<HTMLInputElement>(null);
   const currSymbols: Record<string, string> = { EUR: '€', USD: '$', GBP: '£', CHF: 'Fr' };
   const currSymbol = currSymbols[currency] || currency;
@@ -59,6 +73,7 @@ export default function InvestmentOrderForm({
   const [bondLookupLoading, setBondLookupLoading] = useState(false);
   const [bondLookupError, setBondLookupError] = useState(false);
   const [commission, setCommission] = useState(initialData ? String(initialData.commission) : '');
+  const onChangeRef = useRef(onChange);
   const [selectedInfo, setSelectedInfo] = useState<{ isin?: string; name?: string; exchange?: string; ter?: number } | null>(
     initialData
       ? {
@@ -72,6 +87,10 @@ export default function InvestmentOrderForm({
   const ucitsLoadedRef = useRef(false);
   const bondCacheLoadedRef = useRef(false);
   const isIsinStr = useCallback((s: string) => /^[A-Z]{2}[A-Z0-9]{10}$/.test(s), []);
+
+  useEffect(() => {
+    onChangeRef.current = onChange;
+  }, [onChange]);
 
   useEffect(() => {
     if (ucitsLoadedRef.current || ucitsCache.length > 0 || instrumentType !== 'etf') return;
@@ -228,10 +247,20 @@ export default function InvestmentOrderForm({
   const parsedCommission = parseFloat((commission || '0').replace(',', '.')) || 0;
   const hasConfirmedSymbol = Boolean(selectedInfo && symbol.trim());
   const hasInvalidCommission = commission.trim().length > 0 && parsedCommission < 0;
-  const isOrderFormValid = hasConfirmedSymbol && parsedQty > 0 && parsedPrice > 0 && !hasInvalidCommission;
+  const normalizedSymbol = symbol.trim().toUpperCase();
+  const availableQuantity = existingOrders
+    .filter(order => order.id !== ignoreOrderId && order.transaction_id !== ignoreTransactionId)
+    .filter(order => order.symbol.trim().toUpperCase() === normalizedSymbol)
+    .reduce((total, order) => {
+      const currentOrderType = order.order_type ?? order.orderType ?? 'buy';
+      const signedQuantity = currentOrderType === 'sell' ? -order.quantity : order.quantity;
+      return total + signedQuantity;
+    }, 0);
+  const hasEnoughHoldings = orderType === 'buy' || (availableQuantity > 0 && parsedQty <= availableQuantity);
+  const isOrderFormValid = hasConfirmedSymbol && parsedQty > 0 && parsedPrice > 0 && !hasInvalidCommission && hasEnoughHoldings;
 
   useEffect(() => {
-    onChange?.({
+    onChangeRef.current?.({
       symbol: symbol.trim().toUpperCase(),
       isin: selectedInfo?.isin,
       name: selectedInfo?.name,
@@ -241,9 +270,10 @@ export default function InvestmentOrderForm({
       price: parsedPrice,
       commission: parsedCommission,
       date,
+      orderType,
       instrumentType,
     }, { isValid: isOrderFormValid });
-  }, [symbol, selectedInfo, parsedQty, parsedPrice, parsedCommission, date, instrumentType, isOrderFormValid, onChange]);
+  }, [symbol, selectedInfo, parsedQty, parsedPrice, parsedCommission, date, orderType, instrumentType, isOrderFormValid]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -258,12 +288,26 @@ export default function InvestmentOrderForm({
       price: parsedPrice,
       commission: parsedCommission,
       date,
+      orderType,
       instrumentType,
     });
   };
 
-  return (
-    <form onSubmit={handleSubmit} autoComplete="off" className="space-y-4">
+  const content = (
+    <div className="space-y-4">
+      <div className="flex rounded-lg overflow-hidden border border-gray-300 dark:border-gray-600">
+        {(['buy', 'sell'] as const).map(type => (
+          <button
+            key={type}
+            type="button"
+            onClick={() => setOrderType(type)}
+            className={`flex-1 py-2 text-sm font-medium transition-colors ${orderType === type ? (type === 'buy' ? 'bg-green-500 text-white' : 'bg-red-500 text-white') : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
+          >
+            {type === 'buy' ? 'Buy' : 'Sell'}
+          </button>
+        ))}
+      </div>
+
       <div className="flex rounded-lg overflow-hidden border border-gray-300 dark:border-gray-600">
         {(['etf', 'stock', 'bond'] as const).map(typ => (
           <button
@@ -485,6 +529,16 @@ export default function InvestmentOrderForm({
           </button>
         </div>
       )}
-    </form>
+    </div>
   );
+
+  if (showActions) {
+    return (
+      <form onSubmit={handleSubmit} autoComplete="off" className="space-y-4">
+        {content}
+      </form>
+    );
+  }
+
+  return content;
 }

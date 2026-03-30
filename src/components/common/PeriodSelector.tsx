@@ -190,9 +190,16 @@ function PeriodSelector({
 
   return (
     <div className="relative">
-      <button
-        type="button"
+      <div
+        role="button"
+        tabIndex={0}
         onClick={() => setIsOpen(!isOpen)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            setIsOpen(!isOpen);
+          }
+        }}
         className="w-full bg-white dark:bg-gray-800 rounded-lg border border-gray-300 dark:border-gray-600 py-3 px-4 text-center relative"
       >
         {/* Freccia sinistra */}
@@ -235,7 +242,7 @@ function PeriodSelector({
             </svg>
           </button>
         )}
-      </button>
+      </div>
 
       {isOpen && (
         <>
