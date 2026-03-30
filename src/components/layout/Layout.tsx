@@ -125,7 +125,7 @@ export default function Layout({ children }: LayoutProps) {
 
       {/* Update banner */}
       {needRefresh && (
-        <div className="fixed left-0 right-0 z-50 px-4" style={{ bottom: '4.5rem' }}>
+        <div className="fixed left-0 right-0 z-50 px-4" style={{ bottom: 'calc(4.5rem + env(safe-area-inset-bottom))' }}>
           <div className="bg-gray-900 dark:bg-gray-700 text-white rounded-xl shadow-lg px-4 py-3 flex items-center gap-3">
             <span className="text-lg flex-shrink-0">🔄</span>
             <div className="flex-1 min-w-0">
