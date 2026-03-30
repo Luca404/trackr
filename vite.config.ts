@@ -7,7 +7,7 @@ import { resolve } from 'path'
 
 const APP_MAJOR = 1
 const APP_MINOR = 0
-const APP_PATCH = 24  // Incrementare manualmente ad ogni commit
+const APP_PATCH = 25  // Incrementare manualmente ad ogni commit
 
 function getCommitMsg() {
   try {
@@ -68,6 +68,7 @@ export default defineConfig({
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         cleanupOutdatedCaches: true,
+        navigateFallback: '/index.html',
       },
       devOptions: {
         enabled: true
