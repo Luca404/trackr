@@ -22,7 +22,7 @@ interface CategoryStat {
 export default function StatsPage() {
   const { t } = useTranslation();
   const { formatCurrency } = useSettings();
-  const { transactions: allTransactions, categories, isLoading } = useData();
+  const { transactions: allTransactions, categories, portfolios, isLoading } = useData();
   const [filter, setFilter] = useState<StatsFilter>('expense');
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
@@ -59,7 +59,8 @@ export default function StatsPage() {
       existing.count += 1;
     } else {
       const category = categories.find(c => c.name === t.category);
-      acc.push({ name: t.category, icon: category?.icon || '📌', amount: Math.abs(t.amount), percentage: 0, count: 1 });
+      const portfolio = portfolios.find(p => p.name === t.category);
+      acc.push({ name: t.category, icon: portfolio?.icon || category?.icon || '📌', amount: Math.abs(t.amount), percentage: 0, count: 1 });
     }
     return acc;
   }, [] as CategoryStat[]);
@@ -126,7 +127,8 @@ export default function StatsPage() {
   const categoryColorMap = new Map<string, string>();
   categoryStats.forEach((cat, index) => {
     const catObj = categories.find(c => c.name === cat.name);
-    categoryColorMap.set(cat.name, catObj?.color || baseColors[index % baseColors.length]);
+    const pfObj = portfolios.find(p => p.name === cat.name);
+    categoryColorMap.set(cat.name, pfObj?.color || catObj?.color || baseColors[index % baseColors.length]);
   });
   const getCategoryColor = (categoryName: string) => categoryColorMap.get(categoryName) || baseColors[0];
 

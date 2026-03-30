@@ -701,7 +701,7 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
                   onClick={() => setSelectedPortfolio(portfolio)}
                   className="flex flex-col items-center justify-center p-4 rounded-xl border-2 border-gray-200 dark:border-gray-700 hover:border-primary-500 dark:hover:border-primary-500 hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-colors bg-white dark:bg-gray-800"
                 >
-                  <span className="text-4xl mb-2">📈</span>
+                  <span className="text-4xl mb-2">{portfolio.icon ?? '📈'}</span>
                   <span className="text-xs font-medium text-gray-700 dark:text-gray-300 text-center">{portfolio.name}</span>
                 </button>
               ))}
