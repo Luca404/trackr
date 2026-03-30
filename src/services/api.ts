@@ -713,6 +713,35 @@ class ApiService {
     if (error) throw error;
   }
 
+  async updateOrder(id: number, fields: Partial<OrderFormData>): Promise<Order> {
+    const { data, error } = await supabase
+      .from('orders')
+      .update(fields)
+      .eq('id', id)
+      .select()
+      .single();
+    if (error) throw error;
+    return {
+      id: data.id,
+      user_id: data.user_id,
+      portfolio_id: data.portfolio_id,
+      symbol: data.symbol,
+      isin: data.isin,
+      name: data.name,
+      exchange: data.exchange,
+      currency: data.currency ?? 'EUR',
+      quantity: data.quantity,
+      price: data.price,
+      commission: data.commission ?? 0,
+      instrument_type: data.instrument_type,
+      order_type: data.order_type,
+      date: data.date,
+      ter: data.ter,
+      transaction_id: data.transaction_id,
+      created_at: data.created_at,
+    };
+  }
+
   async deleteOrder(id: number): Promise<void> {
     const { error } = await supabase.from('orders').delete().eq('id', id);
     if (error) throw error;

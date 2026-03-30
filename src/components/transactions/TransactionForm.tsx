@@ -1,13 +1,12 @@
-import { useState, useEffect, useMemo, useRef, useCallback, type FormEvent } from 'react';
+import { useState, useEffect, useMemo, useRef, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useSettings } from '../../contexts/SettingsContext';
-
-const PF_BACKEND_URL = import.meta.env.VITE_PF_BACKEND_URL || 'https://portfolio-tracker-production-3bd4.up.railway.app';
 import type { TransactionFormData, TransactionType, Category, Subcategory, Account, Portfolio, RecurringFrequency } from '../../types';
 import { useData } from '../../contexts/DataContext';
 import ConfirmDialog from '../common/ConfirmDialog';
 import Modal, { registerBackHandler } from '../common/Modal';
+import InvestmentOrderForm, { type InvestmentOrderInput } from '../investments/InvestmentOrderForm';
 
 interface TransactionFormProps {
   onSubmit: (data: TransactionFormData) => Promise<void>;
@@ -45,36 +44,19 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
   const [showPortfolioPicker, setShowPortfolioPicker] = useState(false);
   const [showCurrencyPicker, setShowCurrencyPicker] = useState(false);
   const [currency, setCurrency] = useState<string>('EUR');
-
-  // Campi investimento
-  const [ticker, setTicker] = useState<string>(initialData?.ticker || '');
-  const [investQty, setInvestQty] = useState<string>(initialData?.quantity?.toString() || '');
-  const [investPrice, setInvestPrice] = useState<string>(initialData?.price?.toString() || '');
-  const [investCommission, setInvestCommission] = useState<string>(() => {
-    if (initialData?.quantity && initialData?.price) {
-      const commission = (initialData.amount) - (initialData.quantity * initialData.price);
-      return commission > 0 ? commission.toFixed(2) : '';
-    }
-    return '';
+  const [investmentDraft, setInvestmentDraft] = useState<InvestmentOrderInput>({
+    symbol: initialData?.ticker || '',
+    isin: initialData?.isin,
+    name: initialData?.instrument_name,
+    exchange: initialData?.exchange,
+    ter: initialData?.ter,
+    quantity: initialData?.quantity || 0,
+    price: initialData?.price || 0,
+    commission: initialData?.quantity && initialData?.price ? Math.max(0, initialData.amount - (initialData.quantity * initialData.price)) : 0,
+    date: initialData?.date || new Date().toISOString().split('T')[0],
+    instrumentType: initialData?.instrument_type || 'etf',
   });
-
-  // Symbol search
-  const [instrumentType, setInstrumentType] = useState<'etf' | 'stock' | 'bond'>('etf');
-  const [ucitsCache, setUcitsCache] = useState<any[]>([]);
-  const [symbolOptions, setSymbolOptions] = useState<any[]>([]);
-  const [symbolLoading, setSymbolLoading] = useState(false);
-  const [symbolSearchOpen, setSymbolSearchOpen] = useState(false);
-  const [symbolSearchCompleted, setSymbolSearchCompleted] = useState(false);
-  const [selectedSymbolInfo, setSelectedSymbolInfo] = useState<{ name: string; exchange: string; currency: string; ter: string; isin: string } | null>(null);
-  const skipSymbolSearchRef = useRef(false);
-  const [isinLookupLoading, setIsinLookupLoading] = useState(false);
-  const [isinLookupError, setIsinLookupError] = useState(false);
-  const ucitsLoadedRef = useRef(false);
-  const [bondCache, setBondCache] = useState<any[]>([]);
-  const bondCacheLoadedRef = useRef(false);
-  const [bondMeta, setBondMeta] = useState<any>(null);
-  const [bondLookupLoading, setBondLookupLoading] = useState(false);
-  const [bondLookupError, setBondLookupError] = useState(false);
+  const [isInvestmentDraftValid, setIsInvestmentDraftValid] = useState(false);
 
   const [selectedPortfolio, setSelectedPortfolio] = useState<Portfolio | null>(null);
 
@@ -157,160 +139,21 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
     }
   }, [isEditMode, currentType, allPortfolios]);
 
-  // Carica ETF UCITS cache (sessionStorage → API)
   useEffect(() => {
-    if (ucitsLoadedRef.current || ucitsCache.length > 0 || currentType !== 'investment') return;
-    const cached = sessionStorage.getItem('ucits_etf_list');
-    if (cached) {
-      try { setUcitsCache(JSON.parse(cached)); ucitsLoadedRef.current = true; return; } catch {}
-    }
-    ucitsLoadedRef.current = true;
-    fetch(`${PF_BACKEND_URL}/symbols/ucits`)
-      .then(r => r.ok ? r.json() : null)
-      .then(data => {
-        if (data?.results) {
-          setUcitsCache(data.results);
-          try { sessionStorage.setItem('ucits_etf_list', JSON.stringify(data.results)); } catch {}
-        }
-      })
-      .catch(() => { ucitsLoadedRef.current = false; });
-  }, [currentType, ucitsCache.length]);
-
-  // Bond cache
-  useEffect(() => {
-    if (bondCacheLoadedRef.current || bondCache.length > 0) return;
-    const cached = sessionStorage.getItem('bond_metadata_list');
-    if (cached) {
-      try { setBondCache(JSON.parse(cached)); return; } catch {}
-    }
-    bondCacheLoadedRef.current = true;
-    fetch(`${PF_BACKEND_URL}/symbols/bonds`)
-      .then(r => r.ok ? r.json() : null)
-      .then(data => {
-        if (data?.results) {
-          setBondCache(data.results);
-          try { sessionStorage.setItem('bond_metadata_list', JSON.stringify(data.results)); } catch {}
-        }
-      })
-      .catch(() => { bondCacheLoadedRef.current = false; });
-  }, [bondCache.length]);
-
-  // Ricerca simboli con debounce
-  const isIsinStr = useCallback((s: string) => /^[A-Z]{2}[A-Z0-9]{10}$/.test(s), []);
-  useEffect(() => {
-    if (skipSymbolSearchRef.current) { skipSymbolSearchRef.current = false; return; }
-    if (!ticker || ticker.length < 2) {
-      setSymbolOptions([]);
-      setSymbolSearchCompleted(false);
-      setSymbolSearchOpen(false);
-      return;
-    }
-    setSymbolSearchCompleted(false);
-    const controller = new AbortController();
-
-    const run = async () => {
-      setSymbolLoading(true);
-      if (instrumentType === 'bond') {
-        await new Promise(r => setTimeout(r, 100));
-        if (controller.signal.aborted) return;
-        const q = ticker.toUpperCase();
-        const filtered = bondCache.filter((item: any) => {
-          const isin = (item.isin || '').toUpperCase();
-          const name = (item.name || '').toUpperCase();
-          const issuer = (item.issuer || '').toUpperCase();
-          return isin.startsWith(q) || (q.length >= 3 && (name.includes(q) || issuer.includes(q)));
-        }).slice(0, 15);
-        setSymbolOptions(filtered);
-        setSymbolSearchOpen(true);
-        setSymbolLoading(false);
-        setSymbolSearchCompleted(true);
-        return;
-      }
-      if (instrumentType === 'etf') {
-        await new Promise(r => setTimeout(r, 100));
-        if (controller.signal.aborted) return;
-        const q = ticker.toUpperCase();
-        const filtered = ucitsCache.filter(item => {
-          const t = (item.symbol || '').toUpperCase();
-          const isin = (item.isin || '').toUpperCase();
-          return t.startsWith(q) || (isIsinStr(q) && isin === q);
-        }).slice(0, 25);
-        setSymbolOptions(filtered);
-        setSymbolSearchOpen(true);
-        setSymbolLoading(false);
-        setSymbolSearchCompleted(true);
-        return;
-      }
-      try {
-        const res = await fetch(
-          `${PF_BACKEND_URL}/symbols/search?q=${encodeURIComponent(ticker)}&instrument_type=stock`,
-          { signal: controller.signal }
-        );
-        if (res.ok) { const data = await res.json(); setSymbolOptions(data.results || []); setSymbolSearchOpen(true); }
-      } catch (err: any) {
-        if (err.name !== 'AbortError') console.error('Symbol search error:', err);
-      } finally {
-        if (!controller.signal.aborted) { setSymbolLoading(false); setSymbolSearchCompleted(true); }
-      }
-    };
-    const timer = setTimeout(run, 250);
-    return () => { clearTimeout(timer); controller.abort(); };
-  }, [ticker, instrumentType, ucitsCache, bondCache, isIsinStr]);
-
-  const handleBondLookup = async () => {
-    setBondLookupLoading(true);
-    setBondLookupError(false);
-    setBondMeta(null);
-    try {
-      const res = await fetch(`${PF_BACKEND_URL}/symbols/bond-lookup?isin=${ticker}`);
-      if (!res.ok) throw new Error('not found');
-      const data = await res.json();
-      const meta = data.metadata || {};
-      setBondMeta(meta);
-      setSelectedSymbolInfo({
-        name: meta.name || meta.issuer || '',
-        exchange: 'MOT/EuroMOT',
-        currency: meta.currency || 'EUR',
-        ter: '',
-        isin: ticker,
-      });
-      // Aggiorna cache locale e sessionStorage
-      setBondCache(prev => {
-        const entry = { ...meta, isin: ticker };
-        const exists = prev.find((b: any) => b.isin === ticker);
-        const updated = exists ? prev.map((b: any) => b.isin === ticker ? entry : b) : [...prev, entry];
-        try { sessionStorage.setItem('bond_metadata_list', JSON.stringify(updated)); } catch {}
-        return updated;
-      });
-      setSymbolOptions([]);
-      setSymbolSearchOpen(false);
-    } catch {
-      setBondLookupError(true);
-    } finally {
-      setBondLookupLoading(false);
-    }
-  };
-
-  const handleIsinLookup = async () => {
-    setIsinLookupLoading(true);
-    setIsinLookupError(false);
-    try {
-      const res = await fetch(`${PF_BACKEND_URL}/symbols/isin-lookup?isin=${ticker}`);
-      if (!res.ok) throw new Error('not found');
-      const data = await res.json();
-      const entries = data.listings.map((l: any) => ({
-        symbol: l.ticker, isin: ticker, name: l.name, exchange: l.exchange, currency: l.currency, ter: l.ter,
-      }));
-      setUcitsCache(prev => [...prev, ...entries]);
-      setSymbolOptions(entries);
-      setSymbolSearchOpen(true);
-      setSymbolSearchCompleted(true);
-    } catch {
-      setIsinLookupError(true);
-    } finally {
-      setIsinLookupLoading(false);
-    }
-  };
+    if (currentType !== 'investment') return;
+    setInvestmentDraft({
+      symbol: initialData?.ticker || '',
+      isin: initialData?.isin,
+      name: initialData?.instrument_name,
+      exchange: initialData?.exchange,
+      ter: initialData?.ter,
+      quantity: initialData?.quantity || 0,
+      price: initialData?.price || 0,
+      commission: initialData?.quantity && initialData?.price ? Math.max(0, initialData.amount - (initialData.quantity * initialData.price)) : 0,
+      date: initialData?.date || new Date().toISOString().split('T')[0],
+      instrumentType: initialData?.instrument_type || 'etf',
+    });
+  }, [currentType, initialData]);
 
   const handleNumberClick = (num: string) => {
     if (num === '.' && amount.includes('.')) return;
@@ -394,27 +237,25 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
     }
 
     if (currentType === 'investment') {
-      const qty = parseFloat(investQty) || 0;
-      const price = parseFloat(investPrice) || 0;
-      const commission = parseFloat(investCommission) || 0;
-      const total = qty * price + commission;
-      if (total <= 0) { setError(t('transactions.errorQtyPrice')); return; }
+      const { quantity, price, commission, symbol, isin, name, exchange, instrumentType, ter, date: investmentDate } = investmentDraft;
+      const total = quantity * price + commission;
+      if (!isInvestmentDraftValid || total <= 0) { setError(t('transactions.errorQtyPrice')); return; }
       submitData = {
         type: currentType,
         category: selectedPortfolio?.name || t('transactions.investment', 'Investment'),
         amount: total,
         description,
-        date,
+        date: investmentDate,
         account_id: selectedAccount.id,
-        ticker: ticker.trim().toUpperCase() || undefined,
-        quantity: qty || undefined,
+        ticker: symbol || undefined,
+        quantity: quantity || undefined,
         price: price || undefined,
         portfolio_id: selectedPortfolio?.id,
-        isin: selectedSymbolInfo?.isin || undefined,
-        instrument_name: selectedSymbolInfo?.name || undefined,
-        exchange: selectedSymbolInfo?.exchange || undefined,
+        isin: isin || undefined,
+        instrument_name: name || undefined,
+        exchange: exchange || undefined,
         instrument_type: instrumentType,
-        ter: selectedSymbolInfo?.ter ? parseFloat(selectedSymbolInfo.ter) || undefined : undefined,
+        ter: ter || undefined,
       };
     } else {
       if (!selectedCategory) { setError(t('transactions.errorSelectCategory')); return; }
@@ -714,14 +555,15 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
 
   // ── Form investimento ────────────────────────────────────────────────────
   if (currentType === 'investment') {
-    const qty = parseFloat(investQty) || 0;
-    const price = parseFloat(investPrice) || 0;
-    const commission = parseFloat(investCommission) || 0;
-    const total = qty * price + commission;
-
     const inputClass = "w-full px-3 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-base";
     const noFill = { autoComplete: "off", autoCorrect: "off", spellCheck: false } as const;
-    const labelClass = "block text-xs text-gray-500 dark:text-gray-400 mb-1";
+    const total = investmentDraft.quantity * investmentDraft.price + investmentDraft.commission;
+    const isInvestmentFormValid = Boolean(
+      selectedAccount &&
+      selectedPortfolio &&
+      isInvestmentDraftValid &&
+      total > 0
+    );
 
     return (
       <form onSubmit={handleSubmit} autoComplete="off" className="space-y-4">
@@ -747,243 +589,28 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
           </button>
         </div>
 
-        {/* ETF / Stock / Bond toggle */}
-        <div className="flex rounded-lg overflow-hidden border border-gray-300 dark:border-gray-600">
-          {(['etf', 'stock', 'bond'] as const).map(inst => (
-            <button
-              key={inst}
-              type="button"
-              onClick={() => {
-                setInstrumentType(inst);
-                setTicker('');
-                setSelectedSymbolInfo(null);
-                setSymbolOptions([]);
-                setSymbolSearchCompleted(false);
-                setBondMeta(null);
-                setBondLookupError(false);
-              }}
-              className={`flex-1 py-2 text-sm font-medium transition-colors ${instrumentType === inst ? 'bg-blue-500 text-white' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
-            >
-              {inst === 'etf' ? 'ETF' : inst === 'stock' ? 'Stock' : 'Bond'}
-            </button>
-          ))}
-        </div>
-
-        {/* Ticker + Quantità */}
-        <div className="grid grid-cols-2 gap-3">
-          <div className="relative">
-            <label className={labelClass}>
-              {instrumentType === 'etf' ? t('transactions.tickerOrIsin') : instrumentType === 'bond' ? 'ISIN' : t('transactions.tickerOrName')}
-            </label>
-            <div className="relative">
-              <input
-                type="text"
-                value={ticker}
-                onChange={(e) => {
-                  setTicker(e.target.value.toUpperCase());
-                  setSelectedSymbolInfo(null);
-                  setIsinLookupError(false);
-                  setBondMeta(null);
-                  setBondLookupError(false);
-                }}
-                placeholder={instrumentType === 'etf' ? 'Es. VWCE, SWDA' : instrumentType === 'bond' ? 'Es. IT0005398406' : 'Es. AAPL, MSFT'}
-                className={inputClass + ' uppercase tracking-wider font-mono' + (symbolLoading ? ' pr-8' : '')}
-                onFocus={() => { if (symbolOptions.length > 0) setSymbolSearchOpen(true); }}
-                onBlur={() => setTimeout(() => setSymbolSearchOpen(false), 150)}
-                {...noFill}
-              />
-              {symbolLoading && (
-                <div className="absolute right-2 top-1/2 -translate-y-1/2">
-                  <svg className="animate-spin h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
-                  </svg>
-                </div>
-              )}
-            </div>
-
-            {/* Dropdown risultati */}
-            {symbolSearchOpen && ticker.length >= 2 && !symbolLoading && symbolSearchCompleted && (
-              <div className="absolute z-20 mt-1 w-64 border border-gray-200 dark:border-gray-700 rounded-lg max-h-52 overflow-auto bg-white dark:bg-gray-900 shadow-xl">
-                {symbolOptions.length > 0 ? symbolOptions.map((opt: any) => {
-                  const isBond = instrumentType === 'bond';
-                  const key = isBond ? opt.isin : `${opt.symbol}-${opt.exchange || ''}`;
-                  return (
-                    <button
-                      key={key}
-                      type="button"
-                      onMouseDown={() => {
-                        if (isBond) {
-                          setTicker(opt.isin);
-                          setSelectedSymbolInfo({ name: opt.name || opt.issuer || '', exchange: 'MOT/EuroMOT', currency: opt.currency || 'EUR', ter: '', isin: opt.isin });
-                          setBondMeta(opt);
-                        } else {
-                          setTicker(opt.symbol);
-                          setSelectedSymbolInfo({ name: opt.name || '', exchange: opt.exchange || '', currency: opt.currency || '', ter: opt.ter || '', isin: opt.isin || '' });
-                        }
-                        setSymbolOptions([]);
-                        setSymbolSearchOpen(false);
-                        skipSymbolSearchRef.current = true;
-                      }}
-                      className="w-full flex items-center justify-between px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-800 text-left border-b border-gray-100 dark:border-gray-800 last:border-0"
-                    >
-                      {isBond ? (
-                        <>
-                          <div className="min-w-0">
-                            <p className="font-bold text-sm text-gray-900 dark:text-gray-100 truncate">{opt.name || opt.isin}</p>
-                            {opt.issuer && <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{opt.issuer}</p>}
-                          </div>
-                          <div className="flex flex-col items-end gap-0.5 ml-2 shrink-0 text-xs text-gray-400">
-                            {opt.maturity && <span>Scad. {opt.maturity}</span>}
-                            {opt.coupon != null && <span className="font-medium">{opt.coupon}%</span>}
-                          </div>
-                        </>
-                      ) : (
-                        <>
-                          <div className="min-w-0">
-                            <span className="font-mono font-bold text-sm text-gray-900 dark:text-gray-100">{opt.symbol}</span>
-                            {opt.name && <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{opt.name}</p>}
-                          </div>
-                          <div className="flex flex-col items-end gap-0.5 ml-2 shrink-0 text-xs text-gray-400">
-                            {opt.exchange && <span>{opt.exchange}</span>}
-                            {opt.currency && <span className="font-medium">{opt.currency}</span>}
-                          </div>
-                        </>
-                      )}
-                    </button>
-                  );
-                }) : (
-                  <div className="px-3 py-3 text-center text-xs text-gray-500 dark:text-gray-400">
-                    {instrumentType === 'bond' && isIsinStr(ticker) ? (
-                      <div className="flex flex-col items-center gap-2">
-                        <span>Obbligazione non in cache</span>
-                        {bondLookupError && <span className="text-red-500">Non trovata su Borsa Italiana</span>}
-                        <button
-                          type="button"
-                          onMouseDown={handleBondLookup}
-                          disabled={bondLookupLoading}
-                          className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-60 transition text-xs"
-                        >
-                          {bondLookupLoading && (
-                            <svg className="animate-spin h-3 w-3" fill="none" viewBox="0 0 24 24">
-                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
-                            </svg>
-                          )}
-                          {bondLookupLoading ? t('transactions.searching') : 'Cerca obbligazione'}
-                        </button>
-                      </div>
-                    ) : isIsinStr(ticker) ? (
-                      <div className="flex flex-col items-center gap-2">
-                        <span>{t('transactions.isinNotCached')}</span>
-                        {isinLookupError && <span className="text-red-500">{t('transactions.isinNotFound')}</span>}
-                        <button
-                          type="button"
-                          onMouseDown={handleIsinLookup}
-                          disabled={isinLookupLoading}
-                          className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-60 transition text-xs"
-                        >
-                          {isinLookupLoading && (
-                            <svg className="animate-spin h-3 w-3" fill="none" viewBox="0 0 24 24">
-                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
-                            </svg>
-                          )}
-                          {isinLookupLoading ? t('transactions.searching') : t('transactions.searchJustEtf')}
-                        </button>
-                      </div>
-                    ) : t('transactions.noResults')}
-                  </div>
-                )}
-              </div>
-            )}
-
-          </div>
-
-          <div>
-            <label className={labelClass}>{t('transactions.quantity')}</label>
-            <input
-              type="number"
-              inputMode="decimal"
-              min="0"
-              step="any"
-              value={investQty}
-              onChange={(e) => setInvestQty(e.target.value)}
-              placeholder="0"
-              className={inputClass}
-              {...noFill}
-            />
-          </div>
-        </div>
-
-        {/* Info asset selezionato */}
-        {selectedSymbolInfo?.name && (
-          <div className="p-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
-            <div><span className="text-gray-400">Nome</span><div className="font-medium text-gray-900 dark:text-gray-100 truncate">{selectedSymbolInfo.name}</div></div>
-            {selectedSymbolInfo.exchange && <div><span className="text-gray-400">Exchange</span><div className="font-medium text-gray-900 dark:text-gray-100">{selectedSymbolInfo.exchange}</div></div>}
-            {selectedSymbolInfo.currency && <div><span className="text-gray-400">Valuta</span><div className="font-medium text-gray-900 dark:text-gray-100">{selectedSymbolInfo.currency}</div></div>}
-            {selectedSymbolInfo.ter && <div><span className="text-gray-400">TER</span><div className="font-medium text-gray-900 dark:text-gray-100">{selectedSymbolInfo.ter}%</div></div>}
-            {bondMeta?.coupon != null && <div><span className="text-gray-400">Cedola</span><div className="font-medium text-gray-900 dark:text-gray-100">{bondMeta.coupon}%</div></div>}
-            {(bondMeta?.maturity || bondMeta?.maturity_bi) && <div><span className="text-gray-400">Scadenza</span><div className="font-medium text-gray-900 dark:text-gray-100">{bondMeta.maturity_bi || bondMeta.maturity}</div></div>}
-            {bondMeta?.ytm_gross != null && <div><span className="text-gray-400">YTM lordo</span><div className="font-medium text-gray-900 dark:text-gray-100">{bondMeta.ytm_gross}%</div></div>}
-            {bondMeta?.ytm_net != null && <div><span className="text-gray-400">YTM netto</span><div className="font-medium text-gray-900 dark:text-gray-100">{bondMeta.ytm_net}%</div></div>}
-          </div>
-        )}
-
-        {/* Prezzo + Commissioni */}
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className={labelClass}>{t('transactions.pricePerUnit')} ({selectedSymbolInfo?.currency ? getCurrencySymbol(selectedSymbolInfo.currency) : '€'})</label>
-            <input
-              type="number"
-              inputMode="decimal"
-              min="0"
-              step="any"
-              value={investPrice}
-              onChange={(e) => setInvestPrice(e.target.value)}
-              placeholder="0,00"
-              className={inputClass}
-              {...noFill}
-            />
-          </div>
-          <div>
-            <label className={labelClass}>{t('transactions.commission')}</label>
-            <input
-              type="number"
-              inputMode="decimal"
-              min="0"
-              step="any"
-              value={investCommission}
-              onChange={(e) => setInvestCommission(e.target.value)}
-              placeholder="0,00"
-              className={inputClass}
-              {...noFill}
-            />
-          </div>
-        </div>
-
-        {/* Totale calcolato */}
-        <div className="text-center py-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl">
-          <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">{t('transactions.total')}</div>
-          <div className={`text-4xl font-bold ${total > 0 ? 'text-blue-600 dark:text-blue-400' : 'text-gray-400 dark:text-gray-500'}`}>
-            {formatCurrency(total)}
-          </div>
-          {qty > 0 && price > 0 && commission > 0 && (
-            <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-              {qty} × {formatCurrency(price)} + {formatCurrency(commission)} {t('transactions.commissions')}
-            </div>
-          )}
-        </div>
-
-        {/* Data */}
-        <button type="button" onClick={() => setShowDateSelector(true)}
-          className="w-full flex items-center justify-between px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:border-primary-500 transition-colors">
-          <span className="flex items-center gap-2">
-            <span>📅</span>
-            <span className="text-sm">{formatDate(date)}</span>
-          </span>
-          <span className="text-gray-400">›</span>
-        </button>
+        <InvestmentOrderForm
+          currency="EUR"
+          showActions={false}
+          initialData={{
+            symbol: initialData?.ticker || '',
+            isin: initialData?.isin,
+            name: initialData?.instrument_name,
+            exchange: initialData?.exchange,
+            ter: initialData?.ter,
+            quantity: initialData?.quantity || 0,
+            price: initialData?.price || 0,
+            commission: initialData?.quantity && initialData?.price ? Math.max(0, initialData.amount - (initialData.quantity * initialData.price)) : 0,
+            date: initialData?.date || new Date().toISOString().split('T')[0],
+            instrumentType: initialData?.instrument_type || 'etf',
+          }}
+          onChange={(draft, meta) => {
+            setInvestmentDraft(draft);
+            setIsInvestmentDraftValid(meta.isValid);
+          }}
+          onSubmit={async () => {}}
+          onCancel={() => {}}
+        />
 
         {/* Descrizione */}
         <input
@@ -1003,7 +630,7 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
 
         <button
           type="submit"
-          disabled={isLoading || total <= 0 || !selectedAccount}
+          disabled={isLoading || !isInvestmentFormValid}
           className="w-full py-4 rounded-xl bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-bold text-lg transition-colors"
         >
           {isLoading ? t('transactions.saving') : isEditMode ? t('transactions.saveChanges') : t('transactions.addInvestment')}
