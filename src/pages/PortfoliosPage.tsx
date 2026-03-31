@@ -29,7 +29,7 @@ interface PortfolioSummary {
 export default function PortfoliosPage() {
   const { t } = useTranslation();
   const { formatCurrency } = useSettings();
-  const { portfolios, isLoading, isInitialized, addPortfolio, updatePortfolio, deletePortfolio, updateTransaction: updateTransactionCache, activeProfile } = useData();
+  const { portfolios, isLoading, isInitialized, addPortfolio, updatePortfolio, deletePortfolio, updateTransaction: updateTransactionCache, refreshTransactions, activeProfile } = useData();
   const skeletonCount = useSkeletonCount('portfolios', portfolios.length, isLoading, 3);
   const { confirm: confirmDialog, dialog: confirmDialogEl } = useConfirm();
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -156,8 +156,12 @@ export default function PortfoliosPage() {
 
   const handleSubmit = async (data: PortfolioFormData, initialPositions?: InitialPosition[]) => {
     if (isEditMode && selectedPortfolio) {
-      const updated = await apiService.updatePortfolio(selectedPortfolio.id, data);
+      const renamed = Boolean(data.name && data.name !== selectedPortfolio.name);
+      const updated = await apiService.updatePortfolio(selectedPortfolio.id, data, selectedPortfolio.name);
       updatePortfolio(updated);
+      if (renamed) {
+        await refreshTransactions();
+      }
     } else {
       const created = await apiService.createPortfolio({ ...data, initial_capital: 0 });
       if (initialPositions && initialPositions.length > 0) {
@@ -184,6 +188,20 @@ export default function PortfoliosPage() {
         localStorage.removeItem(SUMMARIES_CACHE_KEY);
       }
       addPortfolio(created);
+      if (!initialPositions || initialPositions.length === 0) {
+        setSummaries(prev => ({
+          ...prev,
+          [created.id]: {
+            total_value: 0,
+            total_cost: 0,
+            total_gain_loss: 0,
+            total_gain_loss_pct: 0,
+            positions_count: 0,
+            xirr: null,
+            reference_currency: data.reference_currency || 'EUR',
+          },
+        }));
+      }
     }
     setIsModalOpen(false);
   };
@@ -319,28 +337,37 @@ export default function PortfoliosPage() {
                         <div className="h-6 w-32 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
                       </div>
                     );
-                    if (!sm) return null;
-                    return (
-                      <div className="grid grid-cols-2 gap-4 pt-3 mt-2 border-t border-gray-200 dark:border-gray-700">
-                        <div>
-                          <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">{t('portfolios.currentValueLabel')}</div>
-                          <div className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                            {hideBalances ? mask(formatCurrency(sm.total_value, sm.reference_currency)) : formatCurrency(sm.total_value, sm.reference_currency)}
+                    if (!sm || sm.positions_count === 0) return (
+                      <div className="pt-3 mt-2 border-t border-gray-200 dark:border-gray-700">
+                        <div className="min-h-[72px] rounded-2xl bg-gray-50 dark:bg-gray-800/50 px-4 py-3 flex items-center">
+                          <div className="text-xs uppercase tracking-[0.14em] text-gray-400 dark:text-gray-500">
+                            {t('portfolios.noPositionsInPortfolio')}
                           </div>
                         </div>
-                        <div>
-                          <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">{t('portfolios.plLabel')}</div>
-                          <div className={`text-lg font-semibold ${sm.total_gain_loss >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
-                            {hideBalances
-                              ? mask(formatCurrency(sm.total_gain_loss, sm.reference_currency))
-                              : <>{formatCurrency(sm.total_gain_loss, sm.reference_currency)}<span className="text-sm ml-1">({sm.total_gain_loss_pct >= 0 ? '+' : ''}{sm.total_gain_loss_pct.toFixed(2)}%)</span></>
-                            }
-                          </div>
-                          {sm.xirr != null && (
-                            <div className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
-                              {t('portfolios.xirrLabel')}: {hideBalances ? '••••' : `${sm.xirr >= 0 ? '+' : ''}${sm.xirr.toFixed(2)}%`}
+                      </div>
+                    );
+                    return (
+                      <div className="pt-3 mt-2 border-t border-gray-200 dark:border-gray-700">
+                        <div className="min-h-[72px] rounded-2xl bg-gray-50 dark:bg-gray-800/50 px-4 py-3 grid grid-cols-2 gap-4 items-center">
+                          <div className="min-w-0 self-center">
+                            <div className="text-xs uppercase tracking-[0.14em] text-gray-400 dark:text-gray-500 mb-1 leading-none">
+                              {t('portfolios.currentValueLabel')}
                             </div>
-                          )}
+                            <div className="text-xl font-semibold text-gray-900 dark:text-gray-100 leading-tight">
+                              {hideBalances ? mask(formatCurrency(sm.total_value, sm.reference_currency)) : formatCurrency(sm.total_value, sm.reference_currency)}
+                            </div>
+                          </div>
+                          <div className="min-w-0 text-right self-center">
+                            <div className="text-xs uppercase tracking-[0.14em] text-gray-400 dark:text-gray-500 mb-1 leading-none">
+                              {t('portfolios.plLabel')}
+                            </div>
+                            <div className={`text-xl font-semibold leading-tight ${sm.total_gain_loss >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                              {hideBalances
+                                ? mask(formatCurrency(sm.total_gain_loss, sm.reference_currency))
+                                : formatCurrency(sm.total_gain_loss, sm.reference_currency)
+                              }
+                            </div>
+                          </div>
                         </div>
                       </div>
                     );
@@ -355,7 +382,7 @@ export default function PortfoliosPage() {
                   style={{ WebkitTapHighlightColor: 'transparent' }}
                   onClick={handleCreatePortfolio}
                 >
-                  <div className="w-10 h-10 rounded-full border-2 border-gray-300 dark:border-gray-600 flex items-center justify-center text-gray-400 dark:text-gray-500 font-bold text-2xl">+</div>
+                  <div className="w-10 h-10 rounded-full border-2 border-gray-300 dark:border-gray-600 flex items-center justify-center text-gray-400 dark:text-gray-500 font-bold text-2xl leading-none">+</div>
                 </div>
               )}
 
@@ -433,8 +460,54 @@ function PortfolioForm({ onSubmit, onDelete, onCancel, onDirtyChange, initialDat
   const [error, setError] = useState('');
   const [initialPositions, setInitialPositions] = useState<InitialPosition[]>([]);
   const [isPositionModalOpen, setIsPositionModalOpen] = useState(false);
+  const [editingInitialPositionIndex, setEditingInitialPositionIndex] = useState<number | null>(null);
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
   const markDirty = () => { onDirtyChange?.(true); };
+  const renderOrderCard = (params: {
+    key: string | number;
+    symbol: string;
+    quantity: number;
+    price: number;
+    commission?: number;
+    currency: string;
+    date?: string;
+    orderType?: 'buy' | 'sell';
+    onClick: () => void;
+  }) => {
+    const total = params.quantity * params.price + (params.commission || 0);
+    return (
+      <button
+        key={params.key}
+        type="button"
+        onClick={params.onClick}
+        className="w-full flex items-center justify-between py-2.5 px-3 rounded-lg bg-gray-50 dark:bg-gray-800/50 text-sm text-left transition-colors hover:bg-gray-100 dark:hover:bg-gray-800 active:bg-gray-100 dark:active:bg-gray-800"
+      >
+        <div className="flex items-center gap-3 min-w-0">
+          {params.orderType && (
+            <span className={`inline-flex items-center self-center text-xs font-medium px-1.5 py-0.5 rounded shrink-0 ${
+              params.orderType === 'buy'
+                ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
+                : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'
+            }`}>
+              {params.orderType === 'buy' ? 'BUY' : 'SELL'}
+            </span>
+          )}
+          <div className="min-w-0">
+            <div className="font-mono font-medium text-gray-900 dark:text-gray-100 truncate">{params.symbol}</div>
+            <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+              {`${params.quantity}x ${formatCurrency(params.price, params.currency)}`}
+            </div>
+          </div>
+        </div>
+        <div className="shrink-0 ml-3 text-right self-center">
+          <div className="text-gray-700 dark:text-gray-300 font-medium">{formatCurrency(total, params.currency)}</div>
+          {params.date && (
+            <div className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{params.date}</div>
+          )}
+        </div>
+      </button>
+    );
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -545,22 +618,17 @@ function PortfolioForm({ onSubmit, onDelete, onCancel, onDirtyChange, initialDat
             </div>
           ) : (
             <div className="space-y-1 max-h-40 overflow-y-auto">
-              {initialPositions.map((pos, i) => (
-                <div key={i} className="flex items-center justify-between py-2 px-3 rounded-lg bg-gray-50 dark:bg-gray-800/50 text-sm">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span className="font-mono font-medium text-gray-900 dark:text-gray-100">{pos.symbol}</span>
-                    <span className="text-gray-500 dark:text-gray-400">{pos.quantity}×</span>
-                    <span className="text-gray-500 dark:text-gray-400">@ {pos.price.toFixed(2)}</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={async () => { if (await confirmDialog('Rimuovere questa posizione?', { title: 'Rimuovi posizione', confirmText: 'Rimuovi', isDestructive: true })) { setInitialPositions(prev => prev.filter((_, j) => j !== i)); markDirty(); } }}
-                    className="text-red-400 dark:text-red-500 text-xs ml-2 shrink-0"
-                  >
-                    ✕
-                  </button>
-                </div>
-              ))}
+              {initialPositions.map((pos, i) => renderOrderCard({
+                key: i,
+                symbol: pos.symbol,
+                quantity: pos.quantity,
+                price: pos.price,
+                commission: pos.commission,
+                currency,
+                date: pos.date,
+                orderType: pos.orderType || 'buy',
+                onClick: () => setEditingInitialPositionIndex(i),
+              }))}
             </div>
           )}
         </div>
@@ -578,32 +646,17 @@ function PortfolioForm({ onSubmit, onDelete, onCancel, onDirtyChange, initialDat
             <div className="text-sm text-gray-400 dark:text-gray-500 text-center py-3">{t('portfolios.noOrders')}</div>
           ) : (
             <div className="space-y-1 max-h-48 overflow-y-auto">
-              {orders.map(order => (
-                <button
-                  key={order.id}
-                  type="button"
-                  onClick={() => setEditingOrder(order)}
-                  className="w-full flex items-center justify-between py-2 px-3 rounded-lg bg-gray-50 dark:bg-gray-800/50 text-sm text-left transition-colors hover:bg-gray-100 dark:hover:bg-gray-800 active:bg-gray-100 dark:active:bg-gray-800"
-                >
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${
-                      order.order_type === 'buy'
-                        ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
-                        : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'
-                    }`}>
-                      {order.order_type === 'buy' ? 'BUY' : 'SELL'}
-                    </span>
-                    <span className="font-mono font-medium text-gray-900 dark:text-gray-100 truncate">{order.symbol}</span>
-                    <span className="text-gray-500 dark:text-gray-400 shrink-0">{order.quantity}×</span>
-                  </div>
-                  <div className="shrink-0 ml-2 text-right">
-                    <div className="text-right">
-                      <div className="text-gray-700 dark:text-gray-300">{formatCurrency(order.price, order.currency)}</div>
-                      <div className="text-xs text-gray-400 dark:text-gray-500">{order.date}</div>
-                    </div>
-                  </div>
-                </button>
-              ))}
+              {orders.map(order => renderOrderCard({
+                key: order.id,
+                symbol: order.symbol,
+                quantity: order.quantity,
+                price: order.price,
+                commission: order.commission,
+                currency: order.currency,
+                date: order.date,
+                orderType: order.order_type as 'buy' | 'sell',
+                onClick: () => setEditingOrder(order),
+              }))}
             </div>
           )}
         </div>
@@ -639,7 +692,19 @@ function PortfolioForm({ onSubmit, onDelete, onCancel, onDirtyChange, initialDat
     <Modal isOpen={isPositionModalOpen} onClose={() => setIsPositionModalOpen(false)} title={t('portfolios.newPosition')}>
       <InvestmentOrderForm
         currency={currency}
-        existingOrders={initialPositions}
+        existingOrders={initialPositions.map((pos, index) => ({
+          id: index,
+          symbol: pos.symbol,
+          isin: pos.isin,
+          name: pos.name,
+          exchange: pos.exchange,
+          currency,
+          quantity: pos.quantity,
+          price: pos.price,
+          commission: pos.commission,
+          order_type: pos.orderType || 'buy',
+          instrument_type: pos.instrumentType,
+        }))}
         onSubmit={(pos) => {
           setInitialPositions(prev => [...prev, pos]);
           markDirty();
@@ -647,6 +712,51 @@ function PortfolioForm({ onSubmit, onDelete, onCancel, onDirtyChange, initialDat
         }}
         onCancel={() => setIsPositionModalOpen(false)}
       />
+    </Modal>
+    <Modal isOpen={editingInitialPositionIndex !== null} onClose={() => setEditingInitialPositionIndex(null)} title={t('portfolios.editOrder')}>
+      {editingInitialPositionIndex !== null && initialPositions[editingInitialPositionIndex] && (
+        <>
+          <InvestmentOrderForm
+            currency={currency}
+            existingOrders={initialPositions.map((pos, index) => ({
+              id: index,
+              symbol: pos.symbol,
+              isin: pos.isin,
+              name: pos.name,
+              exchange: pos.exchange,
+              currency,
+              quantity: pos.quantity,
+              price: pos.price,
+              commission: pos.commission,
+              order_type: pos.orderType || 'buy',
+              instrument_type: pos.instrumentType,
+            }))}
+            ignoreOrderId={editingInitialPositionIndex}
+            initialData={initialPositions[editingInitialPositionIndex]}
+            submitLabel={t('common.save')}
+            onSubmit={async (data) => {
+              setInitialPositions(prev => prev.map((pos, index) => index === editingInitialPositionIndex ? data : pos));
+              markDirty();
+              setEditingInitialPositionIndex(null);
+            }}
+            onCancel={() => setEditingInitialPositionIndex(null)}
+          />
+          <button
+            type="button"
+            onClick={async () => {
+              if (editingInitialPositionIndex === null) return;
+              if (await confirmDialog('Rimuovere questa posizione?', { title: 'Rimuovi posizione', confirmText: 'Rimuovi', isDestructive: true })) {
+                setInitialPositions(prev => prev.filter((_, index) => index !== editingInitialPositionIndex));
+                markDirty();
+                setEditingInitialPositionIndex(null);
+              }
+            }}
+            className="mt-3 w-full px-4 py-3 rounded-lg bg-red-500 text-white hover:bg-red-600 transition-colors font-medium text-sm"
+          >
+            {t('common.delete')}
+          </button>
+        </>
+      )}
     </Modal>
     <Modal isOpen={!!editingOrder} onClose={() => setEditingOrder(null)} title={t('portfolios.editOrder')}>
       {editingOrder && (

@@ -869,7 +869,8 @@ class ApiService {
     return mapPortfolio(data);
   }
 
-  async updatePortfolio(id: number, formData: Partial<PortfolioFormData>): Promise<Portfolio> {
+  async updatePortfolio(id: number, formData: Partial<PortfolioFormData>, previousName?: string): Promise<Portfolio> {
+    const profileId = this.getActiveProfileId();
     const { data, error } = await supabase
       .from('portfolios')
       .update(formData)
@@ -877,6 +878,23 @@ class ApiService {
       .select()
       .single();
     if (error) throw error;
+    if (formData.name && previousName && previousName !== formData.name) {
+      const transactionUpdate = supabase
+        .from('transactions')
+        .update({ category: formData.name })
+        .eq('profile_id', profileId)
+        .eq('type', 'investment')
+        .eq('category', previousName);
+      const recurringUpdate = supabase
+        .from('recurring_transactions')
+        .update({ category: formData.name })
+        .eq('profile_id', profileId)
+        .eq('type', 'investment')
+        .eq('portfolio_id', id);
+      const [{ error: transactionError }, { error: recurringError }] = await Promise.all([transactionUpdate, recurringUpdate]);
+      if (transactionError) throw transactionError;
+      if (recurringError) throw recurringError;
+    }
     return mapPortfolio(data);
   }
 

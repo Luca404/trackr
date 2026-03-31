@@ -231,23 +231,34 @@ function TickerCard({
 
   const handleBondLookup = async () => {
     const isin = ticker.toUpperCase().trim();
-    if (!isin) return;
+    if (!/^[A-Z]{2}[A-Z0-9]{10}$/.test(isin)) return;
     setBondLookupLoading(true); setBondLookupError(false);
     try {
       const res = await fetch(`${PF_BACKEND_URL}/symbols/bond-lookup?isin=${encodeURIComponent(isin)}`);
       if (!res.ok) throw new Error('not found');
       const data = await res.json();
-      if (data.listings?.length > 0) {
-        const first = data.listings[0];
-        const entry = { isin, name: first.name || '', issuer: first.name || '', coupon: null, maturity: null, currency: first.currency || 'EUR' };
-        const updated = [...bondCache.filter(b => b.isin !== isin), entry];
-        setBondCache(updated);
-        try { sessionStorage.setItem('bondCache', JSON.stringify(updated)); } catch {}
-        skipNextSearch.current = true;
-        onChange(id, { ticker: isin, isin, name: first.name || isin, exchange: first.exchange || 'MOT', ter: '' });
-        setSelectedInfo({ name: first.name || isin, exchange: first.exchange || 'MOT', currency: first.currency || 'EUR' });
-        setSymbolOptions([]); setSymbolSearchOpen(false);
-      } else { setBondLookupError(true); }
+      const metadata = data?.metadata;
+      if (!metadata?.name && !metadata?.issuer && metadata?.coupon == null && metadata?.ytm_gross == null && !metadata?.maturity) {
+        setBondLookupError(true);
+        return;
+      }
+      const entry = {
+        isin,
+        name: metadata?.name || '',
+        issuer: metadata?.issuer || '',
+        coupon: metadata?.coupon ?? null,
+        ytm_gross: metadata?.ytm_gross ?? null,
+        maturity: metadata?.maturity ?? null,
+        currency: metadata?.currency || 'EUR',
+      };
+      const updated = [...bondCache.filter(b => b.isin !== isin), entry];
+      setBondCache(updated);
+      try { sessionStorage.setItem('bondCache', JSON.stringify(updated)); } catch {}
+      skipNextSearch.current = true;
+      onChange(id, { ticker: isin, isin, name: metadata?.name || metadata?.issuer || isin, exchange: 'MOT/EuroMOT', ter: '' });
+      setSelectedInfo({ name: metadata?.name || metadata?.issuer || isin, exchange: 'MOT/EuroMOT', currency: metadata?.currency || 'EUR' });
+      setSymbolOptions([]); setSymbolSearchOpen(false);
+      setSymbolSearchCompleted(true);
     } catch { setBondLookupError(true); }
     finally { setBondLookupLoading(false); }
   };
@@ -362,7 +373,7 @@ function TickerCard({
             ))}
           </div>
         )}
-        {instrumentType === 'bond' && ticker.length >= 10 && symbolSearchCompleted && symbolOptions.length === 0 && !selectedInfo && (
+        {instrumentType === 'bond' && /^[A-Z]{2}[A-Z0-9]{10}$/.test(ticker.trim().toUpperCase()) && symbolSearchCompleted && symbolOptions.length === 0 && !selectedInfo && (
           <div className="absolute z-20 left-0 right-0 top-full mt-1 bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
             <button
               type="button"
@@ -1079,10 +1090,11 @@ export default function KakeboImport({ onClose, onDirtyChange }: Props) {
                     ))}
                     <button
                       type="button"
-                      className="w-full py-2 text-xs text-primary-500 dark:text-primary-400 border border-dashed border-primary-300 dark:border-primary-700 rounded-xl hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-colors"
+                      className="w-full py-2 text-xs text-primary-500 dark:text-primary-400 border border-dashed border-primary-300 dark:border-primary-700 rounded-xl hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-colors inline-flex items-center justify-center gap-1"
                       onClick={() => addPosition(contoId)}
                     >
-                      + Aggiungi posizione
+                      <span className="inline-flex w-3 items-center justify-center text-sm leading-none">+</span>
+                      <span>Aggiungi posizione</span>
                     </button>
                   </div>
                 );

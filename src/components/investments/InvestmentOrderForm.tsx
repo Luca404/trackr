@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import TransactionDateModal from '../common/TransactionDateModal';
 import type { RecurringFrequency } from '../../types';
@@ -30,6 +30,13 @@ interface InvestmentOrderFormProps {
     id?: number;
     transaction_id?: number;
     symbol: string;
+    isin?: string;
+    name?: string;
+    exchange?: string;
+    currency?: string;
+    ter?: number;
+    instrument_type?: string;
+    instrumentType?: 'etf' | 'stock' | 'bond';
     quantity: number;
     order_type?: string;
     orderType?: 'buy' | 'sell';
@@ -58,9 +65,10 @@ export default function InvestmentOrderForm({
 }: InvestmentOrderFormProps) {
   const { t } = useTranslation();
   const today = new Date().toISOString().split('T')[0];
+  const initialNumberText = (value?: number) => (value != null && value !== 0 ? String(value) : '');
   const [symbol, setSymbol] = useState(initialData?.symbol || '');
-  const [quantity, setQuantity] = useState(initialData ? String(initialData.quantity) : '');
-  const [price, setPrice] = useState(initialData ? String(initialData.price) : '');
+  const [quantity, setQuantity] = useState(initialNumberText(initialData?.quantity));
+  const [price, setPrice] = useState(initialNumberText(initialData?.price));
   const [date, setDate] = useState(initialData?.date || today);
   const [orderType, setOrderType] = useState<'buy' | 'sell'>(initialData?.orderType || 'buy');
   const [showDateSelector, setShowDateSelector] = useState(false);
@@ -79,7 +87,7 @@ export default function InvestmentOrderForm({
   const [isinLookupError, setIsinLookupError] = useState(false);
   const [bondLookupLoading, setBondLookupLoading] = useState(false);
   const [bondLookupError, setBondLookupError] = useState(false);
-  const [commission, setCommission] = useState(initialData ? String(initialData.commission) : '');
+  const [commission, setCommission] = useState(initialNumberText(initialData?.commission));
   const onChangeRef = useRef(onChange);
   const [selectedInfo, setSelectedInfo] = useState<{ isin?: string; name?: string; exchange?: string; ter?: number; currency?: string; coupon?: number; ytmGross?: number } | null>(
     initialData
@@ -94,6 +102,110 @@ export default function InvestmentOrderForm({
   const ucitsLoadedRef = useRef(false);
   const bondCacheLoadedRef = useRef(false);
   const isIsinStr = useCallback((s: string) => /^[A-Z]{2}[A-Z0-9]{10}$/.test(s), []);
+  const getLookupKey = useCallback((params: {
+    instrumentType: 'etf' | 'stock' | 'bond';
+    symbol?: string;
+    isin?: string;
+    exchange?: string;
+  }) => {
+    if (params.instrumentType === 'bond') return (params.isin || params.symbol || '').trim().toUpperCase();
+    const symbolPart = (params.symbol || '').trim().toUpperCase();
+    const exchangePart = (params.exchange || '').trim().toUpperCase();
+    return exchangePart ? `${symbolPart}|${exchangePart}` : symbolPart;
+  }, []);
+  const netQuantityByInstrumentKey = useMemo(() => (
+    existingOrders
+      .filter(order => order.id !== ignoreOrderId && order.transaction_id !== ignoreTransactionId)
+      .filter(order => (order.instrument_type ?? order.instrumentType ?? 'etf') === instrumentType)
+      .reduce<Record<string, number>>((acc, order) => {
+        const currentOrderType = order.order_type ?? order.orderType ?? 'buy';
+        const signedQuantity = currentOrderType === 'sell' ? -order.quantity : order.quantity;
+        const lookupKey = getLookupKey({
+          instrumentType,
+          symbol: order.symbol,
+          isin: order.isin,
+          exchange: order.exchange,
+        });
+        if (!lookupKey) return acc;
+        acc[lookupKey] = (acc[lookupKey] || 0) + signedQuantity;
+        return acc;
+      }, {})
+  ), [existingOrders, ignoreOrderId, ignoreTransactionId, instrumentType, getLookupKey]);
+  const availableKeysForCurrentInstrument = useMemo(() => (
+    Object.entries(netQuantityByInstrumentKey)
+      .filter(([, quantity]) => quantity > 0)
+      .map(([key]) => key)
+  ), [netQuantityByInstrumentKey]);
+  const hasAvailableInstrumentToSell = availableKeysForCurrentInstrument.length > 0;
+  const sellOptionsForCurrentInstrument = useMemo(() => {
+    if (orderType !== 'sell') return [];
+    const eligibleOrders = existingOrders.filter(order => (
+      order.id !== ignoreOrderId &&
+      order.transaction_id !== ignoreTransactionId &&
+      (order.instrument_type ?? order.instrumentType ?? 'etf') === instrumentType
+    ));
+
+    if (instrumentType === 'bond') {
+      return availableKeysForCurrentInstrument.map((lookupKey) => {
+        const cachedBond = bondCache.find((bond) => getLookupKey({ instrumentType: 'bond', isin: bond.isin, symbol: bond.symbol }) === lookupKey);
+        const sourceOrder = eligibleOrders.find((order) => getLookupKey({
+          instrumentType: 'bond',
+          symbol: order.symbol,
+          isin: order.isin,
+          exchange: order.exchange,
+        }) === lookupKey);
+        return {
+          isin: sourceOrder?.isin || cachedBond?.isin || '',
+          name: cachedBond?.name || sourceOrder?.name || sourceOrder?.symbol || '',
+          issuer: cachedBond?.issuer || '',
+          coupon: cachedBond?.coupon,
+          ytm_gross: cachedBond?.ytm_gross,
+          maturity: cachedBond?.maturity,
+          currency: cachedBond?.currency || sourceOrder?.currency || 'EUR',
+        };
+      });
+    }
+
+    if (instrumentType === 'etf') {
+      return availableKeysForCurrentInstrument.map((lookupKey) => {
+        const cachedEtf = ucitsCache.find((item) => getLookupKey({
+          instrumentType: 'etf',
+          symbol: item.symbol,
+          exchange: item.exchange,
+          isin: item.isin,
+        }) === lookupKey);
+        const sourceOrder = eligibleOrders.find((order) => getLookupKey({
+          instrumentType: 'etf',
+          symbol: order.symbol,
+          exchange: order.exchange,
+          isin: order.isin,
+        }) === lookupKey);
+        return {
+          symbol: sourceOrder?.symbol || cachedEtf?.symbol || '',
+          isin: cachedEtf?.isin || sourceOrder?.isin,
+          name: cachedEtf?.name || sourceOrder?.name || '',
+          exchange: cachedEtf?.exchange || sourceOrder?.exchange || '',
+          currency: cachedEtf?.currency || sourceOrder?.currency || currency,
+          ter: cachedEtf?.ter ?? sourceOrder?.ter,
+        };
+      });
+    }
+
+    return availableKeysForCurrentInstrument.map((lookupKey) => {
+      const sourceOrder = eligibleOrders.find((order) => getLookupKey({
+        instrumentType: 'stock',
+        symbol: order.symbol,
+        exchange: order.exchange,
+        isin: order.isin,
+      }) === lookupKey);
+      return {
+        symbol: sourceOrder?.symbol || '',
+        name: sourceOrder?.name || '',
+        exchange: sourceOrder?.exchange || '',
+        currency: sourceOrder?.currency || currency,
+      };
+    });
+  }, [orderType, existingOrders, ignoreOrderId, ignoreTransactionId, instrumentType, availableKeysForCurrentInstrument, bondCache, ucitsCache, currency, getLookupKey]);
 
   useEffect(() => {
     onChangeRef.current = onChange;
@@ -136,11 +248,36 @@ export default function InvestmentOrderForm({
   }, [instrumentType, bondCache.length]);
 
   useEffect(() => {
+    if (instrumentType !== 'bond' || bondCache.length === 0) return;
+    const currentIsin = (selectedInfo?.isin || initialData?.isin || symbol).trim().toUpperCase();
+    if (!currentIsin || !isIsinStr(currentIsin)) return;
+    const cachedBond = bondCache.find((bond) => (bond.isin || '').trim().toUpperCase() === currentIsin);
+    if (!cachedBond) return;
+
+    setSelectedInfo((prev) => ({
+      isin: currentIsin,
+      name: prev?.name || cachedBond.name || cachedBond.issuer || currentIsin,
+      exchange: prev?.exchange || 'MOT/EuroMOT',
+      ter: prev?.ter,
+      currency: prev?.currency || cachedBond.currency || 'EUR',
+      coupon: prev?.coupon ?? cachedBond.coupon ?? undefined,
+      ytmGross: prev?.ytmGross ?? cachedBond.ytm_gross ?? undefined,
+    }));
+  }, [instrumentType, bondCache, initialData?.isin, isIsinStr, selectedInfo?.isin, symbol]);
+
+  useEffect(() => {
     if (skipSymbolSearchRef.current) { skipSymbolSearchRef.current = false; return; }
+    if (orderType === 'sell' && !symbol) {
+      setSymbolOptions(sellOptionsForCurrentInstrument.slice(0, 20));
+      setSymbolSearchCompleted(true);
+      setSymbolSearchOpen(isSymbolFocused && (sellOptionsForCurrentInstrument.length > 0 || !hasAvailableInstrumentToSell));
+      setSymbolLoading(false);
+      return;
+    }
     if (!symbol || symbol.length < 2) {
       setSymbolOptions([]);
       setSymbolSearchCompleted(false);
-      setSymbolSearchOpen(false);
+      setSymbolSearchOpen(orderType === 'sell' && isSymbolFocused && !hasAvailableInstrumentToSell);
       return;
     }
     if (instrumentType === 'bond') {
@@ -152,10 +289,17 @@ export default function InvestmentOrderForm({
         const isin = (b.isin || '').toUpperCase();
         const name = (b.name || '').toLowerCase();
         const issuer = (b.issuer || '').toLowerCase();
-        return isIsin ? isin.startsWith(q) : (name.includes(ql) || issuer.includes(ql));
+        const matchesQuery = isIsin ? isin.startsWith(q) : (name.includes(ql) || issuer.includes(ql));
+        const matchesHolding = orderType !== 'sell' || availableKeysForCurrentInstrument.includes(getLookupKey({
+          instrumentType: 'bond',
+          symbol: b.symbol,
+          isin: b.isin,
+          exchange: b.exchange,
+        }));
+        return matchesQuery && matchesHolding;
       }).slice(0, 20);
       setSymbolOptions(filtered);
-      setSymbolSearchOpen(isSymbolFocused && filtered.length > 0);
+      setSymbolSearchOpen(isSymbolFocused && (filtered.length > 0 || (orderType === 'sell' && !hasAvailableInstrumentToSell)));
       setSymbolLoading(false);
       setSymbolSearchCompleted(true);
       return;
@@ -171,10 +315,18 @@ export default function InvestmentOrderForm({
         const filtered = ucitsCache.filter(item => {
           const sym = (item.symbol || '').toUpperCase();
           const isin = (item.isin || '').toUpperCase();
-          return sym.startsWith(q) || (isIsinStr(q) && isin === q);
+          const name = (item.name || '').toLowerCase();
+          const matchesQuery = sym.startsWith(q) || name.includes(symbol.toLowerCase()) || (isIsinStr(q) && isin === q);
+          const matchesHolding = orderType !== 'sell' || availableKeysForCurrentInstrument.includes(getLookupKey({
+            instrumentType: 'etf',
+            symbol: item.symbol,
+            exchange: item.exchange,
+            isin: item.isin,
+          }));
+          return matchesQuery && matchesHolding;
         }).slice(0, 25);
         setSymbolOptions(filtered);
-        setSymbolSearchOpen(isSymbolFocused && filtered.length > 0);
+        setSymbolSearchOpen(isSymbolFocused && (filtered.length > 0 || (orderType === 'sell' && !hasAvailableInstrumentToSell)));
         setSymbolLoading(false);
         setSymbolSearchCompleted(true);
         return;
@@ -186,9 +338,16 @@ export default function InvestmentOrderForm({
         );
         if (res.ok) {
           const data = await res.json();
-          const results = data.results || [];
+          const results = (data.results || []).filter((item: any) => (
+            orderType !== 'sell' || availableKeysForCurrentInstrument.includes(getLookupKey({
+              instrumentType: 'stock',
+              symbol: item.symbol,
+              exchange: item.exchange,
+              isin: item.isin,
+            }))
+          ));
           setSymbolOptions(results);
-          setSymbolSearchOpen(isSymbolFocused && results.length > 0);
+          setSymbolSearchOpen(isSymbolFocused && (results.length > 0 || (orderType === 'sell' && !hasAvailableInstrumentToSell)));
         }
       } catch (err: any) {
         if (err.name !== 'AbortError') console.error('Symbol search error:', err);
@@ -198,7 +357,7 @@ export default function InvestmentOrderForm({
     };
     const timer = setTimeout(run, 250);
     return () => { clearTimeout(timer); controller.abort(); };
-  }, [symbol, instrumentType, ucitsCache, bondCache, isIsinStr, isSymbolFocused]);
+  }, [symbol, instrumentType, ucitsCache, bondCache, isIsinStr, isSymbolFocused, orderType, availableKeysForCurrentInstrument, hasAvailableInstrumentToSell, sellOptionsForCurrentInstrument, getLookupKey]);
 
   const handleIsinLookup = async () => {
     setIsinLookupLoading(true);
@@ -223,37 +382,42 @@ export default function InvestmentOrderForm({
 
   const handleBondLookup = async () => {
     const isin = symbol.toUpperCase().trim();
-    if (!isin) return;
+    if (!isIsinStr(isin)) return;
     setBondLookupLoading(true); setBondLookupError(false);
     try {
       const res = await fetch(`${PF_BACKEND_URL}/symbols/bond-lookup?isin=${encodeURIComponent(isin)}`);
       if (!res.ok) throw new Error('not found');
       const data = await res.json();
-      if (data.listings?.length > 0) {
-        const first = data.listings[0];
-        const entry = {
-          isin,
-          name: data.metadata?.name || first.name || '',
-          issuer: data.metadata?.issuer || first.name || '',
-          coupon: data.metadata?.coupon ?? null,
-          ytm_gross: data.metadata?.ytm_gross ?? null,
-          maturity: data.metadata?.maturity ?? null,
-          currency: data.metadata?.currency || first.currency || 'EUR',
-        };
-        const updated = [...bondCache.filter(b => b.isin !== isin), entry];
-        setBondCache(updated);
-        try { sessionStorage.setItem('bondCache', JSON.stringify(updated)); } catch {}
-        skipSymbolSearchRef.current = true;
-        setSelectedInfo({
-          isin,
-          name: data.metadata?.name || first.name || '',
-          exchange: first.exchange || 'MOT',
-          currency: data.metadata?.currency || first.currency || 'EUR',
-          coupon: data.metadata?.coupon,
-          ytmGross: data.metadata?.ytm_gross,
-        });
-        setSymbolOptions([]); setSymbolSearchOpen(false);
-      } else { setBondLookupError(true); }
+      const metadata = data?.metadata;
+      if (!metadata?.name && !metadata?.issuer && metadata?.coupon == null && metadata?.ytm_gross == null && !metadata?.maturity) {
+        setBondLookupError(true);
+        return;
+      }
+      const entry = {
+        isin,
+        name: metadata?.name || '',
+        issuer: metadata?.issuer || '',
+        coupon: metadata?.coupon ?? null,
+        ytm_gross: metadata?.ytm_gross ?? null,
+        maturity: metadata?.maturity ?? null,
+        currency: metadata?.currency || 'EUR',
+      };
+      const updated = [...bondCache.filter(b => b.isin !== isin), entry];
+      setBondCache(updated);
+      try { sessionStorage.setItem('bondCache', JSON.stringify(updated)); } catch {}
+      skipSymbolSearchRef.current = true;
+      setSelectedInfo({
+        isin,
+        name: metadata?.name || metadata?.issuer || isin,
+        exchange: 'MOT/EuroMOT',
+        currency: metadata?.currency || 'EUR',
+        coupon: metadata?.coupon,
+        ytmGross: metadata?.ytm_gross,
+      });
+      setSymbol(isin);
+      setSymbolOptions([]);
+      setSymbolSearchCompleted(true);
+      setSymbolSearchOpen(false);
     } catch { setBondLookupError(true); }
     finally { setBondLookupLoading(false); }
   };
@@ -271,10 +435,20 @@ export default function InvestmentOrderForm({
   const currSymbol = currSymbols[effectiveCurrency] || effectiveCurrency;
   const hasConfirmedSymbol = Boolean(selectedInfo && symbol.trim());
   const hasInvalidCommission = commission.trim().length > 0 && parsedCommission < 0;
-  const normalizedSymbol = symbol.trim().toUpperCase();
+  const normalizedInstrumentKey = getLookupKey({
+    instrumentType,
+    symbol,
+    isin: selectedInfo?.isin,
+    exchange: selectedInfo?.exchange,
+  });
   const availableQuantity = existingOrders
     .filter(order => order.id !== ignoreOrderId && order.transaction_id !== ignoreTransactionId)
-    .filter(order => order.symbol.trim().toUpperCase() === normalizedSymbol)
+    .filter(order => getLookupKey({
+      instrumentType,
+      symbol: order.symbol,
+      isin: order.isin,
+      exchange: order.exchange,
+    }) === normalizedInstrumentKey)
     .reduce((total, order) => {
       const currentOrderType = order.order_type ?? order.orderType ?? 'buy';
       const signedQuantity = currentOrderType === 'sell' ? -order.quantity : order.quantity;
@@ -282,6 +456,11 @@ export default function InvestmentOrderForm({
     }, 0);
   const hasEnoughHoldings = orderType === 'buy' || (availableQuantity > 0 && parsedQty <= availableQuantity);
   const isOrderFormValid = hasConfirmedSymbol && parsedQty > 0 && parsedPrice > 0 && !hasInvalidCommission && hasEnoughHoldings;
+  const sellNoMatchMessage = instrumentType === 'etf'
+    ? t('transactions.etfNotInPortfolio')
+    : instrumentType === 'stock'
+      ? t('transactions.stockNotInPortfolio')
+      : t('transactions.bondNotInPortfolio');
 
   useEffect(() => {
     onChangeRef.current?.({
@@ -332,7 +511,7 @@ export default function InvestmentOrderForm({
             onClick={() => setOrderType(type)}
             className={`flex-1 py-2 text-sm font-medium transition-colors ${orderType === type ? (type === 'buy' ? 'bg-green-500 text-white' : 'bg-red-500 text-white') : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
           >
-            {type === 'buy' ? 'Buy' : 'Sell'}
+            {type === 'buy' ? t('transactions.buy') : t('transactions.sell')}
           </button>
         ))}
       </div>
@@ -350,7 +529,7 @@ export default function InvestmentOrderForm({
         ))}
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="space-y-3">
         <div className="relative">
           <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">
             {instrumentType === 'etf' ? t('transactions.tickerOrIsin') : instrumentType === 'stock' ? t('transactions.tickerOrName') : 'ISIN'}
@@ -362,7 +541,14 @@ export default function InvestmentOrderForm({
               onChange={(e) => { setSymbol(e.target.value.toUpperCase()); setIsinLookupError(false); setBondLookupError(false); setSelectedInfo(null); }}
               placeholder={instrumentType === 'etf' ? 'Es. VWCE, SWDA' : instrumentType === 'stock' ? 'Es. AAPL, MSFT' : 'Es. IT0005398406'}
               className={'w-full px-3 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-base uppercase tracking-wider font-mono' + (symbolLoading ? ' pr-8' : '')}
-              onFocus={() => { setIsSymbolFocused(true); if (symbolOptions.length > 0) setSymbolSearchOpen(true); }}
+              onFocus={() => {
+                setIsSymbolFocused(true);
+                if (orderType === 'sell') {
+                  setSymbolSearchOpen(true);
+                } else if (symbolOptions.length > 0) {
+                  setSymbolSearchOpen(true);
+                }
+              }}
               onBlur={() => setTimeout(() => { setIsSymbolFocused(false); setSymbolSearchOpen(false); }, 150)}
               autoComplete="off" autoCorrect="off" spellCheck={false}
               autoCapitalize="characters"
@@ -378,8 +564,20 @@ export default function InvestmentOrderForm({
             )}
           </div>
 
-          {symbolSearchOpen && symbol.length >= 2 && !symbolLoading && symbolSearchCompleted && symbolOptions.length > 0 && (
-            <div className="absolute z-20 mt-1 w-64 border border-gray-200 dark:border-gray-700 rounded-lg max-h-52 overflow-auto bg-white dark:bg-gray-900 shadow-xl">
+          {orderType === 'sell' && isSymbolFocused && !symbolLoading && !hasAvailableInstrumentToSell && (
+            <div className="absolute z-20 mt-1 w-full border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 shadow-xl">
+              <div className="px-3 py-3 text-center text-xs text-gray-500 dark:text-gray-400">
+                {instrumentType === 'etf'
+                  ? t('transactions.noEtfInPortfolio')
+                  : instrumentType === 'stock'
+                    ? t('transactions.noStockInPortfolio')
+                    : t('transactions.noBondInPortfolio')}
+              </div>
+            </div>
+          )}
+
+          {symbolSearchOpen && ((orderType === 'sell' && symbol.length === 0) || symbol.length >= 2) && !symbolLoading && symbolSearchCompleted && symbolOptions.length > 0 && (
+            <div className="absolute z-20 mt-1 w-full border border-gray-200 dark:border-gray-700 rounded-lg max-h-52 overflow-auto bg-white dark:bg-gray-900 shadow-xl">
               {symbolOptions.map((opt: any, i: number) => (
                 <button
                   key={i}
@@ -439,9 +637,11 @@ export default function InvestmentOrderForm({
           )}
 
           {instrumentType !== 'bond' && symbolSearchOpen && symbol.length >= 2 && !symbolLoading && symbolSearchCompleted && symbolOptions.length === 0 && (
-            <div className="absolute z-20 mt-1 w-64 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 shadow-xl">
+            <div className="absolute z-20 mt-1 w-full border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 shadow-xl">
               <div className="px-3 py-3 text-center text-xs text-gray-500 dark:text-gray-400">
-                {isIsinStr(symbol) ? (
+                {orderType === 'sell' ? (
+                  <span>{hasAvailableInstrumentToSell ? sellNoMatchMessage : (instrumentType === 'etf' ? t('transactions.noEtfInPortfolio') : t('transactions.noStockInPortfolio'))}</span>
+                ) : isIsinStr(symbol) ? (
                   <div className="flex flex-col items-center gap-2">
                     <span>{t('transactions.isinNotCached')}</span>
                     {isinLookupError && <span className="text-red-500">{t('transactions.isinNotFound')}</span>}
@@ -462,8 +662,16 @@ export default function InvestmentOrderForm({
             </div>
           )}
 
-          {instrumentType === 'bond' && symbol.length >= 10 && symbolSearchCompleted && symbolOptions.length === 0 && (
-            <div className="absolute z-20 mt-1 w-64 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 shadow-xl overflow-hidden">
+          {instrumentType === 'bond' && orderType === 'sell' && symbolSearchOpen && symbol.length >= 2 && !symbolLoading && symbolSearchCompleted && symbolOptions.length === 0 && hasAvailableInstrumentToSell && (
+            <div className="absolute z-20 mt-1 w-full border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 shadow-xl">
+              <div className="px-3 py-3 text-center text-xs text-gray-500 dark:text-gray-400">
+                {sellNoMatchMessage}
+              </div>
+            </div>
+          )}
+
+          {instrumentType === 'bond' && orderType !== 'sell' && isIsinStr(symbol.trim().toUpperCase()) && symbolSearchCompleted && symbolOptions.length === 0 && !selectedInfo && (
+            <div className="absolute z-20 mt-1 w-full border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 shadow-xl overflow-hidden">
               <button
                 type="button"
                 onMouseDown={handleBondLookup}
@@ -475,20 +683,6 @@ export default function InvestmentOrderForm({
               {bondLookupError && <div className="px-3 py-1.5 text-xs text-red-500">Non trovato</div>}
             </div>
           )}
-        </div>
-
-        <div>
-          <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">{t('transactions.quantity')}</label>
-          <input
-            type="number"
-            inputMode="decimal"
-            min="0"
-            step="any"
-            value={quantity}
-            onChange={e => setQuantity(e.target.value)}
-            className="w-full px-3 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-base"
-            placeholder="0"
-          />
         </div>
       </div>
 
@@ -502,9 +696,22 @@ export default function InvestmentOrderForm({
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-3 gap-3">
         <div>
-          <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">{t('transactions.pricePerUnit')} ({currSymbol})</label>
+          <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">{t('transactions.quantity')}</label>
+          <input
+            type="number"
+            inputMode="decimal"
+            min="0"
+            step="any"
+            value={quantity}
+            onChange={e => setQuantity(e.target.value)}
+            className="w-full px-3 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-base"
+            placeholder="0"
+          />
+        </div>
+        <div>
+          <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">{t('transactions.priceShort')} ({currSymbol})</label>
           <input
             type="number"
             inputMode="decimal"
