@@ -29,7 +29,7 @@ interface PortfolioSummary {
 export default function PortfoliosPage() {
   const { t } = useTranslation();
   const { formatCurrency } = useSettings();
-  const { portfolios, isLoading, isInitialized, addPortfolio, updatePortfolio, deletePortfolio, updateTransaction: updateTransactionCache, refreshTransactions, activeProfile } = useData();
+  const { portfolios, isLoading, isInitialized, addPortfolio, updatePortfolio, deletePortfolio, updateTransaction: updateTransactionCache, deleteTransaction: deleteTransactionCache, refreshTransactions, activeProfile } = useData();
   const skeletonCount = useSkeletonCount('portfolios', portfolios.length, isLoading, 3);
   const { confirm: confirmDialog, dialog: confirmDialogEl } = useConfirm();
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -207,7 +207,13 @@ export default function PortfoliosPage() {
   };
 
   const handleDelete = async (id: number) => {
-    const ok = await confirmDialog(t('portfolios.confirmDeletePortfolio', 'Eliminare questo portafoglio? L\'azione non può essere annullata.'), { title: t('portfolios.deletePortfolio'), confirmText: t('common.delete', 'Elimina'), isDestructive: true });
+    const ok = await confirmDialog(
+      t(
+        'portfolios.confirmDeletePortfolio',
+        'Eliminare questo portafoglio? Verranno eliminati anche tutti gli ordini e le transazioni collegate. L\'azione non può essere annullata.'
+      ),
+      { title: t('portfolios.deletePortfolio'), confirmText: t('common.delete', 'Elimina'), isDestructive: true }
+    );
     if (ok) {
       await apiService.deletePortfolio(id);
       deletePortfolio(id);
@@ -242,6 +248,24 @@ export default function PortfoliosPage() {
       updateTransactionCache(updatedTransaction);
     }
     setPortfolioOrders(prev => prev.map(order => order.id === orderId ? updated : order));
+    localStorage.removeItem(SUMMARIES_CACHE_KEY);
+    loadSummariesFromServer(true).catch(console.error);
+  };
+
+  const handleDeleteOrder = async (order: Order) => {
+    const ok = await confirmDialog('Eliminare questo ordine?', {
+      title: t('portfolios.editOrder'),
+      confirmText: t('common.delete'),
+      isDestructive: true,
+    });
+    if (!ok) return;
+
+    await apiService.deleteOrder(order.id);
+    if (order.transaction_id) {
+      await apiService.deleteTransaction(order.transaction_id);
+      deleteTransactionCache(order.transaction_id);
+    }
+    setPortfolioOrders(prev => prev.filter(existing => existing.id !== order.id));
     localStorage.removeItem(SUMMARIES_CACHE_KEY);
     loadSummariesFromServer(true).catch(console.error);
   };
@@ -426,6 +450,7 @@ export default function PortfoliosPage() {
             orders={portfolioOrders}
             isLoadingOrders={isLoadingOrders}
             onOrderUpdate={handleUpdateOrder}
+            onOrderDelete={handleDeleteOrder}
           />
         </Modal>
         {confirmDialogEl}
@@ -444,9 +469,10 @@ interface PortfolioFormProps {
   orders: Order[];
   isLoadingOrders: boolean;
   onOrderUpdate: (orderId: number, data: InvestmentOrderInput) => Promise<void>;
+  onOrderDelete: (order: Order) => Promise<void>;
 }
 
-function PortfolioForm({ onSubmit, onDelete, onCancel, onDirtyChange, initialData, isEditMode, orders, isLoadingOrders, onOrderUpdate }: PortfolioFormProps) {
+function PortfolioForm({ onSubmit, onDelete, onCancel, onDirtyChange, initialData, isEditMode, orders, isLoadingOrders, onOrderUpdate, onOrderDelete }: PortfolioFormProps) {
   const { t } = useTranslation();
   const { formatCurrency } = useSettings();
   const { confirm: confirmDialog, dialog: confirmDialogEl } = useConfirm();
@@ -462,6 +488,7 @@ function PortfolioForm({ onSubmit, onDelete, onCancel, onDirtyChange, initialDat
   const [isPositionModalOpen, setIsPositionModalOpen] = useState(false);
   const [editingInitialPositionIndex, setEditingInitialPositionIndex] = useState<number | null>(null);
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
+  const isPortfolioFormValid = name.trim() !== '';
   const markDirty = () => { onDirtyChange?.(true); };
   const renderOrderCard = (params: {
     key: string | number;
@@ -511,6 +538,7 @@ function PortfolioForm({ onSubmit, onDelete, onCancel, onDirtyChange, initialDat
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!name.trim()) return;
     setIsLoading(true);
     setError('');
     try {
@@ -527,7 +555,7 @@ function PortfolioForm({ onSubmit, onDelete, onCancel, onDirtyChange, initialDat
   };
 
   return (<>
-    <form onSubmit={handleSubmit} autoComplete="off" className="space-y-3">
+    <form onSubmit={handleSubmit} noValidate autoComplete="off" className="space-y-3">
       <div>
         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('portfolios.name')}</label>
         <input
@@ -537,7 +565,6 @@ function PortfolioForm({ onSubmit, onDelete, onCancel, onDirtyChange, initialDat
           className="input-field"
           placeholder="Es: Fineco, TradeRepublic..."
           autoComplete="off" autoCorrect="off" spellCheck={false}
-          required
         />
       </div>
 
@@ -672,7 +699,7 @@ function PortfolioForm({ onSubmit, onDelete, onCancel, onDirtyChange, initialDat
         <button type="button" onClick={onCancel} className="flex-1 btn-secondary" disabled={isLoading}>
           {t('common.cancel')}
         </button>
-        <button type="submit" className="flex-1 btn-primary" disabled={isLoading}>
+        <button type="submit" className="flex-1 btn-primary disabled:opacity-50 disabled:cursor-not-allowed" disabled={isLoading || !isPortfolioFormValid}>
           {isLoading ? '...' : isEditMode ? t('common.save') : t('common.create')}
         </button>
       </div>
@@ -681,7 +708,7 @@ function PortfolioForm({ onSubmit, onDelete, onCancel, onDirtyChange, initialDat
         <button
           type="button"
           onClick={onDelete}
-          className="w-full px-4 py-3 rounded-lg bg-red-500 text-white hover:bg-red-600 transition-colors font-medium text-sm"
+          className="w-full px-4 py-2.5 rounded-lg bg-red-500 text-white hover:bg-red-600 transition-colors text-sm font-medium"
           disabled={isLoading}
         >
           {t('portfolios.deletePortfolio')}
@@ -751,7 +778,7 @@ function PortfolioForm({ onSubmit, onDelete, onCancel, onDirtyChange, initialDat
                 setEditingInitialPositionIndex(null);
               }
             }}
-            className="mt-3 w-full px-4 py-3 rounded-lg bg-red-500 text-white hover:bg-red-600 transition-colors font-medium text-sm"
+            className="mt-3 w-full px-4 py-2.5 rounded-lg bg-red-500 text-white hover:bg-red-600 transition-colors text-sm font-medium"
           >
             {t('common.delete')}
           </button>
@@ -760,30 +787,42 @@ function PortfolioForm({ onSubmit, onDelete, onCancel, onDirtyChange, initialDat
     </Modal>
     <Modal isOpen={!!editingOrder} onClose={() => setEditingOrder(null)} title={t('portfolios.editOrder')}>
       {editingOrder && (
-        <InvestmentOrderForm
-          currency={editingOrder.currency}
-          existingOrders={orders}
-          ignoreOrderId={editingOrder.id}
-          initialData={{
-            symbol: editingOrder.symbol,
-            isin: editingOrder.isin,
-            name: editingOrder.name,
-            exchange: editingOrder.exchange,
-            ter: editingOrder.ter,
-            quantity: editingOrder.quantity,
-            price: editingOrder.price,
-            commission: editingOrder.commission,
-            date: editingOrder.date,
-            orderType: editingOrder.order_type as 'buy' | 'sell',
-            instrumentType: editingOrder.instrument_type as 'etf' | 'stock' | 'bond' | undefined,
-          }}
-          submitLabel={t('common.save')}
-          onSubmit={async (data) => {
-            await onOrderUpdate(editingOrder.id, data);
-            setEditingOrder(null);
-          }}
-          onCancel={() => setEditingOrder(null)}
-        />
+        <>
+          <InvestmentOrderForm
+            currency={editingOrder.currency}
+            existingOrders={orders}
+            ignoreOrderId={editingOrder.id}
+            initialData={{
+              symbol: editingOrder.symbol,
+              isin: editingOrder.isin,
+              name: editingOrder.name,
+              exchange: editingOrder.exchange,
+              ter: editingOrder.ter,
+              quantity: editingOrder.quantity,
+              price: editingOrder.price,
+              commission: editingOrder.commission,
+              date: editingOrder.date,
+              orderType: editingOrder.order_type as 'buy' | 'sell',
+              instrumentType: editingOrder.instrument_type as 'etf' | 'stock' | 'bond' | undefined,
+            }}
+            submitLabel={t('common.save')}
+            onSubmit={async (data) => {
+              await onOrderUpdate(editingOrder.id, data);
+              setEditingOrder(null);
+            }}
+            onCancel={() => setEditingOrder(null)}
+          />
+          <button
+            type="button"
+            onClick={async () => {
+              await onOrderDelete(editingOrder);
+              setEditingOrder(null);
+            }}
+            className="mt-3 w-full px-4 py-2.5 rounded-lg bg-red-500 text-white hover:bg-red-600 transition-colors text-sm font-medium"
+          >
+            {t('common.delete')}
+          </button>
+        </>
       )}
     </Modal>
     {confirmDialogEl}

@@ -192,6 +192,7 @@
     "purchaseDate": "Data acquisto",
     "currentValue": "Valore Attuale",
     "deletePortfolio": "🗑️ Elimina portafoglio",
+    "confirmDeletePortfolio": "Eliminare questo portafoglio? Verranno eliminati anche tutti gli ordini e le transazioni collegate. L'azione non può essere annullata.",
     "currentValueLabel": "Valore Attuale",
     "plLabel": "P/L",
     "xirrLabel": "XIRR"

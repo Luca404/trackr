@@ -192,6 +192,7 @@
     "purchaseDate": "Fecha de compra",
     "currentValue": "Valor actual",
     "deletePortfolio": "🗑️ Eliminar cartera",
+    "confirmDeletePortfolio": "¿Eliminar esta cartera? También se eliminarán todas las órdenes y transacciones vinculadas. Esta acción no se puede deshacer.",
     "currentValueLabel": "Valor actual",
     "plLabel": "G/P",
     "xirrLabel": "XIRR"

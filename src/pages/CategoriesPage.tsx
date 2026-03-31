@@ -249,6 +249,8 @@ export default function CategoriesPage() {
   const [isDeleteSubcategoryDialogOpen, setIsDeleteSubcategoryDialogOpen] = useState(false);
   const [categoryToDelete, setCategoryToDelete] = useState<number | null>(null);
   const [subcategoryToDelete, setSubcategoryToDelete] = useState<number | null>(null);
+  const isCategoryFormValid = categoryFormData.name.trim() !== '';
+  const isSubcategoryFormValid = subcategoryFormData.name.trim() !== '';
 
   const handlePeriodChange = (start: Date, end: Date, type: PeriodType) => {
     setPeriod(start, end, type);
@@ -299,6 +301,7 @@ export default function CategoriesPage() {
 
   const handleCategorySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!categoryFormData.name.trim()) return;
     try {
       if (isEditMode && selectedCategory) {
         const oldName = selectedCategory.name;
@@ -323,6 +326,7 @@ export default function CategoriesPage() {
   const handleSubcategorySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedCategory) return;
+    if (!subcategoryFormData.name.trim()) return;
 
     try {
       const newSubcategory = await apiService.createSubcategory(selectedCategory.id, subcategoryFormData);
@@ -607,28 +611,39 @@ export default function CategoriesPage() {
                 </button>
               </div>
             ) : (
-              <form onSubmit={handleSubcategorySubmit} autoComplete="off" className="space-y-3">
+              <form onSubmit={handleSubcategorySubmit} noValidate autoComplete="off" className="space-y-3">
                 <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">
                   {t('common.newSubcategory')}
                 </h4>
 
-                <div className="flex gap-2">
+                <div>
                   <input
                     type="text"
                     value={subcategoryFormData.name}
                     onChange={(e) => setSubcategoryFormData({ ...subcategoryFormData, name: e.target.value })}
-                    className="flex-[3] px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-sm"
+                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-sm"
                     placeholder={t('common.subcategoryName')}
                     autoComplete="off" autoCorrect="off" spellCheck={false}
-                    required
                     autoFocus
                   />
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowSubcategoryForm(false);
+                      setSubcategoryFormData({ name: '' });
+                    }}
+                    className="flex-1 btn-secondary"
+                  >
+                    {t('common.cancel')}
+                  </button>
                   <button
                     type="submit"
-                    className="flex-1 h-10 rounded-lg bg-primary-500 text-white hover:bg-primary-600 transition-colors flex items-center justify-center text-2xl"
-                    title={t('common.add')}
+                    disabled={!isSubcategoryFormValid}
+                    className="flex-1 btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    ✓
+                    {t('common.add')}
                   </button>
                 </div>
               </form>
@@ -650,7 +665,7 @@ export default function CategoriesPage() {
           }}
           title={isEditMode ? t('categories.editCategory') : t('categories.newCategory')}
         >
-          <form onSubmit={handleCategorySubmit} autoComplete="off" className="space-y-4">
+          <form onSubmit={handleCategorySubmit} noValidate autoComplete="off" className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 {t('categories.name')}
@@ -661,7 +676,6 @@ export default function CategoriesPage() {
                 onChange={(e) => setCategoryFormData({ ...categoryFormData, name: e.target.value })}
                 className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
                 autoComplete="off" autoCorrect="off" spellCheck={false}
-                required
               />
             </div>
 
@@ -743,30 +757,48 @@ export default function CategoriesPage() {
                 <>
                   <button
                     type="button"
-                    onClick={(e) => handleDeleteCategory(e, selectedCategory.id)}
-                    className="flex-1 h-12 rounded-lg bg-red-500 text-white hover:bg-red-600 transition-colors flex items-center justify-center text-2xl"
-                    title={t('common.delete')}
+                    onClick={() => setIsCategoryModalOpen(false)}
+                    className="flex-1 btn-secondary"
                   >
-                    🗑️
+                    {t('common.cancel')}
                   </button>
                   <button
                     type="submit"
-                    className="flex-1 h-12 rounded-lg bg-primary-500 text-white hover:bg-primary-600 transition-colors flex items-center justify-center text-2xl"
-                    title={t('common.save')}
+                    disabled={!isCategoryFormValid}
+                    className="flex-1 btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    ✓
+                    {t('common.save')}
                   </button>
                 </>
               ) : (
-                <button
-                  type="submit"
-                  className="w-full h-12 rounded-lg bg-primary-500 text-white hover:bg-primary-600 transition-colors flex items-center justify-center text-2xl"
-                  title={t('common.create')}
-                >
-                  ✓
-                </button>
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setIsCategoryModalOpen(false)}
+                    className="flex-1 btn-secondary"
+                  >
+                    {t('common.cancel')}
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={!isCategoryFormValid}
+                    className="flex-1 btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {t('common.create')}
+                  </button>
+                </>
               )}
             </div>
+            {isEditMode && selectedCategory && (
+              <button
+                type="button"
+                onClick={(e) => handleDeleteCategory(e, selectedCategory.id)}
+                className="w-full px-4 py-2.5 rounded-lg bg-red-500 text-white hover:bg-red-600 transition-colors text-sm font-medium flex items-center justify-center gap-2"
+              >
+                <span className="text-base leading-none">🗑️</span>
+                <span>{t('common.delete')}</span>
+              </button>
+            )}
           </form>
         </Modal>
 

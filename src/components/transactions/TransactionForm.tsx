@@ -279,15 +279,15 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
 
-    if (!selectedAccount) { setError(t('transactions.errorSelectAccount')); return; }
+    if (!selectedAccount) return;
 
     let submitData: TransactionFormData;
 
     if (currentType === 'transfer') {
-      if (!selectedToAccount) { setError(t('transactions.errorSelectDestination')); return; }
-      if (selectedToAccount.id === selectedAccount.id) { setError(t('transactions.errorDifferentAccounts')); return; }
+      if (!selectedToAccount) return;
+      if (selectedToAccount.id === selectedAccount.id) return;
       const amountNum = parseFloat(amount) || 0;
-      if (amountNum <= 0) { setError(t('transactions.errorInvalidAmount')); return; }
+      if (amountNum <= 0) return;
       submitData = {
         type: 'transfer',
         category: 'Trasferimento',
@@ -314,7 +314,7 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
       const { quantity, price, commission, symbol, isin, name, exchange, instrumentType, orderType, ter, date: investmentDate } = investmentDraft;
       const grossAmount = quantity * price + commission;
       const total = orderType === 'sell' ? -grossAmount : grossAmount;
-      if (!isInvestmentDraftValid || grossAmount <= 0) { setError(t('transactions.errorQtyPrice')); return; }
+      if (!isInvestmentDraftValid || grossAmount <= 0) return;
       submitData = {
         type: currentType,
         category: selectedPortfolio?.name || t('transactions.investment', 'Investment'),
@@ -335,9 +335,9 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
         recurrence: recurrence ?? undefined,
       };
     } else {
-      if (!selectedCategory) { setError(t('transactions.errorSelectCategory')); return; }
+      if (!selectedCategory) return;
       const amountNum = parseFloat(amount) || 0;
-      if (amountNum <= 0) { setError(t('transactions.errorInvalidAmount')); return; }
+      if (amountNum <= 0) return;
       submitData = {
         type: currentType,
         category: selectedCategory.name,
@@ -662,19 +662,20 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
         <button
           type="submit"
           disabled={isLoading || !isInvestmentFormValid}
-          className="w-full py-4 rounded-xl bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-bold text-lg transition-colors"
+          className="w-full px-4 py-2.5 rounded-lg bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-sm text-white font-medium transition-colors"
         >
-          {isLoading ? t('transactions.saving') : isEditMode ? t('transactions.saveChanges') : t('transactions.addInvestment')}
+          {isLoading ? t('transactions.saving') : isEditMode ? t('common.save') : t('transactions.addInvestment')}
         </button>
 
         {isEditMode && onDelete && (
           <button
             type="button"
             onClick={() => isRecurring ? setShowRecurringDeleteModal(true) : setIsDeleteDialogOpen(true)}
-            className="w-full px-4 py-3 rounded-lg bg-red-500 text-white hover:bg-red-600 transition-colors font-medium"
+            className="w-full px-4 py-2.5 rounded-lg bg-red-500 text-white hover:bg-red-600 transition-colors text-sm font-medium flex items-center justify-center gap-2"
             disabled={isLoading}
           >
-            🗑️ {t('common.delete')}
+            <span className="text-base leading-none">🗑️</span>
+            <span>{t('common.delete')}</span>
           </button>
         )}
 
@@ -685,8 +686,15 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
 
   // ── Form trasferimento ────────────────────────────────────────────────────
   if (currentType === 'transfer') {
+    const amountNum = parseFloat(amount);
+    const isTransferFormValid = Boolean(
+      selectedAccount &&
+      selectedToAccount &&
+      selectedToAccount.id !== selectedAccount.id &&
+      amountNum > 0
+    );
     return (
-      <form onSubmit={handleSubmit} autoComplete="off" className="space-y-4">
+      <form onSubmit={handleSubmit} noValidate autoComplete="off" className="space-y-4">
         {tabSelector}
 
         {/* Da → A */}
@@ -750,9 +758,14 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
               className="h-14 text-2xl font-semibold rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-900 dark:text-gray-100 transition-colors">,</button>
           </div>
           <div className="flex flex-col gap-2">
-            <button type="button" onClick={handleBackspace}
-              className="h-14 w-14 text-2xl rounded-lg bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-900 dark:text-gray-100 transition-colors">←</button>
-            <button type="submit" disabled={isLoading || !selectedAccount || !selectedToAccount || parseFloat(amount) <= 0}
+          <button type="button" onClick={handleBackspace}
+              className="h-14 w-14 rounded-lg bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-900 dark:text-gray-100 transition-colors flex items-center justify-center">
+              <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M11 17l-5-5 5-5" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19 12H7" />
+              </svg>
+            </button>
+            <button type="submit" disabled={isLoading || !isTransferFormValid}
               className="flex-1 w-14 rounded-lg bg-green-500 hover:bg-green-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-bold text-3xl transition-colors flex items-center justify-center">
               {isLoading ? '...' : '✓'}
             </button>
@@ -780,10 +793,11 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
           <button
             type="button"
             onClick={() => setIsDeleteDialogOpen(true)}
-            className="w-full px-4 py-3 rounded-lg bg-red-500 text-white hover:bg-red-600 transition-colors font-medium"
+            className="w-full px-4 py-2.5 rounded-lg bg-red-500 text-white hover:bg-red-600 transition-colors text-sm font-medium flex items-center justify-center gap-2"
             disabled={isLoading}
           >
-            🗑️ {t('common.delete')}
+            <span className="text-base leading-none">🗑️</span>
+            <span>{t('common.delete')}</span>
           </button>
         )}
 
@@ -818,8 +832,10 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
   }
 
   // ── Form con tastierino numerico (expense / income / transfer) ─────────────
+  const amountNum = parseFloat(amount);
+  const isStandardFormValid = Boolean(selectedCategory && selectedAccount && amountNum > 0);
   return (
-    <form onSubmit={handleSubmit} autoComplete="off" className="space-y-4">
+    <form onSubmit={handleSubmit} noValidate autoComplete="off" className="space-y-4">
       {/* Categoria e Conto */}
       <div className="flex gap-2">
         <button type="button" onClick={() => setShowCategoryPicker(true)}
@@ -878,8 +894,13 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
         </div>
         <div className="flex flex-col gap-2">
           <button type="button" onClick={handleBackspace}
-            className="h-14 w-14 text-2xl rounded-lg bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-900 dark:text-gray-100 transition-colors">←</button>
-          <button type="submit" disabled={isLoading || !selectedCategory || !selectedAccount || parseFloat(amount) <= 0}
+            className="h-14 w-14 rounded-lg bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-900 dark:text-gray-100 transition-colors flex items-center justify-center">
+            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M11 17l-5-5 5-5" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 12H7" />
+            </svg>
+          </button>
+          <button type="submit" disabled={isLoading || !isStandardFormValid}
             className="flex-1 w-14 rounded-lg bg-green-500 hover:bg-green-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-bold text-3xl transition-colors flex items-center justify-center">
             {isLoading ? '...' : '✓'}
           </button>
@@ -911,9 +932,10 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
       {isEditMode && onDelete && (
         <button type="button"
           onClick={() => isRecurring ? setShowRecurringDeleteModal(true) : setIsDeleteDialogOpen(true)}
-          className="w-full px-4 py-3 rounded-lg bg-red-500 text-white hover:bg-red-600 transition-colors font-medium"
+          className="w-full px-4 py-2.5 rounded-lg bg-red-500 text-white hover:bg-red-600 transition-colors text-sm font-medium flex items-center justify-center gap-2"
           disabled={isLoading}>
-          🗑️ {t('common.delete')}
+          <span className="text-base leading-none">🗑️</span>
+          <span>{t('common.delete')}</span>
         </button>
       )}
 

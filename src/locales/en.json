@@ -192,6 +192,7 @@
     "purchaseDate": "Purchase date",
     "currentValue": "Current Value",
     "deletePortfolio": "🗑️ Delete portfolio",
+    "confirmDeletePortfolio": "Delete this portfolio? All linked orders and transactions will be deleted too. This action cannot be undone.",
     "currentValueLabel": "Current Value",
     "plLabel": "P/L",
     "xirrLabel": "XIRR"

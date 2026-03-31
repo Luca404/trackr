@@ -47,7 +47,7 @@ export default function ConfirmDialog({
           <button
             type="button"
             onClick={handleConfirm}
-            className={`flex-1 py-3 rounded-xl font-medium text-white transition-colors ${
+            className={`flex-1 px-4 py-3 rounded-lg font-medium text-white transition-colors ${
               isDestructive ? 'bg-red-500 hover:bg-red-600' : 'bg-primary-500 hover:bg-primary-600'
             }`}
           >

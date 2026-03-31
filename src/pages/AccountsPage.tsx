@@ -15,7 +15,7 @@ const ACCOUNT_ICONS = ['💳', '🏦', '💰', '💵', '💶', '💷', '💴', '
 export default function AccountsPage() {
   const { t } = useTranslation();
   const { formatCurrency } = useSettings();
-  const { accounts, isLoading, addAccount, updateAccount: updateAccountCache, deleteAccount: deleteAccountCache, refreshAccounts } = useData();
+  const { accounts, transactions, transfers, isLoading, addAccount, updateAccount: updateAccountCache, deleteAccount: deleteAccountCache, refreshAccounts } = useData();
   const skeletonCount = useSkeletonCount('accounts', accounts.length, isLoading, 3);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [hideBalances, setHideBalances] = useState(() => localStorage.getItem('hideBalances') === 'true');
@@ -214,6 +214,23 @@ export default function AccountsPage() {
   };
 
   const totalLiquidity = accounts.reduce((sum, acc) => sum + (acc.current_balance ?? acc.initial_balance), 0);
+  const isAccountFormValid = formData.name.trim() !== '';
+  const openDeleteDialog = () => {
+    if (!selectedAccount) return;
+    const linkedTransactionsCount = transactions.filter((tx) => tx.account_id === selectedAccount.id).length;
+    const linkedTransfersCount = transfers.filter(
+      (tr) => tr.from_account_id === selectedAccount.id || tr.to_account_id === selectedAccount.id
+    ).length;
+    const linkedItemsCount = linkedTransactionsCount + linkedTransfersCount;
+    if (linkedItemsCount > 0) {
+      setTransactionCount(linkedItemsCount);
+      setDeleteError('linked-transactions');
+    } else {
+      setTransactionCount(0);
+      setDeleteError(null);
+    }
+    setShowDeleteConfirm(true);
+  };
 
   return (
     <Layout>
@@ -305,7 +322,7 @@ export default function AccountsPage() {
           onClose={handleCloseModal}
           title={isEditMode ? t('accounts.editAccount') : t('accounts.newAccount')}
         >
-          <form onSubmit={handleSubmit} autoComplete="off" className="space-y-4">
+          <form onSubmit={handleSubmit} noValidate autoComplete="off" className="space-y-4">
             {/* Nome */}
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -327,7 +344,6 @@ export default function AccountsPage() {
                     : 'border-gray-300 dark:border-gray-600'
                 } bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 focus:border-transparent`}
                 placeholder={t('accounts.namePlaceholder')}
-                required
               />
             </div>
 
@@ -366,7 +382,7 @@ export default function AccountsPage() {
                 </div>
               </div>
 
-              {/* Tastierino numerico con OK */}
+              {/* Tastierino numerico */}
               <div className="flex gap-2">
                 {/* Griglia numeri 3x4 (sinistra) */}
                 <div className="flex-1 grid grid-cols-3 gap-2">
@@ -418,31 +434,35 @@ export default function AccountsPage() {
                   <button
                     type="button"
                     onClick={handleBackspace}
-                    className="h-14 w-14 text-2xl font-semibold rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                    className="h-14 w-14 rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors flex items-center justify-center text-gray-900 dark:text-gray-100"
                   >
-                    ←
+                    <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M11 17l-5-5 5-5" />
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 12H7" />
+                    </svg>
                   </button>
-                  {/* OK button */}
                   <button
                     type="button"
                     onClick={() => handleSubmit()}
-                    className="flex-1 w-14 text-2xl font-bold rounded-lg bg-primary-500 text-white hover:bg-primary-600 transition-colors"
+                    disabled={!isAccountFormValid}
+                    className="flex-1 w-14 text-2xl font-bold rounded-lg bg-primary-500 text-white hover:bg-primary-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-primary-500"
                   >
                     ✓
                   </button>
-                  {/* Elimina (solo in edit mode) */}
-                  {isEditMode && (
-                    <button
-                      type="button"
-                      onClick={() => setShowDeleteConfirm(true)}
-                      className="h-14 w-14 text-xl rounded-lg bg-red-500 text-white hover:bg-red-600 transition-colors"
-                    >
-                      🗑️
-                    </button>
-                  )}
                 </div>
               </div>
             </div>
+
+            {isEditMode && (
+              <button
+                type="button"
+                onClick={openDeleteDialog}
+                className="w-full px-4 py-2.5 rounded-lg bg-red-500 text-white hover:bg-red-600 transition-colors text-sm font-medium flex items-center justify-center gap-2"
+              >
+                <span className="text-base leading-none">🗑️</span>
+                <span>{t('common.delete')}</span>
+              </button>
+            )}
           </form>
         </Modal>
 
@@ -453,7 +473,7 @@ export default function AccountsPage() {
             setShowDeleteConfirm(false);
             setDeleteError(null);
           }}
-          onConfirm={handleDelete}
+          onConfirm={deleteError ? () => {} : handleDelete}
           title={deleteError ? t('accounts.cannotDeleteTitle') : t('accounts.deleteTitle')}
           message={
             deleteError
