@@ -7,7 +7,8 @@ import { resolve } from 'path'
 
 const APP_MAJOR = 1
 const APP_MINOR = 0
-const APP_PATCH = 27  // Incrementare manualmente ad ogni commit
+const APP_PATCH = 28  // Incrementare manualmente ad ogni release pubblicata
+const APP_RELEASE_NOTES = 'Investment flows now support buy/sell orders, recurring investments, cleaner modals, and safer delete and duplicate-name checks'
 
 function getCommitMsg() {
   try {
@@ -20,13 +21,14 @@ function getCommitMsg() {
 const commitMsg = getCommitMsg()
 const appVersion = `${APP_MAJOR}.${APP_MINOR}.${APP_PATCH}`
 
-writeFileSync(resolve(__dirname, 'public/version.json'), JSON.stringify({ version: appVersion, commitMsg }))
+writeFileSync(resolve(__dirname, 'public/version.json'), JSON.stringify({ version: appVersion, commitMsg, releaseNotes: APP_RELEASE_NOTES }))
 
 // https://vite.dev/config/
 export default defineConfig({
   define: {
     __APP_VERSION__: JSON.stringify(appVersion),
     __LAST_COMMIT_MSG__: JSON.stringify(commitMsg),
+    __RELEASE_NOTES__: JSON.stringify(APP_RELEASE_NOTES),
   },
   plugins: [
     react(),

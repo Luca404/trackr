@@ -28,13 +28,13 @@ export default function Layout({ children }: LayoutProps) {
       setInterval(() => registration?.update(), 60 * 60 * 1000);
     }
   });
-  const [newCommitMsg, setNewCommitMsg] = useState<string | null>(null);
+  const [newReleaseNotes, setNewReleaseNotes] = useState<string | null>(null);
   const [newVersion, setNewVersion] = useState<string | null>(null);
   useEffect(() => {
     if (!needRefresh) return;
     fetch('/version.json', { cache: 'no-store' })
       .then(r => r.json())
-      .then(d => { setNewCommitMsg(d.commitMsg || null); setNewVersion(d.version || null); })
+      .then(d => { setNewReleaseNotes(d.releaseNotes || d.commitMsg || null); setNewVersion(d.version || null); })
       .catch(() => {});
   }, [needRefresh]);
 
@@ -130,8 +130,8 @@ export default function Layout({ children }: LayoutProps) {
             <span className="text-lg flex-shrink-0">🔄</span>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium leading-tight">Nuova versione disponibile{newVersion ? ` (v${newVersion})` : ''}</p>
-              {(newCommitMsg || __LAST_COMMIT_MSG__) && (
-                <p className="text-xs text-gray-400 dark:text-gray-300 mt-0.5 break-words">{newCommitMsg || __LAST_COMMIT_MSG__}</p>
+              {(newReleaseNotes || __RELEASE_NOTES__ || __LAST_COMMIT_MSG__) && (
+                <p className="text-xs text-gray-400 dark:text-gray-300 mt-0.5 break-words">{newReleaseNotes || __RELEASE_NOTES__ || __LAST_COMMIT_MSG__}</p>
               )}
             </div>
             <button
