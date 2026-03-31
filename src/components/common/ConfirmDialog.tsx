@@ -26,7 +26,7 @@ export default function ConfirmDialog({
 }: ConfirmDialogProps) {
   const { t } = useTranslation();
   const resolvedConfirmText = confirmText ?? t('common.confirm');
-  const resolvedCancelText = cancelText ?? t('common.cancel');
+  const resolvedCancelText = cancelText === undefined ? undefined : (cancelText ?? t('common.cancel'));
 
   const handleConfirm = () => {
     onConfirm();

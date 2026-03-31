@@ -249,8 +249,18 @@ export default function CategoriesPage() {
   const [isDeleteSubcategoryDialogOpen, setIsDeleteSubcategoryDialogOpen] = useState(false);
   const [categoryToDelete, setCategoryToDelete] = useState<number | null>(null);
   const [subcategoryToDelete, setSubcategoryToDelete] = useState<number | null>(null);
-  const isCategoryFormValid = categoryFormData.name.trim() !== '';
-  const isSubcategoryFormValid = subcategoryFormData.name.trim() !== '';
+  const [deleteCategoryBlockedCount, setDeleteCategoryBlockedCount] = useState(0);
+  const [deleteSubcategoryBlockedCount, setDeleteSubcategoryBlockedCount] = useState(0);
+  const normalizedCategoryName = categoryFormData.name.trim().toLocaleLowerCase();
+  const isDuplicateCategoryName = normalizedCategoryName !== '' && baseCategories.some(
+    (category) => category.id !== selectedCategory?.id && category.name.trim().toLocaleLowerCase() === normalizedCategoryName
+  );
+  const normalizedSubcategoryName = subcategoryFormData.name.trim().toLocaleLowerCase();
+  const isDuplicateSubcategoryName = normalizedSubcategoryName !== '' && (selectedCategory?.subcategories || []).some(
+    (subcategory) => subcategory.name.trim().toLocaleLowerCase() === normalizedSubcategoryName
+  );
+  const isCategoryFormValid = categoryFormData.name.trim() !== '' && !isDuplicateCategoryName;
+  const isSubcategoryFormValid = subcategoryFormData.name.trim() !== '' && !isDuplicateSubcategoryName;
 
   const handlePeriodChange = (start: Date, end: Date, type: PeriodType) => {
     setPeriod(start, end, type);
@@ -280,12 +290,19 @@ export default function CategoriesPage() {
 
   const handleDeleteCategory = (e: React.MouseEvent, categoryId: number) => {
     e.stopPropagation();
+    const category = baseCategories.find(c => c.id === categoryId);
+    const linkedTransactions = allTransactions.filter(tx => tx.category === category?.name).length;
+    setDeleteCategoryBlockedCount(linkedTransactions);
     setCategoryToDelete(categoryId);
     setIsDeleteCategoryDialogOpen(true);
   };
 
   const confirmDeleteCategory = async () => {
     if (categoryToDelete !== null) {
+      if (deleteCategoryBlockedCount > 0) {
+        setCategoryToDelete(null);
+        return;
+      }
       try {
         await apiService.deleteCategory(categoryToDelete);
         deleteCategoryCache(categoryToDelete);
@@ -295,6 +312,7 @@ export default function CategoriesPage() {
         console.error('Errore eliminazione categoria:', error);
       } finally {
         setCategoryToDelete(null);
+        setDeleteCategoryBlockedCount(0);
       }
     }
   };
@@ -302,6 +320,7 @@ export default function CategoriesPage() {
   const handleCategorySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!categoryFormData.name.trim()) return;
+    if (isDuplicateCategoryName) return;
     try {
       if (isEditMode && selectedCategory) {
         const oldName = selectedCategory.name;
@@ -327,6 +346,7 @@ export default function CategoriesPage() {
     e.preventDefault();
     if (!selectedCategory) return;
     if (!subcategoryFormData.name.trim()) return;
+    if (isDuplicateSubcategoryName) return;
 
     try {
       const newSubcategory = await apiService.createSubcategory(selectedCategory.id, subcategoryFormData);
@@ -361,6 +381,10 @@ export default function CategoriesPage() {
     if (!trimmed || !selectedCategory) { setEditingSubcategoryId(null); return; }
     const original = selectedCategory.subcategories?.find(s => s.id === subcategoryId)?.name;
     if (trimmed === original) { setEditingSubcategoryId(null); return; }
+    const duplicate = (selectedCategory.subcategories || []).some(
+      s => s.id !== subcategoryId && s.name.trim().toLocaleLowerCase() === trimmed.toLocaleLowerCase()
+    );
+    if (duplicate) return;
     try {
       const updated = await apiService.updateSubcategory(subcategoryId, trimmed);
       const updateSubs = (subs: any[]) => subs.map(s => s.id === subcategoryId ? { ...s, name: updated.name } : s);
@@ -377,12 +401,21 @@ export default function CategoriesPage() {
   };
 
   const handleDeleteSubcategory = (subcategoryId: number) => {
+    const subcategory = selectedCategory?.subcategories?.find(s => s.id === subcategoryId);
+    const linkedTransactions = allTransactions.filter(
+      tx => tx.category === selectedCategory?.name && tx.subcategory === subcategory?.name
+    ).length;
+    setDeleteSubcategoryBlockedCount(linkedTransactions);
     setSubcategoryToDelete(subcategoryId);
     setIsDeleteSubcategoryDialogOpen(true);
   };
 
   const confirmDeleteSubcategory = async () => {
     if (!selectedCategory || subcategoryToDelete === null) return;
+    if (deleteSubcategoryBlockedCount > 0) {
+      setSubcategoryToDelete(null);
+      return;
+    }
     try {
       await apiService.deleteSubcategory(selectedCategory.id, subcategoryToDelete);
 
@@ -408,6 +441,7 @@ export default function CategoriesPage() {
       console.error('Errore eliminazione sottocategoria:', error);
     } finally {
       setSubcategoryToDelete(null);
+      setDeleteSubcategoryBlockedCount(0);
     }
   };
 
@@ -621,7 +655,9 @@ export default function CategoriesPage() {
                     type="text"
                     value={subcategoryFormData.name}
                     onChange={(e) => setSubcategoryFormData({ ...subcategoryFormData, name: e.target.value })}
-                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-sm"
+                    className={`w-full px-3 py-2 rounded-lg border ${
+                      isDuplicateSubcategoryName ? 'border-red-500 dark:border-red-500' : 'border-gray-300 dark:border-gray-600'
+                    } bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-sm`}
                     placeholder={t('common.subcategoryName')}
                     autoComplete="off" autoCorrect="off" spellCheck={false}
                     autoFocus
@@ -674,7 +710,9 @@ export default function CategoriesPage() {
                 type="text"
                 value={categoryFormData.name}
                 onChange={(e) => setCategoryFormData({ ...categoryFormData, name: e.target.value })}
-                className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+                className={`w-full px-4 py-2 rounded-lg border ${
+                  isDuplicateCategoryName ? 'border-red-500 dark:border-red-500' : 'border-gray-300 dark:border-gray-600'
+                } bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100`}
                 autoComplete="off" autoCorrect="off" spellCheck={false}
               />
             </div>
@@ -814,24 +852,38 @@ export default function CategoriesPage() {
         {/* Confirm Dialogs */}
         <ConfirmDialog
           isOpen={isDeleteCategoryDialogOpen}
-          onClose={() => setIsDeleteCategoryDialogOpen(false)}
-          onConfirm={confirmDeleteCategory}
-          title={t('categories.deleteTitle')}
-          message={t('categories.deleteMessage')}
-          confirmText={t('common.delete')}
-          cancelText={t('common.cancel')}
-          isDestructive={true}
+          onClose={() => {
+            setIsDeleteCategoryDialogOpen(false);
+            setDeleteCategoryBlockedCount(0);
+          }}
+          onConfirm={deleteCategoryBlockedCount > 0 ? () => {} : confirmDeleteCategory}
+          title={deleteCategoryBlockedCount > 0 ? t('categories.cannotDeleteTitle') : t('categories.deleteTitle')}
+          message={
+            deleteCategoryBlockedCount > 0
+              ? t('categories.cannotDeleteMessage', { count: deleteCategoryBlockedCount })
+              : t('categories.deleteMessage')
+          }
+          confirmText={deleteCategoryBlockedCount > 0 ? t('common.ok') : t('common.delete')}
+          cancelText={deleteCategoryBlockedCount > 0 ? undefined : t('common.cancel')}
+          isDestructive={deleteCategoryBlockedCount === 0}
         />
 
         <ConfirmDialog
           isOpen={isDeleteSubcategoryDialogOpen}
-          onClose={() => setIsDeleteSubcategoryDialogOpen(false)}
-          onConfirm={confirmDeleteSubcategory}
-          title={t('categories.deleteSubcategoryTitle')}
-          message={t('categories.deleteSubcategoryMessage')}
-          confirmText={t('common.delete')}
-          cancelText={t('common.cancel')}
-          isDestructive={true}
+          onClose={() => {
+            setIsDeleteSubcategoryDialogOpen(false);
+            setDeleteSubcategoryBlockedCount(0);
+          }}
+          onConfirm={deleteSubcategoryBlockedCount > 0 ? () => {} : confirmDeleteSubcategory}
+          title={deleteSubcategoryBlockedCount > 0 ? t('categories.cannotDeleteSubcategoryTitle') : t('categories.deleteSubcategoryTitle')}
+          message={
+            deleteSubcategoryBlockedCount > 0
+              ? t('categories.cannotDeleteSubcategoryMessage', { count: deleteSubcategoryBlockedCount })
+              : t('categories.deleteSubcategoryMessage')
+          }
+          confirmText={deleteSubcategoryBlockedCount > 0 ? t('common.ok') : t('common.delete')}
+          cancelText={deleteSubcategoryBlockedCount > 0 ? undefined : t('common.cancel')}
+          isDestructive={deleteSubcategoryBlockedCount === 0}
         />
       </div>
     </Layout>

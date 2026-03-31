@@ -217,6 +217,13 @@ export default function PortfoliosPage() {
     if (ok) {
       await apiService.deletePortfolio(id);
       deletePortfolio(id);
+      setSummaries(prev => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+      localStorage.removeItem(SUMMARIES_CACHE_KEY);
+      await refreshTransactions();
       setIsModalOpen(false);
     }
   };
@@ -439,6 +446,8 @@ export default function PortfoliosPage() {
             onDelete={isEditMode && selectedPortfolio ? () => handleDelete(selectedPortfolio.id) : undefined}
             onCancel={guardedModalClose}
             onDirtyChange={dirty => { portfolioDirtyRef.current = dirty; }}
+            existingPortfolios={portfolios}
+            editingPortfolioId={selectedPortfolio?.id}
             initialData={selectedPortfolio ? {
               name: selectedPortfolio.name,
               icon: selectedPortfolio.icon,
@@ -464,6 +473,8 @@ interface PortfolioFormProps {
   onDelete?: () => Promise<void>;
   onCancel: () => void;
   onDirtyChange?: (dirty: boolean) => void;
+  existingPortfolios: Portfolio[];
+  editingPortfolioId?: number;
   initialData?: PortfolioFormData;
   isEditMode?: boolean;
   orders: Order[];
@@ -472,7 +483,7 @@ interface PortfolioFormProps {
   onOrderDelete: (order: Order) => Promise<void>;
 }
 
-function PortfolioForm({ onSubmit, onDelete, onCancel, onDirtyChange, initialData, isEditMode, orders, isLoadingOrders, onOrderUpdate, onOrderDelete }: PortfolioFormProps) {
+function PortfolioForm({ onSubmit, onDelete, onCancel, onDirtyChange, existingPortfolios, editingPortfolioId, initialData, isEditMode, orders, isLoadingOrders, onOrderUpdate, onOrderDelete }: PortfolioFormProps) {
   const { t } = useTranslation();
   const { formatCurrency } = useSettings();
   const { confirm: confirmDialog, dialog: confirmDialogEl } = useConfirm();
@@ -488,7 +499,11 @@ function PortfolioForm({ onSubmit, onDelete, onCancel, onDirtyChange, initialDat
   const [isPositionModalOpen, setIsPositionModalOpen] = useState(false);
   const [editingInitialPositionIndex, setEditingInitialPositionIndex] = useState<number | null>(null);
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
-  const isPortfolioFormValid = name.trim() !== '';
+  const normalizedPortfolioName = name.trim().toLocaleLowerCase();
+  const isDuplicatePortfolioName = normalizedPortfolioName !== '' && existingPortfolios.some(
+    (portfolio) => portfolio.id !== editingPortfolioId && portfolio.name.trim().toLocaleLowerCase() === normalizedPortfolioName
+  );
+  const isPortfolioFormValid = name.trim() !== '' && !isDuplicatePortfolioName;
   const markDirty = () => { onDirtyChange?.(true); };
   const renderOrderCard = (params: {
     key: string | number;
@@ -539,6 +554,7 @@ function PortfolioForm({ onSubmit, onDelete, onCancel, onDirtyChange, initialDat
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
+    if (isDuplicatePortfolioName) return;
     setIsLoading(true);
     setError('');
     try {
@@ -562,7 +578,7 @@ function PortfolioForm({ onSubmit, onDelete, onCancel, onDirtyChange, initialDat
           type="text"
           value={name}
           onChange={(e) => { setName(e.target.value); markDirty(); }}
-          className="input-field"
+          className={`input-field ${isDuplicatePortfolioName ? '!border-red-500 dark:!border-red-500' : ''}`}
           placeholder="Es: Fineco, TradeRepublic..."
           autoComplete="off" autoCorrect="off" spellCheck={false}
         />

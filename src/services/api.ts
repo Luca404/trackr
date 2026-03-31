@@ -239,6 +239,31 @@ class ApiService {
     localStorage.removeItem('activeProfileId');
   }
 
+  private normalizeName(value: string): string {
+    return value.trim().toLocaleLowerCase();
+  }
+
+  private async assertUniqueProfileName(
+    table: 'accounts' | 'categories' | 'portfolios',
+    name: string,
+    excludeId?: number
+  ): Promise<void> {
+    const profileId = this.getActiveProfileId();
+    const normalized = this.normalizeName(name);
+    const { data, error } = await supabase.from(table).select('id, name').eq('profile_id', profileId);
+    if (error) throw error;
+    const duplicate = (data || []).some((row: any) => row.id !== excludeId && this.normalizeName(row.name || '') === normalized);
+    if (duplicate) throw new Error('duplicate-name');
+  }
+
+  private async assertUniqueSubcategoryName(categoryId: number, name: string, excludeId?: number): Promise<void> {
+    const normalized = this.normalizeName(name);
+    const { data, error } = await supabase.from('subcategories').select('id, name').eq('category_id', categoryId);
+    if (error) throw error;
+    const duplicate = (data || []).some((row: any) => row.id !== excludeId && this.normalizeName(row.name || '') === normalized);
+    if (duplicate) throw new Error('duplicate-name');
+  }
+
   // ==================== PROFILES ====================
 
   async getProfiles(): Promise<UserProfile[]> {
@@ -308,6 +333,7 @@ class ApiService {
   async createAccount(formData: AccountFormData): Promise<Account> {
     const userId = await getCurrentUserId();
     const profileId = this.getActiveProfileId();
+    await this.assertUniqueProfileName('accounts', formData.name);
     const { current_balance: _, ...dbData } = formData as any;
     const { data, error } = await supabase
       .from('accounts')
@@ -319,6 +345,9 @@ class ApiService {
   }
 
   async updateAccount(id: number, formData: Partial<AccountFormData>): Promise<Account> {
+    if (typeof formData.name === 'string') {
+      await this.assertUniqueProfileName('accounts', formData.name, id);
+    }
     const { current_balance: _, ...dbData } = formData as any;
     const { data, error } = await supabase
       .from('accounts')
@@ -366,6 +395,7 @@ class ApiService {
   async createCategory(formData: CategoryFormData): Promise<Category> {
     const userId = await getCurrentUserId();
     const profileId = this.getActiveProfileId();
+    await this.assertUniqueProfileName('categories', formData.name);
     const { data, error } = await supabase
       .from('categories')
       .insert({ ...formData, user_id: userId, profile_id: profileId })
@@ -376,6 +406,9 @@ class ApiService {
   }
 
   async updateCategory(id: number, formData: Partial<CategoryFormData>): Promise<Category> {
+    if (typeof formData.name === 'string') {
+      await this.assertUniqueProfileName('categories', formData.name, id);
+    }
     const { data, error } = await supabase
       .from('categories')
       .update(formData)
@@ -394,6 +427,7 @@ class ApiService {
   // ==================== SUBCATEGORIES ====================
 
   async createSubcategory(categoryId: number, formData: SubcategoryFormData): Promise<Subcategory> {
+    await this.assertUniqueSubcategoryName(categoryId, formData.name);
     const { data, error } = await supabase
       .from('subcategories')
       .insert({ ...formData, category_id: categoryId })
@@ -404,6 +438,13 @@ class ApiService {
   }
 
   async updateSubcategory(subcategoryId: number, name: string): Promise<Subcategory> {
+    const { data: current, error: currentError } = await supabase
+      .from('subcategories')
+      .select('category_id')
+      .eq('id', subcategoryId)
+      .single();
+    if (currentError) throw currentError;
+    await this.assertUniqueSubcategoryName(current.category_id, name, subcategoryId);
     const { data, error } = await supabase
       .from('subcategories')
       .update({ name })
@@ -852,6 +893,7 @@ class ApiService {
   async createPortfolio(formData: PortfolioFormData): Promise<Portfolio> {
     const userId = await getCurrentUserId();
     const profileId = this.getActiveProfileId();
+    await this.assertUniqueProfileName('portfolios', formData.name);
     const { data, error } = await supabase
       .from('portfolios')
       .insert({
@@ -871,6 +913,9 @@ class ApiService {
 
   async updatePortfolio(id: number, formData: Partial<PortfolioFormData>, previousName?: string): Promise<Portfolio> {
     const profileId = this.getActiveProfileId();
+    if (typeof formData.name === 'string') {
+      await this.assertUniqueProfileName('portfolios', formData.name, id);
+    }
     const { data, error } = await supabase
       .from('portfolios')
       .update(formData)
@@ -899,6 +944,28 @@ class ApiService {
   }
 
   async deletePortfolio(id: number): Promise<void> {
+    const profileId = this.getActiveProfileId();
+    const { data: orderRows, error: orderError } = await supabase
+      .from('orders')
+      .select('transaction_id')
+      .eq('portfolio_id', id);
+    if (orderError) throw orderError;
+
+    const transactionIds = Array.from(
+      new Set((orderRows || []).map((row: any) => row.transaction_id).filter(Boolean))
+    ) as number[];
+
+    const [{ error: recurringError }, { error: transactionsError }, { error: ordersDeleteError }] = await Promise.all([
+      supabase.from('recurring_transactions').delete().eq('profile_id', profileId).eq('portfolio_id', id),
+      transactionIds.length > 0
+        ? supabase.from('transactions').delete().in('id', transactionIds)
+        : Promise.resolve({ error: null } as any),
+      supabase.from('orders').delete().eq('portfolio_id', id),
+    ]);
+    if (recurringError) throw recurringError;
+    if (transactionsError) throw transactionsError;
+    if (ordersDeleteError) throw ordersDeleteError;
+
     const { error } = await supabase.from('portfolios').delete().eq('id', id);
     if (error) throw error;
   }

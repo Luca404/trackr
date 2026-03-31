@@ -87,7 +87,7 @@ export default function AccountsPage() {
     if (e) e.preventDefault();
 
     // Valida il nome
-    if (formData.name.trim() === '') {
+    if (formData.name.trim() === '' || isDuplicateAccountName) {
       setShowNameError(true);
       return;
     }
@@ -214,7 +214,11 @@ export default function AccountsPage() {
   };
 
   const totalLiquidity = accounts.reduce((sum, acc) => sum + (acc.current_balance ?? acc.initial_balance), 0);
-  const isAccountFormValid = formData.name.trim() !== '';
+  const normalizedAccountName = formData.name.trim().toLocaleLowerCase();
+  const isDuplicateAccountName = normalizedAccountName !== '' && accounts.some(
+    (account) => account.id !== selectedAccount?.id && account.name.trim().toLocaleLowerCase() === normalizedAccountName
+  );
+  const isAccountFormValid = formData.name.trim() !== '' && !isDuplicateAccountName;
   const openDeleteDialog = () => {
     if (!selectedAccount) return;
     const linkedTransactionsCount = transactions.filter((tx) => tx.account_id === selectedAccount.id).length;
@@ -339,7 +343,7 @@ export default function AccountsPage() {
                   }
                 }}
                 className={`w-full px-4 py-2 rounded-lg border ${
-                  showNameError
+                  (showNameError || isDuplicateAccountName)
                     ? 'border-red-500 dark:border-red-500'
                     : 'border-gray-300 dark:border-gray-600'
                 } bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 focus:border-transparent`}
