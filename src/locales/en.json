@@ -48,7 +48,7 @@
     "from": "From",
     "to": "To",
     "total": "Total",
-    "commission": "Commission (€)",
+    "commission": "Commission",
     "quantity": "Quantity",
     "pricePerUnit": "Price per unit",
     "changeCategory": "Change Category",

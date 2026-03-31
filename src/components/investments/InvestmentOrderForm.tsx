@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import TransactionDateModal from '../common/TransactionDateModal';
+import type { RecurringFrequency } from '../../types';
 const PF_BACKEND_URL = import.meta.env.VITE_PF_BACKEND_URL || 'https://portfolio-tracker-production-3bd4.up.railway.app';
 
 export interface InvestmentOrderInput {
@@ -34,6 +36,9 @@ interface InvestmentOrderFormProps {
   }>;
   ignoreOrderId?: number;
   ignoreTransactionId?: number;
+  allowRecurring?: boolean;
+  recurrence?: RecurringFrequency | null;
+  onRecurrenceChange?: (frequency: RecurringFrequency | null) => void;
 }
 
 export default function InvestmentOrderForm({
@@ -47,6 +52,9 @@ export default function InvestmentOrderForm({
   existingOrders = [],
   ignoreOrderId,
   ignoreTransactionId,
+  allowRecurring = false,
+  recurrence = null,
+  onRecurrenceChange,
 }: InvestmentOrderFormProps) {
   const { t } = useTranslation();
   const today = new Date().toISOString().split('T')[0];
@@ -55,9 +63,8 @@ export default function InvestmentOrderForm({
   const [price, setPrice] = useState(initialData ? String(initialData.price) : '');
   const [date, setDate] = useState(initialData?.date || today);
   const [orderType, setOrderType] = useState<'buy' | 'sell'>(initialData?.orderType || 'buy');
-  const dateRef = useRef<HTMLInputElement>(null);
+  const [showDateSelector, setShowDateSelector] = useState(false);
   const currSymbols: Record<string, string> = { EUR: '€', USD: '$', GBP: '£', CHF: 'Fr' };
-  const currSymbol = currSymbols[currency] || currency;
 
   const [instrumentType, setInstrumentType] = useState<'etf' | 'stock' | 'bond'>(initialData?.instrumentType || 'etf');
   const [ucitsCache, setUcitsCache] = useState<any[]>([]);
@@ -74,7 +81,7 @@ export default function InvestmentOrderForm({
   const [bondLookupError, setBondLookupError] = useState(false);
   const [commission, setCommission] = useState(initialData ? String(initialData.commission) : '');
   const onChangeRef = useRef(onChange);
-  const [selectedInfo, setSelectedInfo] = useState<{ isin?: string; name?: string; exchange?: string; ter?: number } | null>(
+  const [selectedInfo, setSelectedInfo] = useState<{ isin?: string; name?: string; exchange?: string; ter?: number; currency?: string; coupon?: number; ytmGross?: number } | null>(
     initialData
       ? {
           isin: initialData.isin,
@@ -224,12 +231,27 @@ export default function InvestmentOrderForm({
       const data = await res.json();
       if (data.listings?.length > 0) {
         const first = data.listings[0];
-        const entry = { isin, name: first.name || '', issuer: first.name || '', coupon: null, maturity: null, currency: first.currency || 'EUR' };
+        const entry = {
+          isin,
+          name: data.metadata?.name || first.name || '',
+          issuer: data.metadata?.issuer || first.name || '',
+          coupon: data.metadata?.coupon ?? null,
+          ytm_gross: data.metadata?.ytm_gross ?? null,
+          maturity: data.metadata?.maturity ?? null,
+          currency: data.metadata?.currency || first.currency || 'EUR',
+        };
         const updated = [...bondCache.filter(b => b.isin !== isin), entry];
         setBondCache(updated);
         try { sessionStorage.setItem('bondCache', JSON.stringify(updated)); } catch {}
         skipSymbolSearchRef.current = true;
-        setSelectedInfo({ isin, name: first.name || '', exchange: first.exchange || 'MOT' });
+        setSelectedInfo({
+          isin,
+          name: data.metadata?.name || first.name || '',
+          exchange: first.exchange || 'MOT',
+          currency: data.metadata?.currency || first.currency || 'EUR',
+          coupon: data.metadata?.coupon,
+          ytmGross: data.metadata?.ytm_gross,
+        });
         setSymbolOptions([]); setSymbolSearchOpen(false);
       } else { setBondLookupError(true); }
     } catch { setBondLookupError(true); }
@@ -245,6 +267,8 @@ export default function InvestmentOrderForm({
   const parsedQty = parseFloat(quantity.replace(',', '.')) || 0;
   const parsedPrice = parseFloat(price.replace(',', '.')) || 0;
   const parsedCommission = parseFloat((commission || '0').replace(',', '.')) || 0;
+  const effectiveCurrency = selectedInfo?.currency || currency;
+  const currSymbol = currSymbols[effectiveCurrency] || effectiveCurrency;
   const hasConfirmedSymbol = Boolean(selectedInfo && symbol.trim());
   const hasInvalidCommission = commission.trim().length > 0 && parsedCommission < 0;
   const normalizedSymbol = symbol.trim().toUpperCase();
@@ -291,6 +315,11 @@ export default function InvestmentOrderForm({
       orderType,
       instrumentType,
     });
+  };
+
+  const formatPercent = (value?: number) => {
+    if (value == null) return '';
+    return `${value.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`;
   };
 
   const content = (
@@ -358,10 +387,23 @@ export default function InvestmentOrderForm({
                   onMouseDown={() => {
                     if (instrumentType === 'bond') {
                       setSymbol(opt.isin || '');
-                      setSelectedInfo({ isin: opt.isin, name: opt.name || opt.issuer || '', exchange: 'MOT/EuroMOT' });
+                      setSelectedInfo({
+                        isin: opt.isin,
+                        name: opt.name || opt.issuer || '',
+                        exchange: 'MOT/EuroMOT',
+                        currency: opt.currency || 'EUR',
+                        coupon: opt.coupon,
+                        ytmGross: opt.ytm_gross,
+                      });
                     } else {
                       setSymbol(opt.symbol);
-                      setSelectedInfo({ isin: opt.isin, name: opt.name || '', exchange: opt.exchange || '', ter: opt.ter });
+                      setSelectedInfo({
+                        isin: opt.isin,
+                        name: opt.name || '',
+                        exchange: opt.exchange || '',
+                        ter: instrumentType === 'etf' ? opt.ter : undefined,
+                        currency: opt.currency || currency,
+                      });
                     }
                     setSymbolOptions([]);
                     setSymbolSearchOpen(false);
@@ -454,8 +496,9 @@ export default function InvestmentOrderForm({
         <div className="p-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
           <div><span className="text-gray-400">Nome</span><div className="font-medium text-gray-900 dark:text-gray-100 truncate">{selectedInfo.name}</div></div>
           {selectedInfo.exchange && <div><span className="text-gray-400">Exchange</span><div className="font-medium text-gray-900 dark:text-gray-100">{selectedInfo.exchange}</div></div>}
-          {selectedInfo.isin && <div><span className="text-gray-400">ISIN</span><div className="font-medium text-gray-900 dark:text-gray-100 font-mono truncate">{selectedInfo.isin}</div></div>}
-          {selectedInfo.ter != null && <div><span className="text-gray-400">TER</span><div className="font-medium text-gray-900 dark:text-gray-100">{selectedInfo.ter}%</div></div>}
+          {instrumentType === 'etf' && selectedInfo.ter != null && <div><span className="text-gray-400">TER</span><div className="font-medium text-gray-900 dark:text-gray-100">{selectedInfo.ter}%</div></div>}
+          {instrumentType === 'bond' && selectedInfo.coupon != null && <div><span className="text-gray-400">Coupon</span><div className="font-medium text-gray-900 dark:text-gray-100">{formatPercent(selectedInfo.coupon)}</div></div>}
+          {instrumentType === 'bond' && selectedInfo.ytmGross != null && <div><span className="text-gray-400">YTM gross</span><div className="font-medium text-gray-900 dark:text-gray-100">{formatPercent(selectedInfo.ytmGross)}</div></div>}
         </div>
       )}
 
@@ -474,7 +517,7 @@ export default function InvestmentOrderForm({
           />
         </div>
         <div>
-          <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">{t('transactions.commission')}</label>
+          <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">{t('transactions.commission')} ({currSymbol})</label>
           <input
             type="number"
             inputMode="decimal"
@@ -488,37 +531,39 @@ export default function InvestmentOrderForm({
         </div>
       </div>
 
-      <div className="text-center py-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl">
-        <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">{t('transactions.total')}</div>
-        <div className={`text-4xl font-bold ${parsedQty > 0 && parsedPrice > 0 ? 'text-blue-600 dark:text-blue-400' : 'text-gray-400 dark:text-gray-500'}`}>
-          {currSymbol} {(parsedQty * parsedPrice + parsedCommission).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-        </div>
-        {parsedQty > 0 && parsedPrice > 0 && parsedCommission > 0 && (
-          <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-            {parsedQty} × {currSymbol} {parsedPrice.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} + {currSymbol} {parsedCommission.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {t('transactions.commissions')}
+      <div className="flex items-center gap-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/60 px-4 py-2.5">
+        <div className="min-w-0 flex-1">
+          <div className="text-[11px] uppercase tracking-[0.12em] text-gray-500 dark:text-gray-400">
+            {t('transactions.total')}
           </div>
-        )}
+          <div className={`mt-0.5 text-2xl font-bold leading-none truncate ${parsedQty > 0 && parsedPrice > 0 ? 'text-blue-600 dark:text-blue-400' : 'text-gray-400 dark:text-gray-500'}`}>
+            {currSymbol} {(parsedQty * parsedPrice + parsedCommission).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => setShowDateSelector(true)}
+          className="shrink-0 flex items-center gap-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-gray-700 dark:text-gray-300 hover:border-primary-500 transition-colors"
+        >
+          <span className="text-base leading-none">📅</span>
+          <div className="text-left">
+            <div className="text-[10px] uppercase tracking-[0.12em] text-gray-500 dark:text-gray-400">
+              {t('transactions.date')}
+            </div>
+            <div className="text-sm font-medium leading-tight">{formatDisplayDate(date)}</div>
+          </div>
+        </button>
       </div>
 
-      <button
-        type="button"
-        onClick={() => dateRef.current?.showPicker()}
-        className="w-full flex items-center justify-between px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:border-primary-500 transition-colors"
-      >
-        <span className="flex items-center gap-2">
-          <span>📅</span>
-          <span className="text-sm">{formatDisplayDate(date)}</span>
-        </span>
-        <span className="text-gray-400">›</span>
-      </button>
-      <input
-        ref={dateRef}
-        type="date"
-        value={date}
-        onChange={e => setDate(e.target.value)}
-        max={today}
-        className="sr-only"
-        required
+      <TransactionDateModal
+        isOpen={showDateSelector}
+        onClose={() => setShowDateSelector(false)}
+        date={date}
+        onDateChange={setDate}
+        allowRecurring={allowRecurring}
+        recurrence={recurrence}
+        onRecurrenceChange={onRecurrenceChange}
       />
 
       {showActions && (

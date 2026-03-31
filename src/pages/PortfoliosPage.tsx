@@ -579,7 +579,12 @@ function PortfolioForm({ onSubmit, onDelete, onCancel, onDirtyChange, initialDat
           ) : (
             <div className="space-y-1 max-h-48 overflow-y-auto">
               {orders.map(order => (
-                <div key={order.id} className="flex items-center justify-between py-2 px-3 rounded-lg bg-gray-50 dark:bg-gray-800/50 text-sm">
+                <button
+                  key={order.id}
+                  type="button"
+                  onClick={() => setEditingOrder(order)}
+                  className="w-full flex items-center justify-between py-2 px-3 rounded-lg bg-gray-50 dark:bg-gray-800/50 text-sm text-left transition-colors hover:bg-gray-100 dark:hover:bg-gray-800 active:bg-gray-100 dark:active:bg-gray-800"
+                >
                   <div className="flex items-center gap-2 min-w-0">
                     <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${
                       order.order_type === 'buy'
@@ -591,20 +596,13 @@ function PortfolioForm({ onSubmit, onDelete, onCancel, onDirtyChange, initialDat
                     <span className="font-mono font-medium text-gray-900 dark:text-gray-100 truncate">{order.symbol}</span>
                     <span className="text-gray-500 dark:text-gray-400 shrink-0">{order.quantity}×</span>
                   </div>
-                  <div className="flex items-center gap-2 shrink-0 ml-2">
+                  <div className="shrink-0 ml-2 text-right">
                     <div className="text-right">
                       <div className="text-gray-700 dark:text-gray-300">{formatCurrency(order.price, order.currency)}</div>
                       <div className="text-xs text-gray-400 dark:text-gray-500">{order.date}</div>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => setEditingOrder(order)}
-                      className="text-xs font-medium text-primary-600 dark:text-primary-400"
-                    >
-                      {t('common.edit')}
-                    </button>
                   </div>
-                </div>
+                </button>
               ))}
             </div>
           )}

@@ -7,6 +7,7 @@ import { useData } from '../../contexts/DataContext';
 import { apiService } from '../../services/api';
 import ConfirmDialog from '../common/ConfirmDialog';
 import Modal, { registerBackHandler } from '../common/Modal';
+import TransactionDateModal from '../common/TransactionDateModal';
 import InvestmentOrderForm, { type InvestmentOrderInput } from '../investments/InvestmentOrderForm';
 
 interface TransactionFormProps {
@@ -16,11 +17,12 @@ interface TransactionFormProps {
   isEditMode?: boolean;
   onDelete?: () => Promise<void>;
   isRecurring?: boolean;
+  initialRecurringId?: number;
   onDeleteRecurringRule?: () => Promise<void>;
   initialTransactionId?: number;
 }
 
-export default function TransactionForm({ onSubmit, onCancel, initialData, isEditMode, onDelete, isRecurring, onDeleteRecurringRule, initialTransactionId }: TransactionFormProps) {
+export default function TransactionForm({ onSubmit, onCancel, initialData, isEditMode, onDelete, isRecurring, initialRecurringId, onDeleteRecurringRule, initialTransactionId }: TransactionFormProps) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { formatCurrency, numberFormat } = useSettings();
@@ -63,6 +65,7 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
 
   const [selectedPortfolio, setSelectedPortfolio] = useState<Portfolio | null>(null);
   const [investmentOrders, setInvestmentOrders] = useState<Order[]>([]);
+  const [linkedOrder, setLinkedOrder] = useState<Order | null>(null);
 
   const [recurrence, setRecurrence] = useState<RecurringFrequency | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -184,6 +187,48 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
     });
   }, [currentType, initialData]);
 
+  useEffect(() => {
+    if (currentType !== 'investment' || !initialTransactionId) {
+      setLinkedOrder(null);
+      return;
+    }
+    let cancelled = false;
+    apiService.getOrderByTransactionId(initialTransactionId)
+      .then((order) => {
+        if (!cancelled) setLinkedOrder(order);
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          console.error('Error loading linked order:', error);
+          setLinkedOrder(null);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [currentType, initialTransactionId]);
+
+  useEffect(() => {
+    if (!initialRecurringId) {
+      setRecurrence(null);
+      return;
+    }
+    let cancelled = false;
+    apiService.getRecurringTransaction(initialRecurringId)
+      .then((rule) => {
+        if (!cancelled) setRecurrence(rule?.frequency ?? null);
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          console.error('Error loading recurring rule:', error);
+          setRecurrence(null);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [initialRecurringId]);
+
   const handleNumberClick = (num: string) => {
     if (num === '.' && amount.includes('.')) return;
     setAmount(prev => prev === '0' ? num : prev + num);
@@ -287,6 +332,7 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
         instrument_type: instrumentType,
         order_type: orderType,
         ter: ter || undefined,
+        recurrence: recurrence ?? undefined,
       };
     } else {
       if (!selectedCategory) { setError(t('transactions.errorSelectCategory')); return; }
@@ -348,8 +394,6 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
     </div>
   );
 
-  const dateInputRef = useRef<HTMLInputElement>(null);
-
   // Swipe sulla griglia categorie per cambiare tab
   const swipeCategoryRef = useRef<{ x: number; y: number } | null>(null);
   const handleCategorySwipeStart = (e: React.TouchEvent) => {
@@ -364,18 +408,6 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
     const idx = typeButtons.findIndex(b => b.type === currentType);
     if (deltaX < 0 && idx < typeButtons.length - 1) setCurrentType(typeButtons[idx + 1].type);
     else if (deltaX > 0 && idx > 0) setCurrentType(typeButtons[idx - 1].type);
-  };
-
-  const handleDateQuickSelect = (option: 'today' | 'yesterday') => {
-    const today = new Date();
-    if (option === 'today') {
-      setDate(today.toISOString().split('T')[0]);
-    } else {
-      const yesterday = new Date(today);
-      yesterday.setDate(yesterday.getDate() - 1);
-      setDate(yesterday.toISOString().split('T')[0]);
-    }
-    setShowDateSelector(false);
   };
 
   const sharedModals = (
@@ -460,56 +492,15 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
         </div>
       </Modal>
 
-      {/* Modal selettore data */}
-      <Modal isOpen={showDateSelector} onClose={() => setShowDateSelector(false)} title={t('transactions.selectDate')}>
-        <div className="space-y-2">
-          <button type="button" onClick={() => handleDateQuickSelect('today')} className="w-full flex items-center gap-3 p-4 rounded-lg border-2 border-gray-200 dark:border-gray-700 hover:border-primary-500 transition-colors">
-            <span className="text-2xl">📅</span>
-            <div className="flex-1 text-left">
-              <div className="font-medium text-gray-900 dark:text-gray-100">{t('transactions.today')}</div>
-              <div className="text-sm text-gray-500 dark:text-gray-400">{new Date().toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}</div>
-            </div>
-          </button>
-          <button type="button" onClick={() => handleDateQuickSelect('yesterday')} className="w-full flex items-center gap-3 p-4 rounded-lg border-2 border-gray-200 dark:border-gray-700 hover:border-primary-500 transition-colors">
-            <span className="text-2xl">⏮️</span>
-            <div className="flex-1 text-left">
-              <div className="font-medium text-gray-900 dark:text-gray-100">{t('transactions.yesterday')}</div>
-              <div className="text-sm text-gray-500 dark:text-gray-400">{(() => { const y = new Date(); y.setDate(y.getDate() - 1); return y.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }); })()}</div>
-            </div>
-          </button>
-          <button type="button" onClick={() => { setTimeout(() => dateInputRef.current?.showPicker?.(), 0); }} className="w-full flex items-center gap-3 p-4 rounded-lg border-2 border-gray-200 dark:border-gray-700 hover:border-primary-500 transition-colors">
-            <span className="text-2xl">🗓️</span>
-            <div className="flex-1 text-left">
-              <div className="font-medium text-gray-900 dark:text-gray-100">{t('transactions.date')}</div>
-              <div className="text-sm text-gray-500 dark:text-gray-400">{t('transactions.chooseDate')}</div>
-            </div>
-          </button>
-          <input
-            ref={dateInputRef}
-            type="date"
-            value={date}
-            onChange={(e) => { if (e.target.value) { setDate(e.target.value); setShowDateSelector(false); } }}
-            className="sr-only"
-          />
-          {!isEditMode && (
-            <div className="pt-3 border-t border-gray-200 dark:border-gray-700">
-              <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{t('transactions.repeat')}</div>
-              <div className="grid grid-cols-4 gap-2">
-                {([null, 'weekly', 'monthly', 'yearly'] as const).map((freq) => {
-                  const labels = { null: t('transactions.never'), weekly: t('transactions.weeklyAbbr'), monthly: t('transactions.monthlyAbbr'), yearly: t('transactions.yearlyAbbr') };
-                  const key = freq ?? 'null';
-                  return (
-                    <button key={key} type="button" onClick={() => setRecurrence(freq)}
-                      className={`py-2 rounded-lg text-sm font-medium transition-colors ${recurrence === freq ? 'bg-primary-500 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'}`}>
-                      {labels[key as keyof typeof labels]}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-        </div>
-      </Modal>
+      <TransactionDateModal
+        isOpen={showDateSelector}
+        onClose={() => setShowDateSelector(false)}
+        date={date}
+        onDateChange={setDate}
+        allowRecurring={currentType !== 'transfer'}
+        recurrence={recurrence}
+        onRecurrenceChange={setRecurrence}
+      />
 
       {/* Confirm Dialog */}
       <ConfirmDialog
@@ -596,6 +587,20 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
       grossAmount > 0
     );
 
+    const investmentInitialData: InvestmentOrderInput = {
+      symbol: linkedOrder?.symbol || initialData?.ticker || '',
+      isin: linkedOrder?.isin || initialData?.isin,
+      name: linkedOrder?.name || initialData?.instrument_name,
+      exchange: linkedOrder?.exchange || initialData?.exchange,
+      ter: linkedOrder?.ter ?? initialData?.ter,
+      quantity: initialData?.quantity || 0,
+      price: initialData?.price || 0,
+      commission: linkedOrder?.commission ?? (initialData?.quantity && initialData?.price ? Math.max(0, Math.abs(initialData.amount) - (initialData.quantity * initialData.price)) : 0),
+      date: initialData?.date || new Date().toISOString().split('T')[0],
+      orderType: (linkedOrder?.order_type as 'buy' | 'sell' | undefined) || initialData?.order_type || 'buy',
+      instrumentType: (linkedOrder?.instrument_type as 'etf' | 'stock' | 'bond' | undefined) || initialData?.instrument_type || 'etf',
+    };
+
     return (
       <form onSubmit={handleSubmit} autoComplete="off" className="space-y-4">
         {/* Portafoglio + Conto */}
@@ -621,23 +626,15 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
         </div>
 
         <InvestmentOrderForm
+          key={`investment-${initialTransactionId ?? 'new'}-${linkedOrder?.id ?? 'none'}`}
           currency="EUR"
           showActions={false}
           existingOrders={investmentOrders}
           ignoreTransactionId={initialTransactionId}
-          initialData={{
-            symbol: initialData?.ticker || '',
-            isin: initialData?.isin,
-            name: initialData?.instrument_name,
-            exchange: initialData?.exchange,
-            ter: initialData?.ter,
-            quantity: initialData?.quantity || 0,
-            price: initialData?.price || 0,
-            commission: initialData?.quantity && initialData?.price ? Math.max(0, initialData.amount - (initialData.quantity * initialData.price)) : 0,
-            date: initialData?.date || new Date().toISOString().split('T')[0],
-            orderType: initialData?.order_type || 'buy',
-            instrumentType: initialData?.instrument_type || 'etf',
-          }}
+          allowRecurring={true}
+          recurrence={recurrence}
+          onRecurrenceChange={setRecurrence}
+          initialData={investmentInitialData}
           onChange={(draft, meta) => {
             setInvestmentDraft(draft);
             setIsInvestmentDraftValid(meta.isValid);
@@ -894,12 +891,11 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
       {/* Data */}
       <div className="text-center text-sm text-gray-600 dark:text-gray-400">
         {formatDate(date)}
-        {!isEditMode && recurrence && (
+        {recurrence && (
           <span className="ml-2 inline-flex items-center gap-1 text-primary-600 dark:text-primary-400">
             🔄 {{ weekly: t('transactions.weeklyAbbr'), monthly: t('transactions.monthlyAbbr'), yearly: t('transactions.yearlyAbbr') }[recurrence]}
           </span>
         )}
-        {isEditMode && isRecurring && <span className="ml-2 text-primary-600 dark:text-primary-400">🔄</span>}
       </div>
 
       {/* Descrizione */}

@@ -29,6 +29,7 @@ export interface RecurringTransaction {
   user_id: string;
   account_id: number;
   type: TransactionType;
+  portfolio_id?: number;
   category: string;
   subcategory?: string;
   amount: number;
@@ -37,6 +38,12 @@ export interface RecurringTransaction {
   start_date: string;
   next_due_date: string;
   ticker?: string;
+  isin?: string;
+  instrument_name?: string;
+  exchange?: string;
+  instrument_type?: 'etf' | 'stock' | 'bond';
+  order_type?: 'buy' | 'sell';
+  currency?: string;
   quantity?: number;
   price?: number;
   created_at?: string;

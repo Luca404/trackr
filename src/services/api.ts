@@ -109,6 +109,7 @@ function mapRecurringTransaction(row: any): RecurringTransaction {
     user_id: row.user_id,
     account_id: row.account_id,
     type: row.type,
+    portfolio_id: row.portfolio_id,
     category: row.category,
     subcategory: row.subcategory,
     amount: row.amount,
@@ -117,6 +118,12 @@ function mapRecurringTransaction(row: any): RecurringTransaction {
     start_date: row.start_date,
     next_due_date: row.next_due_date,
     ticker: row.ticker,
+    isin: row.isin,
+    instrument_name: row.instrument_name,
+    exchange: row.exchange,
+    instrument_type: row.instrument_type,
+    order_type: row.order_type,
+    currency: row.currency,
     quantity: row.quantity,
     price: row.price,
     created_at: row.created_at,
@@ -590,6 +597,36 @@ class ApiService {
     return mapRecurringTransaction(data);
   }
 
+  async getRecurringTransaction(id: number): Promise<RecurringTransaction | null> {
+    const { data, error } = await supabase
+      .from('recurring_transactions')
+      .select('*')
+      .eq('id', id)
+      .maybeSingle();
+    if (error) throw error;
+    return data ? mapRecurringTransaction(data) : null;
+  }
+
+  async updateRecurringTransaction(
+    id: number,
+    formData: Partial<Omit<RecurringTransaction, 'id' | 'user_id' | 'created_at' | 'next_due_date'>>
+  ): Promise<RecurringTransaction> {
+    const payload: Record<string, any> = { ...formData };
+    const startDate = (formData.start_date as string | undefined) ?? undefined;
+    const frequency = (formData.frequency as RecurringFrequency | undefined) ?? undefined;
+    if (startDate && frequency) {
+      payload.next_due_date = getNextDueDate(startDate, frequency);
+    }
+    const { data, error } = await supabase
+      .from('recurring_transactions')
+      .update(payload)
+      .eq('id', id)
+      .select()
+      .single();
+    if (error) throw error;
+    return mapRecurringTransaction(data);
+  }
+
   async deleteRecurringTransaction(id: number): Promise<void> {
     const { error } = await supabase.from('recurring_transactions').delete().eq('id', id);
     if (error) throw error;
@@ -636,7 +673,29 @@ class ApiService {
           .select()
           .single();
 
-        if (!txErr && tx) created.push(mapTransaction(tx));
+        if (!txErr && tx) {
+          created.push(mapTransaction(tx));
+          if (rule.type === 'investment' && rule.portfolio_id && rule.ticker) {
+            await supabase
+              .from('orders')
+              .insert({
+                user_id: userId,
+                portfolio_id: rule.portfolio_id,
+                symbol: rule.ticker,
+                isin: rule.isin,
+                name: rule.instrument_name,
+                exchange: rule.exchange,
+                currency: rule.currency || 'EUR',
+                quantity: rule.quantity ?? 0,
+                price: rule.price ?? 0,
+                commission: Math.max(0, Math.abs(rule.amount) - ((rule.quantity ?? 0) * (rule.price ?? 0))),
+                instrument_type: rule.instrument_type,
+                order_type: rule.order_type || 'buy',
+                date: nextDate,
+                transaction_id: tx.id,
+              });
+          }
+        }
         nextDate = getNextDueDate(nextDate, rule.frequency);
       }
 
@@ -745,6 +804,35 @@ class ApiService {
   async deleteOrder(id: number): Promise<void> {
     const { error } = await supabase.from('orders').delete().eq('id', id);
     if (error) throw error;
+  }
+
+  async getOrderByTransactionId(transactionId: number): Promise<Order | null> {
+    const { data, error } = await supabase
+      .from('orders')
+      .select('*')
+      .eq('transaction_id', transactionId)
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) return null;
+    return {
+      id: data.id,
+      user_id: data.user_id,
+      portfolio_id: data.portfolio_id,
+      symbol: data.symbol,
+      isin: data.isin,
+      name: data.name,
+      exchange: data.exchange,
+      currency: data.currency ?? 'EUR',
+      quantity: data.quantity,
+      price: data.price,
+      commission: data.commission ?? 0,
+      instrument_type: data.instrument_type,
+      order_type: data.order_type,
+      date: data.date,
+      ter: data.ter,
+      transaction_id: data.transaction_id,
+      created_at: data.created_at,
+    };
   }
 
   async deleteOrderByTransactionId(transactionId: number): Promise<void> {

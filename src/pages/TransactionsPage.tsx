@@ -113,15 +113,47 @@ export default function TransactionsPage() {
       const rule = await apiService.createRecurringTransaction({
         account_id: data.account_id!,
         type: data.type,
+        portfolio_id: data.portfolio_id,
         category: data.category,
         subcategory: data.subcategory,
         amount: data.amount,
         description: data.description,
         frequency: data.recurrence,
         start_date: data.date,
+        ticker: data.ticker,
+        isin: data.isin,
+        instrument_name: data.instrument_name,
+        exchange: data.exchange,
+        instrument_type: data.instrument_type,
+        order_type: data.order_type,
+        currency: 'EUR',
+        quantity: data.quantity,
+        price: data.price,
       });
       const newTransaction = await apiService.createTransaction({ ...data, recurring_id: rule.id });
       addTransaction(newTransaction);
+      if (data.type === 'investment' && data.portfolio_id && data.ticker) {
+        const qty = data.quantity ?? 0;
+        const price = data.price ?? 0;
+        const grossAmount = Math.abs(data.amount);
+        const commission = grossAmount - qty * price;
+        await apiService.createOrder({
+          portfolio_id: data.portfolio_id,
+          symbol: data.ticker,
+          isin: data.isin,
+          name: data.instrument_name,
+          exchange: data.exchange,
+          instrument_type: data.instrument_type,
+          currency: 'EUR',
+          quantity: qty,
+          price,
+          commission: commission > 0 ? commission : 0,
+          order_type: data.order_type || 'buy',
+          date: data.date,
+          transaction_id: newTransaction.id,
+        });
+        localStorage.removeItem('pf_summaries_cache');
+      }
     } else {
       const newTransaction = await apiService.createTransaction(data);
       addTransaction(newTransaction);
@@ -167,7 +199,40 @@ export default function TransactionsPage() {
       return;
     }
     if (selectedTransaction) {
-      const updated = await apiService.updateTransaction(selectedTransaction.id, data);
+      let recurringId = selectedTransaction.recurring_id;
+      if (data.recurrence) {
+        const recurringPayload = {
+          account_id: data.account_id!,
+          type: data.type,
+          portfolio_id: data.portfolio_id,
+          category: data.category,
+          subcategory: data.subcategory,
+          amount: data.amount,
+          description: data.description,
+          frequency: data.recurrence,
+          start_date: data.date,
+          ticker: data.ticker,
+          isin: data.isin,
+          instrument_name: data.instrument_name,
+          exchange: data.exchange,
+          instrument_type: data.instrument_type,
+          order_type: data.order_type,
+          currency: 'EUR',
+          quantity: data.quantity,
+          price: data.price,
+        };
+        if (selectedTransaction.recurring_id) {
+          await apiService.updateRecurringTransaction(selectedTransaction.recurring_id, recurringPayload);
+        } else {
+          const rule = await apiService.createRecurringTransaction(recurringPayload);
+          recurringId = rule.id;
+        }
+      } else if (selectedTransaction.recurring_id) {
+        await apiService.deleteRecurringTransaction(selectedTransaction.recurring_id);
+        recurringId = undefined;
+      }
+
+      const updated = await apiService.updateTransaction(selectedTransaction.id, { ...data, recurring_id: recurringId });
       updateTransactionCache(updated);
       // Aggiorna anche l'ordine associato se è un investimento
       if (data.type === 'investment' && data.ticker) {
@@ -392,6 +457,7 @@ export default function TransactionsPage() {
             isEditMode={isEditMode}
             onDelete={isEditMode ? handleDeleteTransaction : undefined}
             isRecurring={isEditMode && !!selectedTransaction?.recurring_id}
+            initialRecurringId={selectedTransaction?.recurring_id}
             onDeleteRecurringRule={isEditMode && selectedTransaction?.recurring_id ? handleDeleteRecurringRule : undefined}
             initialTransactionId={selectedTransaction?.id}
           />
