@@ -1,9 +1,7 @@
-import { defineConfig } from 'vite'
+import { defineConfig, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 import { execSync } from 'child_process'
-import { writeFileSync } from 'fs'
-import { resolve } from 'path'
 
 const APP_MAJOR = 1
 const APP_MINOR = 0
@@ -20,8 +18,26 @@ function getCommitMsg() {
 
 const commitMsg = getCommitMsg()
 const appVersion = `${APP_MAJOR}.${APP_MINOR}.${APP_PATCH}`
+const versionPayload = JSON.stringify({ version: appVersion, commitMsg, releaseNotes: APP_RELEASE_NOTES })
 
-writeFileSync(resolve(__dirname, 'public/version.json'), JSON.stringify({ version: appVersion, commitMsg, releaseNotes: APP_RELEASE_NOTES }))
+function versionMetadataPlugin(): Plugin {
+  return {
+    name: 'trackr-version-metadata',
+    configureServer(server: any) {
+      server.middlewares.use('/version.json', (_req: any, res: any) => {
+        res.setHeader('Content-Type', 'application/json')
+        res.end(versionPayload)
+      })
+    },
+    generateBundle() {
+      this.emitFile({
+        type: 'asset',
+        fileName: 'version.json',
+        source: versionPayload,
+      })
+    },
+  }
+}
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -32,6 +48,7 @@ export default defineConfig({
   },
   plugins: [
     react(),
+    versionMetadataPlugin(),
     VitePWA({
       registerType: 'prompt',
       includeAssets: ['icon.svg', 'icon-192.png', 'icon-512.png'],
