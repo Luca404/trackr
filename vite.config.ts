@@ -5,8 +5,8 @@ import { execSync } from 'child_process'
 
 const APP_MAJOR = 1
 const APP_MINOR = 0
-const APP_PATCH = 28  // Incrementare manualmente ad ogni release pubblicata
-const APP_RELEASE_NOTES = 'Investment flows now support buy/sell orders, recurring investments, cleaner modals, and safer delete and duplicate-name checks'
+const APP_PATCH = 29  // Incrementare manualmente ad ogni release pubblicata
+const APP_RELEASE_NOTES = 'Kakebo import now guides accounts, categories, and portfolio data through a clearer multi-step flow with safer investment mapping'
 
 function getCommitMsg() {
   try {
