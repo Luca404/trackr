@@ -163,7 +163,11 @@ export default function PortfoliosPage() {
         await refreshTransactions();
       }
     } else {
-      const created = await apiService.createPortfolio({ ...data, initial_capital: 0 });
+      const created = await apiService.createPortfolio({
+        ...data,
+        initial_capital: 0,
+        history_mode: initialPositions && initialPositions.length > 0 ? 'positions_only' : 'full_orders',
+      });
       if (initialPositions && initialPositions.length > 0) {
         const currency = data.reference_currency || 'EUR';
         await Promise.all(

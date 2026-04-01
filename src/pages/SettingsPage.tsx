@@ -69,7 +69,7 @@ export default function SettingsPage() {
   const kakeboDirtyRef = useRef(false);
   const guardedKakeboClose = async () => {
     if (kakeboDirtyRef.current) {
-      const ok = await confirmDialog('Hai modifiche non salvate. Chiudere comunque?', { title: 'Modifiche non salvate', confirmText: 'Chiudi', cancelText: 'Annulla' });
+      const ok = await confirmDialog('Hai modifiche non salvate. Chiudere comunque?', { title: 'Modifiche non salvate', confirmText: 'Chiudi', cancelText: 'Annulla', noBottomOffset: true });
       if (!ok) return;
       kakeboDirtyRef.current = false;
     }

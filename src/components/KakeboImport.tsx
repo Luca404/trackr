@@ -4,7 +4,6 @@ import { useTranslation } from 'react-i18next';
 import { supabase } from '../services/supabase';
 import { apiService } from '../services/api';
 import { useData } from '../contexts/DataContext';
-import type { CategoryWithStats } from '../types';
 
 const PF_BACKEND_URL = import.meta.env.VITE_PF_BACKEND_URL || 'https://portfolio-tracker-production-3bd4.up.railway.app';
 
@@ -21,6 +20,7 @@ interface ParsedDB { conti: KConto[]; categorie: KCategoria[]; movimenti: KMovim
 // Mode A: one entry per individual investment transfer
 interface InvDetail {
   movimentoId: number;
+  sourceKind: 'transfer' | 'bonus';
   date: string;
   amount: number;
   description: string | null;
@@ -29,6 +29,7 @@ interface InvDetail {
   ticker: string;
   quantity: string;
   price: string;
+  commission: string;
   isin: string;
   name: string;
   exchange: string;
@@ -55,6 +56,9 @@ interface InvPosition {
 // ── helpers ────────────────────────────────────────────────────────────────────
 
 function msToDate(ms: number): string { return new Date(ms).toISOString().slice(0, 10); }
+function normalizeLooseText(value?: string | null): string {
+  return (value || '').trim().toLocaleLowerCase();
+}
 function chunk<T>(arr: T[], size: number): T[][] {
   return Array.from({ length: Math.ceil(arr.length / size) }, (_, i) => arr.slice(i * size, (i + 1) * size));
 }
@@ -66,6 +70,9 @@ function queryAll<T>(db: any, sql: string): T[] {
   return rows;
 }
 function isInvestmentName(name: string): boolean { return /investiment/i.test(name); }
+function formatCurrency(amount: number, currency: string = 'EUR'): string {
+  return amount.toLocaleString('it-IT', { style: 'currency', currency });
+}
 
 // ── TickerCard sub-component ──────────────────────────────────────────────────
 
@@ -83,16 +90,18 @@ interface TickerCardProps {
   ticker: string;
   quantity: string;
   price: string;
+  commission?: string;
   qtyLabel: string;
   priceLabel: string;
+  commissionLabel?: string;
   showValidation?: boolean;
   onRemove?: () => void;
-  onChange: (id: string, updates: Partial<{ instrumentType: 'etf' | 'stock' | 'bond'; ticker: string; quantity: string; price: string; isin: string; name: string; exchange: string; ter: string }>) => void;
+  onChange: (id: string, updates: Partial<{ instrumentType: 'etf' | 'stock' | 'bond'; ticker: string; quantity: string; price: string; commission: string; isin: string; name: string; exchange: string; ter: string }>) => void;
 }
 
 function TickerCard({
   id, contoName, date, amount, totalAmount, transferCount,
-  instrumentType, ticker, quantity, price, qtyLabel, priceLabel, showValidation, onRemove,
+  instrumentType, ticker, quantity, price, commission = '', qtyLabel, priceLabel, commissionLabel = 'Commissioni', showValidation, onRemove,
   onChange,
 }: TickerCardProps) {
   const { t } = useTranslation();
@@ -263,6 +272,42 @@ function TickerCard({
     finally { setBondLookupLoading(false); }
   };
 
+  useEffect(() => {
+    if (!ticker.trim()) {
+      setSelectedInfo(null);
+      setBondLookupError(false);
+      setSymbolOptions([]);
+      setSymbolSearchOpen(false);
+      setSymbolSearchCompleted(false);
+    }
+  }, [ticker]);
+
+  const autoPriceFromQuantity = (nextQuantity: string, nextCommission: string = commission) => {
+    if (amount == null) return;
+    const qty = parseFloat(nextQuantity);
+    const comm = parseFloat(nextCommission || '0');
+    if (!Number.isFinite(qty) || qty <= 0) return;
+    const computed = (amount - (Number.isFinite(comm) ? comm : 0)) / qty;
+    if (Number.isFinite(computed) && computed > 0) {
+      onChange(id, { quantity: nextQuantity, price: computed.toFixed(4), commission: nextCommission });
+      return true;
+    }
+    return false;
+  };
+
+  const autoQuantityFromPrice = (nextPrice: string, nextCommission: string = commission) => {
+    if (amount == null) return;
+    const px = parseFloat(nextPrice);
+    const comm = parseFloat(nextCommission || '0');
+    if (!Number.isFinite(px) || px <= 0) return;
+    const computed = (amount - (Number.isFinite(comm) ? comm : 0)) / px;
+    if (Number.isFinite(computed) && computed > 0) {
+      onChange(id, { quantity: computed.toFixed(6), price: nextPrice, commission: nextCommission });
+      return true;
+    }
+    return false;
+  };
+
   const missing = showValidation && (!ticker.trim() || !quantity.trim() || !price.trim());
 
   return (
@@ -270,16 +315,29 @@ function TickerCard({
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <span className="text-base">📈</span>
-          <div>
-            <div className="text-xs font-medium text-gray-700 dark:text-gray-300">{contoName}</div>
-            {date && <div className="text-xs text-gray-400">{date}</div>}
-            {transferCount != null && (
-              <div className="text-xs text-primary-500 dark:text-primary-400">
-                {transferCount} acquist{transferCount === 1 ? 'o' : 'i'}
+          {contoName ? (
+            <>
+              <span className="text-base">📈</span>
+              <div>
+                <div className="text-xs font-medium text-gray-700 dark:text-gray-300">{contoName}</div>
+                {date && <div className="text-xs text-gray-400">{date}</div>}
+                {transferCount != null && (
+                  <div className="text-xs text-primary-500 dark:text-primary-400">
+                    {transferCount} acquist{transferCount === 1 ? 'o' : 'i'}
+                  </div>
+                )}
               </div>
-            )}
-          </div>
+            </>
+          ) : (
+            <div>
+              {date && <div className="text-xs text-gray-400">{date}</div>}
+              {transferCount != null && (
+                <div className="text-xs text-primary-500 dark:text-primary-400">
+                  {transferCount} acquist{transferCount === 1 ? 'o' : 'i'}
+                </div>
+              )}
+            </div>
+          )}
         </div>
         <div className="flex items-center gap-2 ml-auto">
           <div className="text-right">
@@ -396,8 +454,8 @@ function TickerCard({
         </div>
       )}
 
-      {/* Qty + Price */}
-      <div className="grid grid-cols-2 gap-2">
+      {/* Qty + Price + Commission */}
+      <div className="grid grid-cols-3 gap-2">
         <div>
           <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">{qtyLabel}</label>
           <input
@@ -405,7 +463,12 @@ function TickerCard({
             placeholder="10"
             type="number" min="0" step="any"
             value={quantity}
-            onChange={e => onChange(id, { quantity: e.target.value })}
+            onChange={e => {
+              const nextQuantity = e.target.value;
+              if (!autoPriceFromQuantity(nextQuantity)) {
+                onChange(id, { quantity: nextQuantity });
+              }
+            }}
           />
         </div>
         <div>
@@ -415,7 +478,27 @@ function TickerCard({
             placeholder="100.00"
             type="number" min="0" step="any"
             value={price}
-            onChange={e => onChange(id, { price: e.target.value })}
+            onChange={e => {
+              const nextPrice = e.target.value;
+              if (!autoQuantityFromPrice(nextPrice)) {
+                onChange(id, { price: nextPrice });
+              }
+            }}
+          />
+        </div>
+        <div>
+          <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">{commissionLabel}</label>
+          <input
+            className="w-full px-2 py-1.5 text-xs rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+            placeholder="0.00"
+            type="number" min="0" step="any"
+            value={commission}
+            onChange={e => {
+              const nextCommission = e.target.value;
+              if (quantity.trim() && autoPriceFromQuantity(quantity, nextCommission)) return;
+              if (price.trim() && autoQuantityFromPrice(price, nextCommission)) return;
+              onChange(id, { commission: nextCommission });
+            }}
           />
         </div>
       </div>
@@ -430,8 +513,23 @@ function TickerCard({
 // ── main component ─────────────────────────────────────────────────────────────
 
 interface Props { onClose: () => void; onDirtyChange?: (dirty: boolean) => void; }
-type Step = 'upload' | 'options' | 'inv_details' | 'importing' | 'done';
+type Step = 'upload' | 'options' | 'categories' | 'inv_details' | 'importing' | 'done';
 type InvMode = 'orders' | 'positions';
+interface SkippedImportRecord {
+  movimentoId: number;
+  date: string;
+  amount: number;
+  conto?: string;
+  contoPrelievo?: string;
+  reason: string;
+}
+interface AccountBalanceCheck {
+  contoId: number;
+  contoName: string;
+  expected: number;
+  actual: number;
+  diff: number;
+}
 
 export default function KakeboImport({ onClose, onDirtyChange }: Props) {
   const { t } = useTranslation();
@@ -442,11 +540,14 @@ export default function KakeboImport({ onClose, onDirtyChange }: Props) {
   const [step, setStep] = useState<Step>('upload');
   const [parsed, setParsed] = useState<ParsedDB | null>(null);
   const [invContoIds, setInvContoIds] = useState<Set<number>>(new Set());
-  const [investmentCatIds, setInvestmentCatIds] = useState<Set<number>>(new Set());
 
   const [invMode, setInvMode] = useState<InvMode>('orders');
   const [invDetails, setInvDetails] = useState<InvDetail[]>([]);    // mode A
   const [invPositions, setInvPositions] = useState<InvPosition[]>([]); // mode B
+  const [positionDrafts, setPositionDrafts] = useState<Record<number, InvPosition>>({});
+  const [editingPositionIds, setEditingPositionIds] = useState<Record<number, string | null>>({});
+  const [categoryView, setCategoryView] = useState<'expense' | 'income'>('expense');
+  const [expandedCategoryIds, setExpandedCategoryIds] = useState<Set<number>>(new Set());
   const [validated, setValidated] = useState(false);
 
   const markDirty = () => { onDirtyChange?.(true); };
@@ -454,9 +555,22 @@ export default function KakeboImport({ onClose, onDirtyChange }: Props) {
 
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<{
-    accounts: number; transactions: number; investments: number; transfers: number; orders: number; skipped: number;
+    accounts: number; transactions: number; investments: number; transfers: number; orders: number; skipped: number; skippedDetails: SkippedImportRecord[]; balanceChecks: AccountBalanceCheck[];
   } | null>(null);
   const [progress, setProgress] = useState('');
+
+  const isBonusInvestmentMovement = (movement: KMovimento, categories: KCategoria[]): boolean => {
+    if (movement.tipo !== 1 || movement.contoPrelievoId != null || !invContoIds.has(movement.contoId)) return false;
+    const categoryById = new Map(categories.map(c => [c.id, c]));
+    const category = movement.categoriaId != null ? categoryById.get(movement.categoriaId) : undefined;
+    const subcategory = movement.sottocategoriaId != null ? categoryById.get(movement.sottocategoriaId) : undefined;
+    const haystack = [
+      normalizeLooseText(category?.nome),
+      normalizeLooseText(subcategory?.nome),
+      normalizeLooseText(movement.note),
+    ].join(' ');
+    return /\b(saveback|bonus)\b/.test(haystack);
+  };
 
   // ── step 1: parse file ──────────────────────────────────────────────────────
 
@@ -489,7 +603,6 @@ export default function KakeboImport({ onClose, onDirtyChange }: Props) {
       db.close();
       setParsed({ conti, categorie, movimenti });
       setInvContoIds(new Set(conti.filter(c => c.tipo === 1 || isInvestmentName(c.nome)).map(c => c.id)));
-      setInvestmentCatIds(new Set(categorie.filter(c => c.padreId == null && isInvestmentName(c.nome)).map(c => c.id)));
       setStep('options');
     } catch (e: any) {
       if (/failed to (fetch|load|import)/i.test(e?.message || '')) { window.location.reload(); return; }
@@ -502,13 +615,15 @@ export default function KakeboImport({ onClose, onDirtyChange }: Props) {
   const handleGoToInvDetails = () => {
     if (!parsed) return;
     const invTransfers = parsed.movimenti.filter(m => m.tipo === -1 && invContoIds.has(m.contoId));
-    if (invTransfers.length === 0) { handleImport(); return; }
+    const bonusMovements = parsed.movimenti.filter(m => isBonusInvestmentMovement(m, parsed.categorie));
+    if (invTransfers.length === 0 && bonusMovements.length === 0) { handleImport(); return; }
 
-    // Build mode A: one InvDetail per transfer, sorted by date
-    const details: InvDetail[] = invTransfers
+    // Build mode A: one InvDetail per transfer or bonus investment movement, sorted by date
+    const details: InvDetail[] = [...invTransfers, ...bonusMovements]
       .sort((a, b) => a.dataOperazione - b.dataOperazione)
       .map(m => ({
         movimentoId: m.id,
+        sourceKind: m.tipo === -1 ? 'transfer' : 'bonus',
         date: msToDate(m.dataOperazione),
         amount: Math.abs(m.importo1),
         description: m.note || null,
@@ -517,6 +632,7 @@ export default function KakeboImport({ onClose, onDirtyChange }: Props) {
         ticker: '',
         quantity: '',
         price: '',
+        commission: '',
         isin: '',
         name: '',
         exchange: '',
@@ -537,8 +653,9 @@ export default function KakeboImport({ onClose, onDirtyChange }: Props) {
         if (date > p.lastDate) p.lastDate = date;
       }
     }
-    setInvPositions(Array.from(posMap.entries()).map(([contoId, info]) => ({
-      id: `${contoId}-0`,
+    setInvPositions([]);
+    setPositionDrafts(Object.fromEntries(Array.from(posMap.entries()).map(([contoId, info]) => [contoId, {
+      id: `draft-${contoId}`,
       contoId,
       ...info,
       instrumentType: 'etf' as const,
@@ -549,43 +666,70 @@ export default function KakeboImport({ onClose, onDirtyChange }: Props) {
       name: '',
       exchange: '',
       ter: '',
-    })));
+    }])));
+    setEditingPositionIds(Object.fromEntries(Array.from(posMap.keys()).map(contoId => [contoId, null])));
     setStep('inv_details');
   };
 
-  const updateDetail = (movimentoId: number, updates: Partial<Pick<InvDetail, 'instrumentType' | 'ticker' | 'quantity' | 'price' | 'isin' | 'name' | 'exchange' | 'ter'>>) => {
+  const updateDetail = (movimentoId: number, updates: Partial<Pick<InvDetail, 'instrumentType' | 'ticker' | 'quantity' | 'price' | 'commission' | 'isin' | 'name' | 'exchange' | 'ter'>>) => {
     markDirty();
     setInvDetails(prev => prev.map(d => d.movimentoId === movimentoId ? { ...d, ...updates } : d));
   };
 
-  const updatePosition = (posId: string, updates: Partial<Pick<InvPosition, 'instrumentType' | 'ticker' | 'totalQty' | 'avgPrice' | 'isin' | 'name' | 'exchange' | 'ter'>>) => {
+  const updatePositionDraft = (contoId: number, updates: Partial<Pick<InvPosition, 'instrumentType' | 'ticker' | 'totalQty' | 'avgPrice' | 'isin' | 'name' | 'exchange' | 'ter'>>) => {
     markDirty();
-    setInvPositions(prev => prev.map(p => p.id === posId ? { ...p, ...updates } : p));
+    setPositionDrafts(prev => prev[contoId] ? ({ ...prev, [contoId]: { ...prev[contoId], ...updates } }) : prev);
   };
 
-  const addPosition = (contoId: number) => {
+  const resetPositionDraft = (contoId: number) => {
+    const ref = positionDrafts[contoId] ?? invPositions.find(p => p.contoId === contoId);
+    if (!ref) return;
+    setPositionDrafts(prev => ({
+      ...prev,
+      [contoId]: {
+        id: `draft-${contoId}`,
+        contoId,
+        totalAmount: ref.totalAmount,
+        transferCount: ref.transferCount,
+        lastDate: ref.lastDate,
+        instrumentType: 'etf',
+        ticker: '',
+        totalQty: '',
+        avgPrice: '',
+        isin: '',
+        name: '',
+        exchange: '',
+        ter: '',
+      },
+    }));
+    setEditingPositionIds(prev => ({ ...prev, [contoId]: null }));
+  };
+
+  const addOrUpdatePosition = (contoId: number) => {
+    const draft = positionDrafts[contoId];
+    if (!draft || !draft.ticker.trim() || !draft.totalQty.trim() || !draft.avgPrice.trim()) return;
     markDirty();
-    const ref = invPositions.find(p => p.contoId === contoId)!;
-    setInvPositions(prev => [...prev, {
-      id: `${contoId}-${Date.now()}`,
-      contoId,
-      totalAmount: ref.totalAmount,
-      transferCount: ref.transferCount,
-      lastDate: ref.lastDate,
-      instrumentType: 'etf',
-      ticker: '',
-      totalQty: '',
-      avgPrice: '',
-      isin: '',
-      name: '',
-      exchange: '',
-      ter: '',
-    }]);
+    const editingId = editingPositionIds[contoId];
+    const normalizedDraft = { ...draft, id: editingId ?? `${contoId}-${Date.now()}` };
+    setInvPositions(prev => editingId
+      ? prev.map(p => p.id === editingId ? normalizedDraft : p)
+      : [...prev, normalizedDraft]);
+    resetPositionDraft(contoId);
+  };
+
+  const editPosition = (position: InvPosition) => {
+    markDirty();
+    setPositionDrafts(prev => ({ ...prev, [position.contoId]: { ...position } }));
+    setEditingPositionIds(prev => ({ ...prev, [position.contoId]: position.id }));
   };
 
   const removePosition = (posId: string) => {
     markDirty();
+    const target = invPositions.find(p => p.id === posId);
     setInvPositions(prev => prev.filter(p => p.id !== posId));
+    if (target && editingPositionIds[target.contoId] === posId) {
+      resetPositionDraft(target.contoId);
+    }
   };
 
   // ── step 4: import ──────────────────────────────────────────────────────────
@@ -615,82 +759,34 @@ export default function KakeboImport({ onClose, onDirtyChange }: Props) {
       if (!user) throw new Error('Not authenticated');
       const userId = user.id;
       const profileId = apiService.getActiveProfileId();
-
-      // 0. Delete existing data
-      setProgress(t('kakebo.resetData'));
-      await supabase.from('transactions').delete().eq('profile_id', profileId);
-      await supabase.from('transfers').delete().eq('profile_id', profileId);
-      await supabase.from('accounts').delete().eq('profile_id', profileId);
-      await supabase.from('categories').delete().eq('profile_id', profileId);
-      await supabase.from('portfolios').delete().eq('profile_id', profileId);
-
-      // 1. Create portfolios + categories for investment accounts
-      setProgress(t('kakebo.accounts'));
-      const invContoToPortfolioId: Record<number, number> = {};
-      const invContoToCategoryName: Record<number, string> = {};
-      const catCreated: Record<string, number> = {};
-
-      for (const contoId of invContoIds) {
-        const conto = parsed.conti.find(c => c.id === contoId);
-        if (!conto) continue;
-        const name = conto.nome.trim();
-
-        const { data: portData, error: portErr } = await supabase
-          .from('portfolios')
-          .insert({ user_id: userId, profile_id: profileId, name, initial_capital: 0, reference_currency: 'EUR', risk_free_source: '', market_benchmark: '' })
-          .select().single();
-        if (portErr) throw portErr;
-        invContoToPortfolioId[contoId] = portData.id;
-        invContoToCategoryName[contoId] = name;
-      }
-
-      // 2. Create accounts for non-investment kakebo accounts
-      // Pre-compute net transaction effects per conto (to set initial_balance = variazioneSaldo1 - net)
-      const netPerConto: Record<number, number> = {};
-      for (const m of parsed.movimenti) {
-        const amount = Math.abs(m.importo1);
-        if (m.tipo === -1) {
-          if (invContoIds.has(m.contoId)) {
-            // Regular → Investment: source regular account loses amount
-            if (m.contoPrelievoId != null && !invContoIds.has(m.contoPrelievoId)) {
-              netPerConto[m.contoPrelievoId] = (netPerConto[m.contoPrelievoId] ?? 0) - amount;
-            }
-          } else {
-            const fromIsInv = m.contoPrelievoId != null && invContoIds.has(m.contoPrelievoId);
-            if (fromIsInv) {
-              // Investment → Regular: destination gains amount
-              netPerConto[m.contoId] = (netPerConto[m.contoId] ?? 0) + amount;
-            } else {
-              // Regular → Regular transfer
-              netPerConto[m.contoId] = (netPerConto[m.contoId] ?? 0) + amount;
-              if (m.contoPrelievoId != null) {
-                netPerConto[m.contoPrelievoId] = (netPerConto[m.contoPrelievoId] ?? 0) - amount;
-              }
-            }
-          }
-        } else {
-          // expense (importo1 < 0) or income (importo1 > 0)
-          if (!invContoIds.has(m.contoId)) {
-            netPerConto[m.contoId] = (netPerConto[m.contoId] ?? 0) + m.importo1;
-          }
+      const duplicateNormalizedNames = (values: string[]) => {
+        const seen = new Set<string>();
+        const duplicates = new Set<string>();
+        for (const value of values.map(v => v.trim()).filter(Boolean)) {
+          const normalized = value.toLocaleLowerCase();
+          if (seen.has(normalized)) duplicates.add(value);
+          seen.add(normalized);
         }
+        return [...duplicates];
+      };
+
+      const investmentConti = parsed.conti.filter(c => invContoIds.has(c.id));
+      const regularConti = parsed.conti.filter(c => !invContoIds.has(c.id));
+
+      const duplicatePortfolioNames = duplicateNormalizedNames(investmentConti.map(c => c.nome));
+      if (duplicatePortfolioNames.length > 0) {
+        throw new Error(`Portafogli duplicati nel file Kakebo: ${duplicatePortfolioNames.join(', ')}`);
+      }
+      const duplicateAccountNames = duplicateNormalizedNames(regularConti.map(c => c.nome));
+      if (duplicateAccountNames.length > 0) {
+        throw new Error(`Conti duplicati nel file Kakebo: ${duplicateAccountNames.join(', ')}`);
       }
 
-      const contoIdMap: Record<number, number> = {};
-      for (const c of parsed.conti) {
-        if (invContoIds.has(c.id)) continue;
-        const net = netPerConto[c.id] ?? 0;
-        const initial_balance = c.variazioneSaldo1 - net;
-        const { data, error: accErr } = await supabase
-          .from('accounts')
-          .insert({ user_id: userId, profile_id: profileId, name: c.nome.trim(), icon: '🏦', initial_balance })
-          .select().single();
-        if (accErr) throw accErr;
-        contoIdMap[c.id] = data.id;
-      }
+      const invContoToCategoryName: Record<number, string> = {};
+      for (const conto of investmentConti) invContoToCategoryName[conto.id] = conto.nome.trim();
+      const contoNameById: Record<number, string> = {};
+      for (const conto of parsed.conti) contoNameById[conto.id] = conto.nome.trim();
 
-      // 3. Category resolution
-      setProgress(t('kakebo.categories'));
       const kCatById: Record<number, KCategoria> = {};
       for (const c of parsed.categorie) kCatById[c.id] = c;
       const catResolved: Record<number, { catName: string; subName?: string }> = {};
@@ -703,40 +799,54 @@ export default function KakeboImport({ onClose, onDirtyChange }: Props) {
         }
       }
 
-      const { data: freshCats } = await supabase.from('categories').select('*, subcategories(*)').eq('profile_id', profileId);
-      for (const tc of (freshCats as CategoryWithStats[] || []))
-        catCreated[`${tc.name.toLowerCase()}|${tc.category_type}`] = tc.id;
-
-      const getOrCreateCategory = async (name: string, type: 'expense' | 'income' | 'investment') => {
-        const key = `${name.toLowerCase()}|${type}`;
-        if (catCreated[key]) return;
-        const icon = type === 'investment' ? '📈' : type === 'income' ? '💰' : '💸';
-        const { data, error: catErr } = await supabase
-          .from('categories').insert({ user_id: userId, profile_id: profileId, name, icon, category_type: type }).select().single();
-        if (catErr) throw catErr;
-        catCreated[key] = data.id;
-      };
-
-      const getCatType = (catId: number): 'expense' | 'income' | 'investment' => {
-        if (investmentCatIds.has(catId)) return 'investment';
+      const getCatType = (catId: number): 'expense' | 'income' => {
         const cat = kCatById[catId];
         if (!cat) return 'expense';
-        if (cat.padreId != null && investmentCatIds.has(cat.padreId)) return 'investment';
         return cat.tipoMovimento === 1 ? 'income' : 'expense';
       };
 
+      const categoryDefs = new Map<string, { name: string; type: 'expense' | 'income'; icon: string; subNames: Set<string> }>();
       for (const m of parsed.movimenti) {
         if (m.tipo === -1) continue;
         const catId = m.sottocategoriaId ?? m.categoriaId;
         if (catId == null || !catResolved[catId]) continue;
-        await getOrCreateCategory(catResolved[catId].catName, getCatType(catId));
+        const { catName, subName } = catResolved[catId];
+        const type = getCatType(catId);
+        const key = `${catName.toLocaleLowerCase()}|${type}`;
+        const existing = categoryDefs.get(key);
+        if (existing) {
+          if (subName) existing.subNames.add(subName);
+        } else {
+          categoryDefs.set(key, {
+            name: catName,
+            type,
+            icon: type === 'income' ? '💰' : '💸',
+            subNames: new Set(subName ? [subName] : []),
+          });
+        }
       }
 
-      // 4. Build transaction/transfer rows
-      setProgress(t('kakebo.transactions'));
-      const txRows: any[] = [];
-      const trRows: any[] = [];
+      const duplicateCategoryNames = duplicateNormalizedNames([...categoryDefs.values()].map(def => def.name));
+      if (duplicateCategoryNames.length > 0) {
+        throw new Error(`Categorie duplicate nel file Kakebo: ${duplicateCategoryNames.join(', ')}`);
+      }
+
+      // Build all rows before touching existing profile data.
+      const transactionSources: any[] = [];
+      const transferRows: any[] = [];
       let skipped = 0;
+      const skippedDetails: SkippedImportRecord[] = [];
+      const recordSkipped = (movimento: KMovimento, reason: string) => {
+        skipped += 1;
+        skippedDetails.push({
+          movimentoId: movimento.id,
+          date: msToDate(movimento.dataOperazione),
+          amount: Math.abs(movimento.importo1),
+          conto: contoNameById[movimento.contoId],
+          contoPrelievo: movimento.contoPrelievoId != null ? contoNameById[movimento.contoPrelievoId] : undefined,
+          reason,
+        });
+      };
 
       // Map movimentoId → InvDetail (mode A)
       const movToDetail = new Map<number, InvDetail>();
@@ -750,67 +860,283 @@ export default function KakeboImport({ onClose, onDirtyChange }: Props) {
         if (m.tipo === -1) {
           if (invContoIds.has(m.contoId)) {
             // Regular → Investment: deduct from source regular account
-            const accountId = m.contoPrelievoId != null ? contoIdMap[m.contoPrelievoId] : undefined;
-            if (!accountId) { skipped++; continue; }
+            if (m.contoPrelievoId == null || invContoIds.has(m.contoPrelievoId)) {
+              recordSkipped(m, 'Investment transfer without a valid source account');
+              continue;
+            }
             const catName = invContoToCategoryName[m.contoId] ?? 'Investimenti';
-            txRows.push({ user_id: userId, profile_id: profileId, account_id: accountId, type: 'investment', category: catName, subcategory: null, amount, description, date, _movId: m.id });
+            transactionSources.push({
+              type: 'investment',
+              sourceContoId: m.contoPrelievoId,
+              category: catName,
+              subcategory: null,
+              amount,
+              description,
+              date,
+              _movId: m.id,
+            });
           } else {
             const fromIsInv = m.contoPrelievoId != null && invContoIds.has(m.contoPrelievoId);
             if (fromIsInv) {
               // Investment → Regular: credit the destination regular account
-              const toId = contoIdMap[m.contoId];
-              if (!toId) { skipped++; continue; }
+              if (invContoIds.has(m.contoId)) {
+                recordSkipped(m, 'Investment exit points to another investment account');
+                continue;
+              }
               const catName = invContoToCategoryName[m.contoPrelievoId!] ?? 'Investimenti';
-              txRows.push({ user_id: userId, profile_id: profileId, account_id: toId, type: 'income', category: catName, subcategory: null, amount, description, date });
+              transactionSources.push({
+                type: 'income',
+                sourceContoId: m.contoId,
+                category: catName,
+                subcategory: null,
+                amount,
+                description,
+                date,
+              });
             } else {
-              const fromId = m.contoPrelievoId != null ? contoIdMap[m.contoPrelievoId] : undefined;
-              const toId = contoIdMap[m.contoId];
-              if (!fromId || !toId) { skipped++; continue; }
-              trRows.push({ user_id: userId, profile_id: profileId, from_account_id: fromId, to_account_id: toId, amount, description, date });
+              if (m.contoPrelievoId == null || invContoIds.has(m.contoId) || invContoIds.has(m.contoPrelievoId)) {
+                recordSkipped(m, 'Transfer could not be mapped to two regular accounts');
+                continue;
+              }
+              transferRows.push({
+                user_id: userId,
+                profile_id: profileId,
+                from_source_conto_id: m.contoPrelievoId,
+                to_source_conto_id: m.contoId,
+                amount,
+                description,
+                date,
+              });
             }
           }
         } else {
-          const accountId = contoIdMap[m.contoId];
-          if (!accountId) { skipped++; continue; }
           const catId = m.sottocategoriaId ?? m.categoriaId;
           let catName = 'Altro'; let subName: string | undefined;
           if (catId != null && catResolved[catId]) { catName = catResolved[catId].catName; subName = catResolved[catId].subName; }
-          let type: 'expense' | 'income' | 'investment' = m.tipo === 1 ? 'income' : 'expense';
-          if (catId != null && getCatType(catId) === 'investment') type = 'investment';
-          txRows.push({ user_id: userId, profile_id: profileId, account_id: accountId, type, category: catName, subcategory: subName || null, amount, description, date });
+          if (invContoIds.has(m.contoId)) {
+            if (isBonusInvestmentMovement(m, parsed.categorie)) {
+              continue;
+            }
+            recordSkipped(m, 'Investment account movement without linked cash transfer (e.g. dividend/interest)');
+            continue;
+          }
+          const type: 'expense' | 'income' = m.tipo === 1 ? 'income' : 'expense';
+          transactionSources.push({
+            type,
+            sourceContoId: m.contoId,
+            category: catName,
+            subcategory: subName || null,
+            amount,
+            description,
+            date,
+          });
         }
       }
 
+      const existingPortfolioIds = (await supabase.from('portfolios').select('id').eq('profile_id', profileId)).data?.map((row: any) => row.id) || [];
+
+      // Compute imported net effect per regular account from records that will
+      // actually exist in Trackr.
+      const importedNetPerConto: Record<number, number> = {};
+      for (const row of transactionSources) {
+        if (invContoIds.has(row.sourceContoId)) continue;
+        const delta = row.type === 'income' ? row.amount : -row.amount;
+        importedNetPerConto[row.sourceContoId] = (importedNetPerConto[row.sourceContoId] ?? 0) + delta;
+      }
+      for (const row of transferRows) {
+        importedNetPerConto[row.from_source_conto_id] = (importedNetPerConto[row.from_source_conto_id] ?? 0) - row.amount;
+        importedNetPerConto[row.to_source_conto_id] = (importedNetPerConto[row.to_source_conto_id] ?? 0) + row.amount;
+      }
+      const sourceNetPerConto: Record<number, number> = {};
+      for (const m of parsed.movimenti) {
+        const amount = Math.abs(m.importo1);
+        if (m.tipo === -1) {
+          if (invContoIds.has(m.contoId)) {
+            if (m.contoPrelievoId != null && !invContoIds.has(m.contoPrelievoId)) {
+              sourceNetPerConto[m.contoPrelievoId] = (sourceNetPerConto[m.contoPrelievoId] ?? 0) - amount;
+            }
+          } else {
+            const fromIsInv = m.contoPrelievoId != null && invContoIds.has(m.contoPrelievoId);
+            if (fromIsInv) {
+              sourceNetPerConto[m.contoId] = (sourceNetPerConto[m.contoId] ?? 0) + amount;
+            } else if (m.contoPrelievoId != null && !invContoIds.has(m.contoPrelievoId)) {
+              sourceNetPerConto[m.contoId] = (sourceNetPerConto[m.contoId] ?? 0) + amount;
+              sourceNetPerConto[m.contoPrelievoId] = (sourceNetPerConto[m.contoPrelievoId] ?? 0) - amount;
+            }
+          }
+        } else if (!invContoIds.has(m.contoId)) {
+          sourceNetPerConto[m.contoId] = (sourceNetPerConto[m.contoId] ?? 0) + m.importo1;
+        }
+      }
+
+      // 0. Delete existing data only after preflight completed successfully.
+      setProgress(t('kakebo.resetData'));
+      await supabase.from('recurring_transactions').delete().eq('profile_id', profileId);
+      if (existingPortfolioIds.length > 0) {
+        for (const ids of chunk(existingPortfolioIds, 200)) {
+          await supabase.from('orders').delete().in('portfolio_id', ids);
+        }
+      }
+      await supabase.from('transactions').delete().eq('profile_id', profileId);
+      await supabase.from('transfers').delete().eq('profile_id', profileId);
+      await supabase.from('accounts').delete().eq('profile_id', profileId);
+      await supabase.from('categories').delete().eq('profile_id', profileId);
+      await supabase.from('portfolios').delete().eq('profile_id', profileId);
+
+      // 1. Create portfolios and accounts.
+      setProgress(t('kakebo.accounts'));
+      const invContoToPortfolioId: Record<number, number> = {};
+      const contoIdMap: Record<number, number> = {};
+      const catCreated: Record<string, number> = {};
+
+      for (const conto of investmentConti) {
+        const { data: portData, error: portErr } = await supabase
+          .from('portfolios')
+          .insert({
+            user_id: userId,
+            profile_id: profileId,
+            name: conto.nome.trim(),
+            history_mode: invMode === 'positions' ? 'positions_only' : 'full_orders',
+            initial_capital: 0,
+            reference_currency: 'EUR',
+            risk_free_source: '',
+            market_benchmark: '',
+          })
+          .select().single();
+        if (portErr) throw portErr;
+        invContoToPortfolioId[conto.id] = portData.id;
+      }
+
+      for (const c of regularConti) {
+        const initial_balance = c.variazioneSaldo1;
+        const { data, error: accErr } = await supabase
+          .from('accounts')
+          .insert({ user_id: userId, profile_id: profileId, name: c.nome.trim(), icon: '🏦', initial_balance })
+          .select().single();
+        if (accErr) throw accErr;
+        contoIdMap[c.id] = data.id;
+      }
+
+      // 2. Create categories and subcategories.
+      setProgress(t('kakebo.categories'));
+      for (const def of categoryDefs.values()) {
+        const { data, error: catErr } = await supabase
+          .from('categories')
+          .insert({ user_id: userId, profile_id: profileId, name: def.name, icon: def.icon, category_type: def.type })
+          .select().single();
+        if (catErr) throw catErr;
+        catCreated[`${def.name.toLocaleLowerCase()}|${def.type}`] = data.id;
+      }
+      const subcategoryRows = [...categoryDefs.values()].flatMap(def => {
+        const categoryId = catCreated[`${def.name.toLocaleLowerCase()}|${def.type}`];
+        return [...def.subNames].map(name => ({ category_id: categoryId, name }));
+      });
+      for (const batch of chunk(subcategoryRows, 500)) {
+        if (batch.length === 0) continue;
+        const { error: subErr } = await supabase.from('subcategories').insert(batch);
+        if (subErr) throw subErr;
+      }
+
       // 5. Batch insert
+      setProgress(t('kakebo.transactions'));
       let txCount = 0; let invCount = 0; let trCount = 0;
-      const txRowsClean = txRows.map(({ _movId: _, ...rest }) => rest);
-      for (const batch of chunk(txRowsClean, 500)) {
+      const mappedTxRows = transactionSources.map((row: any) => ({
+        ...row,
+        user_id: userId,
+        profile_id: profileId,
+        account_id: contoIdMap[row.sourceContoId],
+      }));
+      const regularTxRows = mappedTxRows
+        .filter((row: any) => row.type !== 'investment')
+        .map(({ _movId: _, sourceContoId: __, ...rest }) => rest);
+      const investmentTxRows = mappedTxRows
+        .filter((row: any) => row.type === 'investment')
+        .map((row: any) => ({ ...row }));
+      const movIdToTransactionId: Record<number, number> = {};
+
+      for (const batch of chunk(regularTxRows, 500)) {
         const { error: txErr } = await supabase.from('transactions').insert(batch);
         if (txErr) throw txErr;
-        txCount += batch.filter((r: any) => r.type !== 'investment').length;
-        invCount += batch.filter((r: any) => r.type === 'investment').length;
+        txCount += batch.length;
       }
-      for (const batch of chunk(trRows, 500)) {
+      for (const row of investmentTxRows) {
+        const { _movId, sourceContoId: _, ...dbRow } = row;
+        const { data: txData, error: txErr } = await supabase
+          .from('transactions')
+          .insert(dbRow)
+          .select('id')
+          .single();
+        if (txErr) throw txErr;
+        if (_movId != null) movIdToTransactionId[_movId] = txData.id;
+        invCount += 1;
+      }
+      const transferRowsMapped = transferRows.map((row: any) => ({
+        user_id: row.user_id,
+        profile_id: row.profile_id,
+        from_account_id: contoIdMap[row.from_source_conto_id],
+        to_account_id: contoIdMap[row.to_source_conto_id],
+        amount: row.amount,
+        description: row.description,
+        date: row.date,
+      }));
+      for (const batch of chunk(transferRowsMapped, 500)) {
         const { error: trErr } = await supabase.from('transfers').insert(batch);
         if (trErr) throw trErr;
         trCount += batch.length;
       }
+
+      const balanceChecks: AccountBalanceCheck[] = regularConti.map((conto) => {
+        const initialBalance = conto.variazioneSaldo1;
+        let reconstructed = initialBalance;
+
+        for (const tx of mappedTxRows) {
+          if (tx.account_id !== contoIdMap[conto.id]) continue;
+          if (tx.type === 'income') reconstructed += tx.amount;
+          else if (tx.type === 'expense' || tx.type === 'investment') reconstructed -= tx.amount;
+        }
+
+        for (const tr of transferRowsMapped) {
+          if (tr.from_account_id === contoIdMap[conto.id]) reconstructed -= tr.amount;
+          if (tr.to_account_id === contoIdMap[conto.id]) reconstructed += tr.amount;
+        }
+
+        const expected = Number((initialBalance + (sourceNetPerConto[conto.id] ?? 0)).toFixed(2));
+        const roundedActual = Number(reconstructed.toFixed(2));
+        return {
+          contoId: conto.id,
+          contoName: conto.nome.trim(),
+          expected,
+          actual: roundedActual,
+          diff: Number((roundedActual - expected).toFixed(2)),
+        };
+      });
 
       // 6. Create orders
       let orderCount = 0;
       if (invMode === 'orders') {
         // Mode A: one order per individual transfer
         for (const m of parsed.movimenti) {
-          if (m.tipo !== -1 || !invContoIds.has(m.contoId)) continue;
           const detail = movToDetail.get(m.id);
-          if (!detail?.ticker.trim() || !detail.quantity.trim() || !detail.price.trim()) continue;
+          if (!detail) continue;
+          if (detail.sourceKind === 'transfer' && (m.tipo !== -1 || !invContoIds.has(m.contoId))) continue;
+          if (detail.sourceKind === 'bonus' && !isBonusInvestmentMovement(m, parsed.categorie)) continue;
+          if (!detail?.ticker.trim() || !detail.quantity.trim() || !detail.price.trim()) {
+            recordSkipped(m, detail?.sourceKind === 'bonus'
+              ? 'Bonus/saveback movement imported without order because ticker, quantity or price is missing'
+              : 'Investment transaction imported without order because ticker, quantity or price is missing');
+            continue;
+          }
           const portfolioId = invContoToPortfolioId[detail.destContoId];
-          if (!portfolioId) continue;
+          if (!portfolioId) {
+            recordSkipped(m, 'Missing portfolio mapping for investment order');
+            continue;
+          }
           const { error: ordErr } = await supabase.from('orders').insert({
             user_id: userId, portfolio_id: portfolioId,
+            transaction_id: detail.sourceKind === 'transfer' ? movIdToTransactionId[m.id] : undefined,
             symbol: detail.ticker.trim().toUpperCase(), currency: 'EUR',
             quantity: parseFloat(detail.quantity), price: parseFloat(detail.price),
-            commission: 0, order_type: 'buy', date: detail.date,
+            commission: parseFloat(detail.commission || '0') || 0, order_type: 'buy', date: detail.date,
             instrument_type: detail.instrumentType,
             isin: detail.isin || undefined,
             name: detail.name || undefined,
@@ -844,7 +1170,19 @@ export default function KakeboImport({ onClose, onDirtyChange }: Props) {
 
       setProgress('');
       clearDirty();
-      setResult({ accounts: Object.keys(contoIdMap).length, transactions: txCount, investments: invCount, transfers: trCount, orders: orderCount, skipped });
+      if (skippedDetails.length > 0) {
+        console.warn('[KakeboImport] skipped records:', skippedDetails);
+      }
+      setResult({
+        accounts: Object.keys(contoIdMap).length,
+        transactions: txCount,
+        investments: invCount,
+        transfers: trCount,
+        orders: orderCount,
+        skipped,
+        skippedDetails,
+        balanceChecks,
+      });
       setStep('done');
       await refreshAll();
 
@@ -860,14 +1198,34 @@ export default function KakeboImport({ onClose, onDirtyChange }: Props) {
     ? (() => { const dates = parsed.movimenti.map(m => m.dataOperazione); return { from: msToDate(Math.min(...dates)), to: msToDate(Math.max(...dates)) }; })()
     : null;
 
-  const expenseCats = parsed?.categorie.filter(c => c.padreId == null && c.tipoMovimento === 0) ?? [];
-  const incomeCats = parsed?.categorie.filter(c => c.padreId == null && c.tipoMovimento === 1) ?? [];
-  const totalTransfers = parsed?.movimenti.filter(m => m.tipo === -1).length ?? 0;
-  const invTransfersCount = parsed?.movimenti.filter(m => m.tipo === -1 && invContoIds.has(m.contoId)).length ?? 0;
-
-  const toggleInvCat = (id: number) => setInvestmentCatIds(prev => {
-    const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next;
-  });
+  const detectedCategories = parsed ? (() => {
+    const topLevel = parsed.categorie
+      .filter(c => c.padreId == null && !isInvestmentName(c.nome))
+      .sort((a, b) => a.nome.localeCompare(b.nome, 'it'));
+    const childrenByParent = new Map<number, string[]>();
+    for (const cat of parsed.categorie) {
+      if (cat.padreId == null) continue;
+      if (!childrenByParent.has(cat.padreId)) childrenByParent.set(cat.padreId, []);
+      childrenByParent.get(cat.padreId)!.push(cat.nome.trim());
+    }
+    for (const values of childrenByParent.values()) values.sort((a, b) => a.localeCompare(b, 'it'));
+    return topLevel.map(cat => ({
+      id: cat.id,
+      name: cat.nome.trim(),
+      type: cat.tipoMovimento === 1 ? 'income' : 'expense',
+      subNames: childrenByParent.get(cat.id) ?? [],
+    }));
+  })() : [];
+  const expenseCategories = detectedCategories.filter(category => category.type === 'expense');
+  const incomeCategories = detectedCategories.filter(category => category.type === 'income');
+  const visibleCategories = categoryView === 'expense' ? expenseCategories : incomeCategories;
+  const detectedTransactionCount = parsed
+    ? parsed.movimenti.filter(m => {
+        if (m.tipo === -1) return false;
+        if (invContoIds.has(m.contoId) && !isBonusInvestmentMovement(m, parsed.categorie)) return false;
+        return true;
+      }).length
+    : 0;
 
   return (
     <div className="space-y-5">
@@ -896,89 +1254,181 @@ export default function KakeboImport({ onClose, onDirtyChange }: Props) {
       {/* ── Options ── */}
       {step === 'options' && parsed && (
         <div className="space-y-5">
+          {dateRange && (
+            <div className="rounded-xl bg-gradient-to-br from-primary-50 to-white dark:from-primary-900/20 dark:to-gray-800/60 border border-primary-100 dark:border-primary-900/40 p-4 text-center">
+              <div className="text-xs font-medium uppercase tracking-wide text-primary-600 dark:text-primary-400 mb-1">
+                Periodo
+              </div>
+              <div className="text-base font-semibold text-gray-800 dark:text-gray-200">
+                {dateRange.from} <span className="text-gray-400 dark:text-gray-500">→</span> {dateRange.to}
+              </div>
+            </div>
+          )}
+
           <div className="grid grid-cols-3 gap-2 text-center">
             <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
               <div className="text-lg font-bold text-gray-900 dark:text-white">{parsed.conti.length}</div>
               <div className="text-xs text-gray-500 dark:text-gray-400">{t('kakebo.accounts')}</div>
             </div>
             <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
-              <div className="text-lg font-bold text-gray-900 dark:text-white">{parsed.movimenti.length}</div>
+              <div className="text-lg font-bold text-gray-900 dark:text-white">{detectedTransactionCount}</div>
               <div className="text-xs text-gray-500 dark:text-gray-400">{t('kakebo.transactions')}</div>
             </div>
             <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
-              <div className="text-lg font-bold text-gray-900 dark:text-white">{parsed.categorie.filter(c => c.padreId == null).length}</div>
+              <div className="text-lg font-bold text-gray-900 dark:text-white">{detectedCategories.length}</div>
               <div className="text-xs text-gray-500 dark:text-gray-400">{t('kakebo.categories')}</div>
             </div>
           </div>
-          {totalTransfers > 0 && (
-            <p className="text-xs text-gray-500 dark:text-gray-400 text-center">
-              {t('kakebo.transfersSummary', { total: totalTransfers, inv: invTransfersCount })}
-            </p>
-          )}
-          {dateRange && (
-            <p className="text-xs text-gray-500 dark:text-gray-400 text-center">
-              {t('kakebo.period', { from: dateRange.from, to: dateRange.to })}
-            </p>
-          )}
 
-          {/* Accounts */}
-          <div>
-            <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('kakebo.accountsToImport')}</div>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">{t('kakebo.invNote')}</p>
-            <div className="space-y-1.5">
-              {parsed.conti.map(c => {
-                const isInv = invContoIds.has(c.id);
-                return (
-                  <div key={c.id} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-50 dark:bg-gray-700/50">
-                    <span className="text-base">{isInv ? '📈' : '🏦'}</span>
-                    <span className="text-sm text-gray-700 dark:text-gray-300 flex-1">{c.nome.trim()}</span>
-                    <label className="flex items-center gap-1.5 cursor-pointer shrink-0">
-                      <input type="checkbox" checked={isInv}
-                        onChange={() => setInvContoIds(prev => { const next = new Set(prev); if (next.has(c.id)) next.delete(c.id); else next.add(c.id); return next; })}
-                        className="w-4 h-4 rounded text-primary-500" />
-                      <span className="text-xs text-gray-500 dark:text-gray-400">→ portafoglio</span>
-                    </label>
-                  </div>
-                );
-              })}
+          <div className="space-y-3">
+            <div className="rounded-xl bg-gray-50 dark:bg-gray-700/40 p-4 space-y-2">
+              <div className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                Conti rilevati
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {parsed.conti
+                  .filter(c => !invContoIds.has(c.id))
+                  .map(c => (
+                    <span
+                      key={`account-${c.id}`}
+                      className="inline-flex items-center gap-1.5 rounded-full bg-white dark:bg-gray-800 px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-600"
+                    >
+                      <span>🏦</span>
+                      <span>{c.nome.trim()}</span>
+                    </span>
+                  ))}
+              </div>
+            </div>
+
+            <div className="rounded-xl bg-gray-50 dark:bg-gray-700/40 p-4 space-y-2">
+              <div className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                Portafogli rilevati
+              </div>
+              {parsed.conti.filter(c => invContoIds.has(c.id)).length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  {parsed.conti
+                    .filter(c => invContoIds.has(c.id))
+                    .map(c => (
+                      <span
+                        key={`portfolio-${c.id}`}
+                        className="inline-flex items-center gap-1.5 rounded-full bg-white dark:bg-gray-800 px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-600"
+                      >
+                        <span>📈</span>
+                        <span>{c.nome.trim()}</span>
+                      </span>
+                    ))}
+                </div>
+              ) : (
+                <div className="text-xs text-gray-500 dark:text-gray-400">
+                  Nessun portafoglio rilevato automaticamente.
+                </div>
+              )}
             </div>
           </div>
-
-          {expenseCats.length > 0 && (
-            <div>
-              <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('kakebo.expenseToInv')}</div>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">{t('kakebo.expenseToInvDesc')}</p>
-              <div className="space-y-0.5">
-                {expenseCats.map(c => (
-                  <label key={c.id} className="flex items-center gap-2 py-1.5 px-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer">
-                    <input type="checkbox" checked={investmentCatIds.has(c.id)} onChange={() => toggleInvCat(c.id)} className="w-4 h-4 rounded text-primary-500" />
-                    <span className="text-sm text-gray-700 dark:text-gray-300">{c.nome.trim()}</span>
-                    {isInvestmentName(c.nome) && <span className="text-xs text-primary-500 dark:text-primary-400 ml-auto">auto</span>}
-                  </label>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {incomeCats.length > 0 && (
-            <div>
-              <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('kakebo.incomeToInv')}</div>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">{t('kakebo.incomeToInvDesc')}</p>
-              <div className="space-y-0.5">
-                {incomeCats.map(c => (
-                  <label key={c.id} className="flex items-center gap-2 py-1.5 px-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer">
-                    <input type="checkbox" checked={investmentCatIds.has(c.id)} onChange={() => toggleInvCat(c.id)} className="w-4 h-4 rounded text-primary-500" />
-                    <span className="text-sm text-gray-700 dark:text-gray-300">{c.nome.trim()}</span>
-                    {isInvestmentName(c.nome) && <span className="text-xs text-primary-500 dark:text-primary-400 ml-auto">auto</span>}
-                  </label>
-                ))}
-              </div>
-            </div>
-          )}
 
           {error && <p className="text-sm text-red-500 dark:text-red-400">{error}</p>}
           <div className="flex gap-2">
             <button className="flex-1 btn-secondary text-sm" onClick={onClose}>{t('common.cancel')}</button>
+            <button className="flex-1 btn-primary text-sm" onClick={() => setStep('categories')}>{t('kakebo.next')}</button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Categories ── */}
+      {step === 'categories' && parsed && (
+        <div className="space-y-4">
+          <div>
+            <div className="text-sm font-medium text-gray-700 dark:text-gray-300">Categorie rilevate</div>
+            <div className="text-xs text-gray-500 dark:text-gray-400">
+              {detectedCategories.length} categorie da importare
+            </div>
+          </div>
+
+          <div className="space-y-4 max-h-[420px] overflow-y-auto pr-1">
+            <div className="flex rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700">
+              <button
+                type="button"
+                onClick={() => setCategoryView('expense')}
+                className={`flex-1 py-2.5 text-xs font-medium transition-colors ${categoryView === 'expense' ? 'bg-primary-500 text-white' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400'}`}
+              >
+                Uscite
+              </button>
+              <button
+                type="button"
+                onClick={() => setCategoryView('income')}
+                className={`flex-1 py-2.5 text-xs font-medium transition-colors ${categoryView === 'income' ? 'bg-primary-500 text-white' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400'}`}
+              >
+                Entrate
+              </button>
+            </div>
+
+            {visibleCategories.length > 0 ? (
+              visibleCategories.map(category => {
+                const isExpanded = expandedCategoryIds.has(category.id);
+                return (
+                  <button
+                    key={category.id}
+                    type="button"
+                    onClick={() => {
+                      if (category.subNames.length === 0) return;
+                      setExpandedCategoryIds(prev => {
+                        const next = new Set(prev);
+                        if (next.has(category.id)) next.delete(category.id);
+                        else next.add(category.id);
+                        return next;
+                      });
+                    }}
+                    className="w-full text-left rounded-xl bg-gray-50 dark:bg-gray-700/40 p-4 space-y-2"
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">
+                          {category.name}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        {category.subNames.length > 0 && (
+                          <div className="text-xs text-gray-400">
+                            {category.subNames.length} {category.subNames.length === 1 ? 'sottocategoria' : 'sottocategorie'}
+                          </div>
+                        )}
+                        {category.subNames.length > 0 && (
+                          <svg
+                            className={`w-4 h-4 text-gray-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                          >
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                          </svg>
+                        )}
+                      </div>
+                    </div>
+                    {isExpanded && category.subNames.length > 0 && (
+                      <div className="flex flex-wrap gap-2 pt-1">
+                        {category.subNames.map(subName => (
+                          <span
+                            key={`${category.id}-${subName}`}
+                            className="inline-flex items-center rounded-full bg-white dark:bg-gray-800 px-3 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-600"
+                          >
+                            {subName}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </button>
+                );
+              })
+            ) : (
+              <div className="text-xs text-gray-400 dark:text-gray-500">
+                Nessuna categoria rilevata.
+              </div>
+            )}
+          </div>
+
+          {error && <p className="text-sm text-red-500 dark:text-red-400">{error}</p>}
+          <div className="sticky bottom-0 bg-white dark:bg-gray-900 pt-3 border-t border-gray-100 dark:border-gray-800 flex gap-2">
+            <button className="flex-1 btn-secondary text-sm" onClick={() => setStep('options')}>Indietro</button>
             <button className="flex-1 btn-primary text-sm" onClick={handleGoToInvDetails}>{t('kakebo.next')}</button>
           </div>
         </div>
@@ -1022,7 +1472,7 @@ export default function KakeboImport({ onClose, onDirtyChange }: Props) {
             </div>
           )}
 
-          <div className="space-y-3">
+          <div className="space-y-3 max-h-[420px] overflow-y-auto pr-1">
             {invMode === 'orders' && invDetails.map(detail => {
               const conto = parsed?.conti.find(c => c.id === detail.destContoId);
               return (
@@ -1036,8 +1486,10 @@ export default function KakeboImport({ onClose, onDirtyChange }: Props) {
                     ticker={detail.ticker}
                     quantity={detail.quantity}
                     price={detail.price}
+                    commission={detail.commission}
                     qtyLabel={t('kakebo.qty')}
                     priceLabel={t('kakebo.pricePerUnit')}
+                    commissionLabel="Commissioni"
                     showValidation={validated}
                     onChange={(_, updates) => updateDetail(detail.movimentoId, updates)}
                   />
@@ -1052,50 +1504,141 @@ export default function KakeboImport({ onClose, onDirtyChange }: Props) {
                 if (!groups.has(pos.contoId)) groups.set(pos.contoId, []);
                 groups.get(pos.contoId)!.push(pos);
               }
-              return Array.from(groups.entries()).map(([contoId, positions]) => {
+              const baseGroups = new Map<number, { totalAmount: number; transferCount: number; lastDate: string }>();
+              Object.values(positionDrafts).forEach(draft => {
+                baseGroups.set(draft.contoId, {
+                  totalAmount: draft.totalAmount,
+                  transferCount: draft.transferCount,
+                  lastDate: draft.lastDate,
+                });
+              });
+              invPositions.forEach(pos => {
+                if (!baseGroups.has(pos.contoId)) {
+                  baseGroups.set(pos.contoId, {
+                    totalAmount: pos.totalAmount,
+                    transferCount: pos.transferCount,
+                    lastDate: pos.lastDate,
+                  });
+                }
+              });
+              return Array.from(baseGroups.entries()).map(([contoId, info]) => {
+                const positions = groups.get(contoId) ?? [];
                 const conto = parsed?.conti.find(c => c.id === contoId);
+                const draft = positionDrafts[contoId];
+                const isDraftValid = !!draft?.ticker.trim() && !!draft?.totalQty.trim() && !!draft?.avgPrice.trim();
                 return (
-                  <div key={contoId} className="space-y-2">
-                    <div className="flex items-center justify-between px-1">
-                      <span className="text-xs font-medium text-gray-600 dark:text-gray-400">
-                        📈 {conto?.nome.trim()}
-                      </span>
-                      <span className="text-xs text-gray-400">
-                        {positions[0].totalAmount.toLocaleString('it-IT', { style: 'currency', currency: 'EUR' })} investiti · {positions[0].transferCount} acquisti
-                      </span>
+                  <div key={contoId} className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900/40 p-3 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="min-w-0">
+                        <div className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">
+                          📈 {conto?.nome.trim()}
+                        </div>
+                        <div className="text-xs text-gray-400">
+                          {formatCurrency(info.totalAmount, 'EUR')} investiti · {info.transferCount} acquisti
+                        </div>
+                      </div>
                     </div>
-                    {positions.map(pos => (
-                      <TickerCard
-                        key={pos.id}
-                        id={pos.id}
-                        contoName=""
-                        instrumentType={pos.instrumentType}
-                        ticker={pos.ticker}
-                        quantity={pos.totalQty}
-                        price={pos.avgPrice}
-                        qtyLabel="Quantità totale"
-                        priceLabel="Prezzo medio di carico"
-                        onRemove={positions.length > 1 ? async () => { if (await confirmDialog('Rimuovere questa posizione?', { title: 'Rimuovi posizione', confirmText: 'Rimuovi', isDestructive: true })) removePosition(pos.id); } : undefined}
-                        onChange={(_, updates) => updatePosition(pos.id, {
-                          ...(updates.instrumentType !== undefined && { instrumentType: updates.instrumentType }),
-                          ...(updates.ticker !== undefined && { ticker: updates.ticker }),
-                          ...(updates.quantity !== undefined && { totalQty: updates.quantity }),
-                          ...(updates.price !== undefined && { avgPrice: updates.price }),
-                          ...(updates.isin !== undefined && { isin: updates.isin }),
-                          ...(updates.name !== undefined && { name: updates.name }),
-                          ...(updates.exchange !== undefined && { exchange: updates.exchange }),
-                          ...(updates.ter !== undefined && { ter: updates.ter }),
-                        })}
-                      />
-                    ))}
-                    <button
-                      type="button"
-                      className="w-full py-2 text-xs text-primary-500 dark:text-primary-400 border border-dashed border-primary-300 dark:border-primary-700 rounded-xl hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-colors inline-flex items-center justify-center gap-1"
-                      onClick={() => addPosition(contoId)}
-                    >
-                      <span className="inline-flex w-3 items-center justify-center text-sm leading-none">+</span>
-                      <span>Aggiungi posizione</span>
-                    </button>
+
+                    {draft && (
+                      <>
+                        <TickerCard
+                          id={draft.id}
+                          contoName=""
+                          instrumentType={draft.instrumentType}
+                          ticker={draft.ticker}
+                          quantity={draft.totalQty}
+                          price={draft.avgPrice}
+                          qtyLabel="Quantità totale"
+                          priceLabel="Prezzo medio"
+                          commissionLabel="Tot. Commissioni"
+                          onChange={(_, updates) => updatePositionDraft(contoId, {
+                            ...(updates.instrumentType !== undefined && { instrumentType: updates.instrumentType }),
+                            ...(updates.ticker !== undefined && { ticker: updates.ticker }),
+                            ...(updates.quantity !== undefined && { totalQty: updates.quantity }),
+                            ...(updates.price !== undefined && { avgPrice: updates.price }),
+                            ...(updates.isin !== undefined && { isin: updates.isin }),
+                            ...(updates.name !== undefined && { name: updates.name }),
+                            ...(updates.exchange !== undefined && { exchange: updates.exchange }),
+                            ...(updates.ter !== undefined && { ter: updates.ter }),
+                          })}
+                        />
+                        <div className="flex justify-end gap-2">
+                          {editingPositionIds[contoId] && (
+                            <button
+                              type="button"
+                              onClick={() => resetPositionDraft(contoId)}
+                              className="px-3 py-2 rounded-xl text-xs font-medium text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800"
+                            >
+                              Annulla modifica
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => addOrUpdatePosition(contoId)}
+                            disabled={!isDraftValid}
+                            className="inline-flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-medium bg-primary-500 text-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-primary-600 transition-colors"
+                          >
+                            <span className="inline-flex w-4 h-4 items-center justify-center rounded-full bg-white/20 text-sm leading-none">✓</span>
+                            <span>{editingPositionIds[contoId] ? 'Salva posizione' : 'Aggiungi posizione'}</span>
+                          </button>
+                        </div>
+                      </>
+                    )}
+
+                    {positions.length > 0 ? (
+                      <div className="space-y-1 max-h-48 overflow-y-auto border-t border-gray-100 dark:border-gray-800 pt-1">
+                        {positions.map(pos => (
+                          <button
+                            key={pos.id}
+                            type="button"
+                            onClick={() => editPosition(pos)}
+                            className="w-full text-left rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50/80 dark:bg-gray-800/60 px-3 py-2.5 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <div className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">
+                                  <span className="font-mono">{pos.ticker}</span>
+                                  {pos.name?.trim() && pos.name.trim().toUpperCase() !== pos.ticker.trim().toUpperCase() && (
+                                    <span className="ml-2 font-medium text-gray-700 dark:text-gray-300">{pos.name.trim()}</span>
+                                  )}
+                                </div>
+                                <div className="text-xs text-gray-500 dark:text-gray-400">
+                                  {pos.totalQty} x {formatCurrency(Number(pos.avgPrice), 'EUR')}
+                                </div>
+                              </div>
+                              <div className="text-right shrink-0">
+                                <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                                  {formatCurrency(Number(pos.totalQty) * Number(pos.avgPrice), 'EUR')}
+                                </div>
+                                <div className="text-xs text-gray-400">{pos.lastDate}</div>
+                              </div>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-sm text-gray-400 dark:text-gray-500 text-center py-2 border-t border-gray-100 dark:border-gray-800">
+                        {t('portfolios.noPositions')}
+                      </div>
+                    )}
+
+                    {editingPositionIds[contoId] && (
+                      <div className="flex justify-end">
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            const editingId = editingPositionIds[contoId];
+                            if (!editingId) return;
+                            if (await confirmDialog('Rimuovere questa posizione?', { title: 'Rimuovi posizione', confirmText: 'Rimuovi', isDestructive: true, noBottomOffset: true })) {
+                              removePosition(editingId);
+                            }
+                          }}
+                          className="text-xs text-red-500 dark:text-red-400 hover:text-red-600"
+                        >
+                          Rimuovi posizione selezionata
+                        </button>
+                      </div>
+                    )}
                   </div>
                 );
               });
@@ -1104,8 +1647,8 @@ export default function KakeboImport({ onClose, onDirtyChange }: Props) {
 
           {error && <p className="text-sm text-red-500 dark:text-red-400">{error}</p>}
 
-          <div className="flex gap-2">
-            <button className="flex-1 btn-secondary text-sm" onClick={() => { setError(null); clearDirty(); setStep('options'); }}>{t('common.cancel')}</button>
+          <div className="sticky bottom-0 bg-white dark:bg-gray-900 pt-3 border-t border-gray-100 dark:border-gray-800 flex gap-2">
+            <button className="flex-1 btn-secondary text-sm" onClick={() => { setError(null); setStep('categories'); }}>Indietro</button>
             <button className="flex-1 btn-primary text-sm" onClick={() => handleImport()}>{t('kakebo.import')}</button>
           </div>
         </div>
@@ -1125,6 +1668,34 @@ export default function KakeboImport({ onClose, onDirtyChange }: Props) {
       {/* ── Done ── */}
       {step === 'done' && result && (
         <div className="space-y-4">
+          {(() => {
+            const mismatches = result.balanceChecks.filter(check => Math.abs(check.diff) >= 0.01);
+            return (
+              <div className={`rounded-xl p-4 space-y-2 ${mismatches.length === 0 ? 'bg-blue-50 dark:bg-blue-900/20' : 'bg-amber-50 dark:bg-amber-900/20'}`}>
+                <div className={`text-sm font-medium ${mismatches.length === 0 ? 'text-blue-800 dark:text-blue-300' : 'text-amber-800 dark:text-amber-300'}`}>
+                  Controllo saldi finali
+                </div>
+                {mismatches.length === 0 ? (
+                  <div className={`text-xs ${'text-blue-700 dark:text-blue-400'}`}>
+                    Tutti i {result.balanceChecks.length} conti regolari quadrano con il saldo finale di Kakebo.
+                  </div>
+                ) : (
+                  <div className="space-y-1.5">
+                    {mismatches.map((check) => (
+                      <div key={check.contoId} className="text-xs text-amber-700 dark:text-amber-400">
+                        <div className="font-medium">{check.contoName}</div>
+                        <div className="opacity-80">
+                          Atteso {check.expected.toLocaleString('it-IT', { style: 'currency', currency: 'EUR' })} ·
+                          importato {check.actual.toLocaleString('it-IT', { style: 'currency', currency: 'EUR' })} ·
+                          diff {check.diff.toLocaleString('it-IT', { style: 'currency', currency: 'EUR' })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
           <div className="bg-green-50 dark:bg-green-900/20 rounded-xl p-4 text-center space-y-1">
             <div className="text-2xl">✅</div>
             <div className="font-semibold text-green-800 dark:text-green-300">{t('kakebo.importDone')}</div>
@@ -1135,6 +1706,32 @@ export default function KakeboImport({ onClose, onDirtyChange }: Props) {
               {result.skipped > 0 && <div className="text-xs opacity-75">{t('kakebo.skipped', { count: result.skipped })}</div>}
             </div>
           </div>
+          {result.skippedDetails.length > 0 && (
+            <div className="bg-amber-50 dark:bg-amber-900/20 rounded-xl p-4 space-y-2">
+              <div className="text-sm font-medium text-amber-800 dark:text-amber-300">
+                Record ignorati
+              </div>
+              <div className="space-y-1.5">
+                {result.skippedDetails.slice(0, 5).map((item) => (
+                  <div key={item.movimentoId} className="text-xs text-amber-700 dark:text-amber-400">
+                    <div className="font-medium">
+                      #{item.movimentoId} · {item.date} · {item.amount.toLocaleString('it-IT', { style: 'currency', currency: 'EUR' })}
+                    </div>
+                    <div className="opacity-80">
+                      {item.reason}
+                      {item.conto && ` · conto: ${item.conto}`}
+                      {item.contoPrelievo && ` · da: ${item.contoPrelievo}`}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {result.skippedDetails.length > 5 && (
+                <div className="text-xs text-amber-700 dark:text-amber-400 opacity-80">
+                  Altri {result.skippedDetails.length - 5} record ignorati disponibili nella console.
+                </div>
+              )}
+            </div>
+          )}
           <button className="w-full btn-primary" onClick={onClose}>{t('common.close')}</button>
         </div>
       )}

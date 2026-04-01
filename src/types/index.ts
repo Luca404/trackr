@@ -195,6 +195,7 @@ export interface Portfolio {
   name: string;
   icon?: string;
   color?: string;
+  history_mode?: 'full_orders' | 'positions_only';
   initial_capital: number;
   reference_currency: string;
   risk_free_source: string;
@@ -210,6 +211,7 @@ export interface PortfolioFormData {
   name: string;
   icon?: string;
   color?: string;
+  history_mode?: 'full_orders' | 'positions_only';
   initial_capital?: number;
   reference_currency?: string;
   risk_free_source?: string;
