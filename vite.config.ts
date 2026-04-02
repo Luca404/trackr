@@ -6,7 +6,7 @@ import { execSync } from 'child_process'
 const APP_MAJOR = 1
 const APP_MINOR = 0
 const APP_PATCH = 30  // Incrementare manualmente ad ogni release pubblicata
-const APP_RELEASE_NOTES = 'Kakebo import is now safer and more complete, with recurring rules review, better recurring handling, and atomic profile import support'
+const APP_RELEASE_NOTES = 'Kakebo import is now safer and more complete, with recurring rules review, atomic profile import support, and new notifications for recurring investment actions'
 
 function getCommitMsg() {
   try {
