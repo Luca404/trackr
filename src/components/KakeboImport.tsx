@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { supabase } from '../services/supabase';
 import { apiService } from '../services/api';
 import { useData } from '../contexts/DataContext';
+import type { RecurringFrequency } from '../types';
 
 const PF_BACKEND_URL = import.meta.env.VITE_PF_BACKEND_URL || 'https://portfolio-tracker-production-3bd4.up.railway.app';
 
@@ -14,8 +15,25 @@ interface KCategoria { id: number; padreId: number | null; tipoMovimento: number
 interface KMovimento {
   id: number; contoId: number; categoriaId: number | null; sottocategoriaId: number | null;
   dataOperazione: number; note: string | null; tipo: number; contoPrelievoId: number | null; importo1: number;
+  numeroRipetizioni?: number | null; calendarField?: number | null;
 }
 interface ParsedDB { conti: KConto[]; categorie: KCategoria[]; movimenti: KMovimento[]; }
+
+interface RecurringDraft {
+  movimentoId: number;
+  enabled: boolean;
+  type: 'expense' | 'income' | 'investment';
+  sourceContoId: number;
+  portfolioContoId?: number;
+  accountName: string;
+  portfolioName?: string;
+  category: string;
+  subcategory?: string | null;
+  amount: string;
+  description: string;
+  startDate: string;
+  frequency: RecurringFrequency;
+}
 
 // Mode A: one entry per individual investment transfer
 interface InvDetail {
@@ -56,11 +74,21 @@ interface InvPosition {
 // ── helpers ────────────────────────────────────────────────────────────────────
 
 function msToDate(ms: number): string { return new Date(ms).toISOString().slice(0, 10); }
+function mapCalendarFieldToFrequency(calendarField?: number | null): RecurringFrequency {
+  if (calendarField === 1) return 'yearly';
+  if (calendarField === 2) return 'monthly';
+  return 'weekly';
+}
+function getNextDueDate(dateStr: string, frequency: RecurringFrequency): string {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  const d = new Date(Date.UTC(year, month - 1, day));
+  if (frequency === 'weekly') d.setUTCDate(d.getUTCDate() + 7);
+  if (frequency === 'monthly') d.setUTCMonth(d.getUTCMonth() + 1);
+  if (frequency === 'yearly') d.setUTCFullYear(d.getUTCFullYear() + 1);
+  return d.toISOString().slice(0, 10);
+}
 function normalizeLooseText(value?: string | null): string {
   return (value || '').trim().toLocaleLowerCase();
-}
-function chunk<T>(arr: T[], size: number): T[][] {
-  return Array.from({ length: Math.ceil(arr.length / size) }, (_, i) => arr.slice(i * size, (i + 1) * size));
 }
 function queryAll<T>(db: any, sql: string): T[] {
   const stmt = db.prepare(sql);
@@ -513,7 +541,7 @@ function TickerCard({
 // ── main component ─────────────────────────────────────────────────────────────
 
 interface Props { onClose: () => void; onDirtyChange?: (dirty: boolean) => void; }
-type Step = 'upload' | 'options' | 'categories' | 'inv_details' | 'importing' | 'done';
+type Step = 'upload' | 'options' | 'categories' | 'recurring' | 'inv_details' | 'importing' | 'done';
 type InvMode = 'orders' | 'positions';
 interface SkippedImportRecord {
   movimentoId: number;
@@ -533,7 +561,7 @@ interface AccountBalanceCheck {
 
 export default function KakeboImport({ onClose, onDirtyChange }: Props) {
   const { t } = useTranslation();
-  const { refreshAll } = useData();
+  const { accounts, categories, transactions, transfers, portfolios, refreshAll } = useData();
   const { confirm: confirmDialog, dialog: confirmDialogEl } = useConfirm();
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -546,6 +574,7 @@ export default function KakeboImport({ onClose, onDirtyChange }: Props) {
   const [invPositions, setInvPositions] = useState<InvPosition[]>([]); // mode B
   const [positionDrafts, setPositionDrafts] = useState<Record<number, InvPosition>>({});
   const [editingPositionIds, setEditingPositionIds] = useState<Record<number, string | null>>({});
+  const [recurringDrafts, setRecurringDrafts] = useState<RecurringDraft[]>([]);
   const [categoryView, setCategoryView] = useState<'expense' | 'income'>('expense');
   const [expandedCategoryIds, setExpandedCategoryIds] = useState<Set<number>>(new Set());
   const [validated, setValidated] = useState(false);
@@ -555,9 +584,31 @@ export default function KakeboImport({ onClose, onDirtyChange }: Props) {
 
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<{
-    accounts: number; transactions: number; investments: number; transfers: number; orders: number; skipped: number; skippedDetails: SkippedImportRecord[]; balanceChecks: AccountBalanceCheck[];
+    accounts: number; transactions: number; investments: number; transfers: number; orders: number; recurring: number; skipped: number; skippedDetails: SkippedImportRecord[]; balanceChecks: AccountBalanceCheck[];
   } | null>(null);
   const [progress, setProgress] = useState('');
+
+  const formatImportError = (err: any) => {
+    const raw = String(err?.message || err || '').trim();
+    const details = String(err?.details || '').trim();
+
+    if (/not authenticated/i.test(raw)) {
+      return 'Sessione scaduta. Ricarica la pagina ed effettua di nuovo l’accesso.';
+    }
+    if (/forbidden/i.test(raw)) {
+      return 'Non hai i permessi per importare nel profilo attivo.';
+    }
+    if (/profile not found/i.test(raw)) {
+      return 'Profilo attivo non trovato. Ricarica la pagina e riprova.';
+    }
+    if (/missing .* mapping/i.test(raw)) {
+      return `Import interrotto per dati interni incoerenti.${details ? ` ${details}` : ''}`;
+    }
+    if (raw) {
+      return `Import non completato. ${raw}`;
+    }
+    return 'Import non completato per un errore imprevisto.';
+  };
 
   const isBonusInvestmentMovement = (movement: KMovimento, categories: KCategoria[]): boolean => {
     if (movement.tipo !== 1 || movement.contoPrelievoId != null || !invContoIds.has(movement.contoId)) return false;
@@ -591,13 +642,15 @@ export default function KakeboImport({ onClose, onDirtyChange }: Props) {
         tipoMovimento: r.tipoMovimento as number, nome: (r.nome as string) || '',
       }));
       const movimenti = queryAll<any>(
-        db, 'SELECT id, contoId, categoriaId, sottocategoriaId, dataOperazione, note, tipo, contoPrelievoId, importo1 FROM Movimento'
+        db, 'SELECT id, contoId, categoriaId, sottocategoriaId, dataOperazione, note, tipo, contoPrelievoId, importo1, numeroRipetizioni, calendarField FROM Movimento'
       ).map(r => ({
         id: r.id as number, contoId: r.contoId as number,
         categoriaId: r.categoriaId as number | null, sottocategoriaId: r.sottocategoriaId as number | null,
         dataOperazione: r.dataOperazione as number, note: r.note as string | null,
         tipo: r.tipo as number, contoPrelievoId: r.contoPrelievoId as number | null,
         importo1: r.importo1 as number,
+        numeroRipetizioni: r.numeroRipetizioni as number | null,
+        calendarField: r.calendarField as number | null,
       }));
 
       db.close();
@@ -610,7 +663,79 @@ export default function KakeboImport({ onClose, onDirtyChange }: Props) {
     }
   };
 
-  // ── step 2→3: build inv details/positions ───────────────────────────────────
+  const handleGoToRecurring = () => {
+    if (!parsed) return;
+
+    const kCatById = new Map(parsed.categorie.map(c => [c.id, c]));
+    const catResolved: Record<number, { catName: string; subName?: string }> = {};
+    for (const c of parsed.categorie) {
+      if (c.padreId == null) {
+        catResolved[c.id] = { catName: c.nome.trim() };
+      } else {
+        const parent = kCatById.get(c.padreId);
+        catResolved[c.id] = { catName: parent ? parent.nome.trim() : c.nome.trim(), subName: c.nome.trim() };
+      }
+    }
+    const contoNameById = new Map(parsed.conti.map(c => [c.id, c.nome.trim()]));
+
+    const drafts: RecurringDraft[] = parsed.movimenti
+      .filter(m => (m.numeroRipetizioni ?? 0) > 0)
+      .sort((a, b) => a.dataOperazione - b.dataOperazione)
+      .flatMap((m): RecurringDraft[] => {
+        const startDate = msToDate(m.dataOperazione);
+        const frequency = mapCalendarFieldToFrequency(m.calendarField);
+        const amount = String(Math.abs(m.importo1));
+        const description = (m.note || '').trim();
+
+        if (m.tipo === -1 && invContoIds.has(m.contoId) && m.contoPrelievoId != null && !invContoIds.has(m.contoPrelievoId)) {
+          return [{
+            movimentoId: m.id,
+            enabled: true,
+            type: 'investment',
+            sourceContoId: m.contoPrelievoId,
+            portfolioContoId: m.contoId,
+            accountName: contoNameById.get(m.contoPrelievoId) || '—',
+            portfolioName: contoNameById.get(m.contoId) || '—',
+            category: contoNameById.get(m.contoId) || 'Investimenti',
+            subcategory: null,
+            amount,
+            description,
+            startDate,
+            frequency,
+          }];
+        }
+
+        if (m.tipo !== -1 && !invContoIds.has(m.contoId)) {
+          const catId = m.sottocategoriaId ?? m.categoriaId;
+          const resolved = catId != null ? catResolved[catId] : undefined;
+          return [{
+            movimentoId: m.id,
+            enabled: true,
+            type: m.tipo === 1 ? 'income' : 'expense',
+            sourceContoId: m.contoId,
+            accountName: contoNameById.get(m.contoId) || '—',
+            category: resolved?.catName || 'Altro',
+            subcategory: resolved?.subName || null,
+            amount,
+            description,
+            startDate,
+            frequency,
+          }];
+        }
+
+        return [];
+      });
+
+    setRecurringDrafts(drafts);
+    setStep('recurring');
+  };
+
+  const updateRecurringDraft = (movimentoId: number, updates: Partial<RecurringDraft>) => {
+    markDirty();
+    setRecurringDrafts(prev => prev.map(d => d.movimentoId === movimentoId ? { ...d, ...updates } : d));
+  };
+
+  // ── step 3→4: build inv details/positions ───────────────────────────────────
 
   const handleGoToInvDetails = () => {
     if (!parsed) return;
@@ -750,15 +875,51 @@ export default function KakeboImport({ onClose, onDirtyChange }: Props) {
       }
     }
 
-    setValidated(false);
-    setStep('importing');
-    setError(null);
-
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
       const userId = user.id;
       const profileId = apiService.getActiveProfileId();
+      const existingPortfolioIds = (await supabase.from('portfolios').select('id').eq('profile_id', profileId)).data?.map((row: any) => row.id) || [];
+      const { count: existingOrdersCount, error: ordersCountErr } = await supabase
+        .from('orders')
+        .select('id', { count: 'exact', head: true })
+        .in('portfolio_id', existingPortfolioIds.length > 0 ? existingPortfolioIds : [-1]);
+      if (ordersCountErr) throw ordersCountErr;
+      const { count: existingRecurringCount, error: recurringCountErr } = await supabase
+        .from('recurring_transactions')
+        .select('id', { count: 'exact', head: true })
+        .eq('profile_id', profileId);
+      if (recurringCountErr) throw recurringCountErr;
+
+      const confirmed = await confirmDialog(
+        [
+          'Stai per sovrascrivere il profilo attivo.',
+          '',
+          'Verranno eliminati:',
+          `- ${accounts.length} conti`,
+          `- ${categories.length} categorie`,
+          `- ${portfolios.length} portafogli`,
+          `- ${transactions.length} transazioni`,
+          `- ${transfers.length} trasferimenti`,
+          `- ${existingRecurringCount ?? 0} ricorrenze`,
+          `- ${existingOrdersCount ?? 0} ordini`,
+          '',
+          'Vuoi continuare?'
+        ].join('\n'),
+        {
+          title: 'Conferma import',
+          confirmText: 'Importa',
+          cancelText: 'Annulla',
+          isDestructive: true,
+          noBottomOffset: true,
+        }
+      );
+      if (!confirmed) return;
+
+      setValidated(false);
+      setStep('importing');
+      setError(null);
       const duplicateNormalizedNames = (values: string[]) => {
         const seen = new Set<string>();
         const duplicates = new Set<string>();
@@ -865,16 +1026,17 @@ export default function KakeboImport({ onClose, onDirtyChange }: Props) {
               continue;
             }
             const catName = invContoToCategoryName[m.contoId] ?? 'Investimenti';
-            transactionSources.push({
-              type: 'investment',
-              sourceContoId: m.contoPrelievoId,
-              category: catName,
-              subcategory: null,
-              amount,
-              description,
-              date,
-              _movId: m.id,
-            });
+          transactionSources.push({
+            type: 'investment',
+            sourceContoId: m.contoPrelievoId,
+            category: catName,
+            subcategory: null,
+            amount,
+            description,
+            date,
+            _movId: m.id,
+            _recurringKey: (m.numeroRipetizioni ?? 0) > 0 ? `mov:${m.id}` : null,
+          });
           } else {
             const fromIsInv = m.contoPrelievoId != null && invContoIds.has(m.contoPrelievoId);
             if (fromIsInv) {
@@ -929,12 +1091,11 @@ export default function KakeboImport({ onClose, onDirtyChange }: Props) {
             amount,
             description,
             date,
+            _movId: m.id,
+            _recurringKey: (m.numeroRipetizioni ?? 0) > 0 ? `mov:${m.id}` : null,
           });
         }
       }
-
-      const existingPortfolioIds = (await supabase.from('portfolios').select('id').eq('profile_id', profileId)).data?.map((row: any) => row.id) || [];
-
       // Compute imported net effect per regular account from records that will
       // actually exist in Trackr.
       const importedNetPerConto: Record<number, number> = {};
@@ -969,135 +1130,35 @@ export default function KakeboImport({ onClose, onDirtyChange }: Props) {
         }
       }
 
-      // 0. Delete existing data only after preflight completed successfully.
       setProgress(t('kakebo.resetData'));
-      await supabase.from('recurring_transactions').delete().eq('profile_id', profileId);
-      if (existingPortfolioIds.length > 0) {
-        for (const ids of chunk(existingPortfolioIds, 200)) {
-          await supabase.from('orders').delete().in('portfolio_id', ids);
-        }
-      }
-      await supabase.from('transactions').delete().eq('profile_id', profileId);
-      await supabase.from('transfers').delete().eq('profile_id', profileId);
-      await supabase.from('accounts').delete().eq('profile_id', profileId);
-      await supabase.from('categories').delete().eq('profile_id', profileId);
-      await supabase.from('portfolios').delete().eq('profile_id', profileId);
-
-      // 1. Create portfolios and accounts.
-      setProgress(t('kakebo.accounts'));
-      const invContoToPortfolioId: Record<number, number> = {};
-      const contoIdMap: Record<number, number> = {};
-      const catCreated: Record<string, number> = {};
-
-      for (const conto of investmentConti) {
-        const { data: portData, error: portErr } = await supabase
-          .from('portfolios')
-          .insert({
-            user_id: userId,
-            profile_id: profileId,
-            name: conto.nome.trim(),
-            history_mode: invMode === 'positions' ? 'positions_only' : 'full_orders',
-            initial_capital: 0,
-            reference_currency: 'EUR',
-            risk_free_source: '',
-            market_benchmark: '',
-          })
-          .select().single();
-        if (portErr) throw portErr;
-        invContoToPortfolioId[conto.id] = portData.id;
-      }
-
-      for (const c of regularConti) {
-        const initial_balance = c.variazioneSaldo1;
-        const { data, error: accErr } = await supabase
-          .from('accounts')
-          .insert({ user_id: userId, profile_id: profileId, name: c.nome.trim(), icon: '🏦', initial_balance })
-          .select().single();
-        if (accErr) throw accErr;
-        contoIdMap[c.id] = data.id;
-      }
-
-      // 2. Create categories and subcategories.
-      setProgress(t('kakebo.categories'));
-      for (const def of categoryDefs.values()) {
-        const { data, error: catErr } = await supabase
-          .from('categories')
-          .insert({ user_id: userId, profile_id: profileId, name: def.name, icon: def.icon, category_type: def.type })
-          .select().single();
-        if (catErr) throw catErr;
-        catCreated[`${def.name.toLocaleLowerCase()}|${def.type}`] = data.id;
-      }
-      const subcategoryRows = [...categoryDefs.values()].flatMap(def => {
-        const categoryId = catCreated[`${def.name.toLocaleLowerCase()}|${def.type}`];
-        return [...def.subNames].map(name => ({ category_id: categoryId, name }));
-      });
-      for (const batch of chunk(subcategoryRows, 500)) {
-        if (batch.length === 0) continue;
-        const { error: subErr } = await supabase.from('subcategories').insert(batch);
-        if (subErr) throw subErr;
-      }
-
-      // 5. Batch insert
-      setProgress(t('kakebo.transactions'));
-      let txCount = 0; let invCount = 0; let trCount = 0;
-      const mappedTxRows = transactionSources.map((row: any) => ({
-        ...row,
-        user_id: userId,
-        profile_id: profileId,
-        account_id: contoIdMap[row.sourceContoId],
-      }));
-      const regularTxRows = mappedTxRows
-        .filter((row: any) => row.type !== 'investment')
-        .map(({ _movId: _, sourceContoId: __, ...rest }) => rest);
-      const investmentTxRows = mappedTxRows
-        .filter((row: any) => row.type === 'investment')
-        .map((row: any) => ({ ...row }));
-      const movIdToTransactionId: Record<number, number> = {};
-
-      for (const batch of chunk(regularTxRows, 500)) {
-        const { error: txErr } = await supabase.from('transactions').insert(batch);
-        if (txErr) throw txErr;
-        txCount += batch.length;
-      }
-      for (const row of investmentTxRows) {
-        const { _movId, sourceContoId: _, ...dbRow } = row;
-        const { data: txData, error: txErr } = await supabase
-          .from('transactions')
-          .insert(dbRow)
-          .select('id')
-          .single();
-        if (txErr) throw txErr;
-        if (_movId != null) movIdToTransactionId[_movId] = txData.id;
-        invCount += 1;
-      }
-      const transferRowsMapped = transferRows.map((row: any) => ({
-        user_id: row.user_id,
-        profile_id: row.profile_id,
-        from_account_id: contoIdMap[row.from_source_conto_id],
-        to_account_id: contoIdMap[row.to_source_conto_id],
+      const transactionRows = transactionSources.map((row: any) => ({
+        transaction_key: row._movId != null ? `mov:${row._movId}` : null,
+        recurring_key: row._recurringKey ?? null,
+        source_conto_id: row.sourceContoId,
+        type: row.type,
+        category: row.category,
+        subcategory: row.subcategory || null,
         amount: row.amount,
         description: row.description,
         date: row.date,
+        ticker: row.ticker || null,
+        quantity: row.quantity || null,
+        price: row.price || null,
       }));
-      for (const batch of chunk(transferRowsMapped, 500)) {
-        const { error: trErr } = await supabase.from('transfers').insert(batch);
-        if (trErr) throw trErr;
-        trCount += batch.length;
-      }
 
       const balanceChecks: AccountBalanceCheck[] = regularConti.map((conto) => {
         const initialBalance = conto.variazioneSaldo1;
         let reconstructed = initialBalance;
 
-        for (const tx of mappedTxRows) {
-          if (tx.account_id !== contoIdMap[conto.id]) continue;
+        for (const tx of transactionRows) {
+          if (tx.source_conto_id !== conto.id) continue;
           if (tx.type === 'income') reconstructed += tx.amount;
           else if (tx.type === 'expense' || tx.type === 'investment') reconstructed -= tx.amount;
         }
 
-        for (const tr of transferRowsMapped) {
-          if (tr.from_account_id === contoIdMap[conto.id]) reconstructed -= tr.amount;
-          if (tr.to_account_id === contoIdMap[conto.id]) reconstructed += tr.amount;
+        for (const tr of transferRows) {
+          if (tr.from_source_conto_id === conto.id) reconstructed -= tr.amount;
+          if (tr.to_source_conto_id === conto.id) reconstructed += tr.amount;
         }
 
         const expected = Number((initialBalance + (sourceNetPerConto[conto.id] ?? 0)).toFixed(2));
@@ -1111,10 +1172,8 @@ export default function KakeboImport({ onClose, onDirtyChange }: Props) {
         };
       });
 
-      // 6. Create orders
-      let orderCount = 0;
+      const orderRows: any[] = [];
       if (invMode === 'orders') {
-        // Mode A: one order per individual transfer
         for (const m of parsed.movimenti) {
           const detail = movToDetail.get(m.id);
           if (!detail) continue;
@@ -1126,47 +1185,113 @@ export default function KakeboImport({ onClose, onDirtyChange }: Props) {
               : 'Investment transaction imported without order because ticker, quantity or price is missing');
             continue;
           }
-          const portfolioId = invContoToPortfolioId[detail.destContoId];
-          if (!portfolioId) {
-            recordSkipped(m, 'Missing portfolio mapping for investment order');
-            continue;
-          }
-          const { error: ordErr } = await supabase.from('orders').insert({
-            user_id: userId, portfolio_id: portfolioId,
-            transaction_id: detail.sourceKind === 'transfer' ? movIdToTransactionId[m.id] : undefined,
-            symbol: detail.ticker.trim().toUpperCase(), currency: 'EUR',
-            quantity: parseFloat(detail.quantity), price: parseFloat(detail.price),
-            commission: parseFloat(detail.commission || '0') || 0, order_type: 'buy', date: detail.date,
+          orderRows.push({
+            source_portfolio_conto_id: detail.destContoId,
+            transaction_key: detail.sourceKind === 'transfer' ? `mov:${m.id}` : null,
+            symbol: detail.ticker.trim().toUpperCase(),
+            isin: detail.isin || null,
+            name: detail.name || null,
+            exchange: detail.exchange || null,
+            currency: 'EUR',
+            quantity: parseFloat(detail.quantity),
+            price: parseFloat(detail.price),
+            commission: parseFloat(detail.commission || '0') || 0,
             instrument_type: detail.instrumentType,
-            isin: detail.isin || undefined,
-            name: detail.name || undefined,
-            exchange: detail.exchange || undefined,
-            ter: detail.ter || undefined,
+            order_type: 'buy',
+            date: detail.date,
+            ter: detail.ter || null,
           });
-          if (ordErr) throw ordErr;
-          orderCount++;
         }
       } else {
-        // Mode B: one order per portfolio position (current state)
         for (const pos of invPositions) {
           if (!pos.ticker.trim() || !pos.totalQty.trim() || !pos.avgPrice.trim()) continue;
-          const portfolioId = invContoToPortfolioId[pos.contoId];
-          if (!portfolioId) continue;
-          const { error: ordErr } = await supabase.from('orders').insert({
-            user_id: userId, portfolio_id: portfolioId,
-            symbol: pos.ticker.trim().toUpperCase(), currency: 'EUR',
-            quantity: parseFloat(pos.totalQty), price: parseFloat(pos.avgPrice),
-            commission: 0, order_type: 'buy', date: pos.lastDate,
+          orderRows.push({
+            source_portfolio_conto_id: pos.contoId,
+            transaction_key: null,
+            symbol: pos.ticker.trim().toUpperCase(),
+            isin: pos.isin || null,
+            name: pos.name || null,
+            exchange: pos.exchange || null,
+            currency: 'EUR',
+            quantity: parseFloat(pos.totalQty),
+            price: parseFloat(pos.avgPrice),
+            commission: 0,
             instrument_type: pos.instrumentType,
-            isin: pos.isin || undefined,
-            name: pos.name || undefined,
-            exchange: pos.exchange || undefined,
-            ter: pos.ter || undefined,
+            order_type: 'buy',
+            date: pos.lastDate,
+            ter: pos.ter || null,
           });
-          if (ordErr) throw ordErr;
-          orderCount++;
         }
       }
+
+      const recurringRows = recurringDrafts
+        .filter(rule => rule.enabled && rule.amount.trim() && rule.startDate)
+        .map((rule) => {
+          const detail = movToDetail.get(rule.movimentoId);
+          return {
+            recurring_key: `mov:${rule.movimentoId}`,
+            source_conto_id: rule.sourceContoId,
+            source_portfolio_conto_id: rule.portfolioContoId ?? null,
+            type: rule.type,
+            category: rule.category,
+            subcategory: rule.subcategory || null,
+            amount: Number(rule.amount),
+            description: rule.description.trim() || null,
+            frequency: rule.frequency,
+            start_date: rule.startDate,
+            next_due_date: getNextDueDate(rule.startDate, rule.frequency),
+            ticker: rule.type === 'investment' ? detail?.ticker?.trim().toUpperCase() || null : null,
+            isin: rule.type === 'investment' ? detail?.isin?.trim() || null : null,
+            instrument_name: rule.type === 'investment' ? detail?.name?.trim() || null : null,
+            exchange: rule.type === 'investment' ? detail?.exchange?.trim() || null : null,
+            instrument_type: rule.type === 'investment' ? detail?.instrumentType || null : null,
+            order_type: rule.type === 'investment' ? 'buy' : null,
+            currency: rule.type === 'investment' ? 'EUR' : null,
+            quantity: rule.type === 'investment' && detail?.quantity ? Number(detail.quantity) : null,
+            price: rule.type === 'investment' && detail?.price ? Number(detail.price) : null,
+          };
+        });
+
+      const payload = {
+        portfolios: investmentConti.map((conto) => ({
+          source_conto_id: conto.id,
+          name: conto.nome.trim(),
+          history_mode: invMode === 'positions' ? 'positions_only' : 'full_orders',
+          initial_capital: 0,
+          reference_currency: 'EUR',
+          risk_free_source: 'auto',
+          market_benchmark: 'auto',
+        })),
+        accounts: regularConti.map((conto) => ({
+          source_conto_id: conto.id,
+          name: conto.nome.trim(),
+          icon: '🏦',
+          initial_balance: conto.variazioneSaldo1,
+        })),
+        categories: [...categoryDefs.values()].map((def) => ({
+          key: `${def.name.toLocaleLowerCase()}|${def.type}`,
+          name: def.name,
+          type: def.type,
+          icon: def.icon,
+          subcategories: [...def.subNames],
+        })),
+        transactions: transactionRows,
+        transfers: transferRows.map((row: any) => ({
+          from_source_conto_id: row.from_source_conto_id,
+          to_source_conto_id: row.to_source_conto_id,
+          amount: row.amount,
+          description: row.description,
+          date: row.date,
+        })),
+        orders: orderRows,
+        recurring_transactions: recurringRows,
+      };
+
+      const { data: importResult, error: importErr } = await supabase.rpc('import_kakebo_profile_atomic', {
+        p_profile_id: profileId,
+        p_payload: payload,
+      });
+      if (importErr) throw importErr;
 
       setProgress('');
       clearDirty();
@@ -1174,11 +1299,12 @@ export default function KakeboImport({ onClose, onDirtyChange }: Props) {
         console.warn('[KakeboImport] skipped records:', skippedDetails);
       }
       setResult({
-        accounts: Object.keys(contoIdMap).length,
-        transactions: txCount,
-        investments: invCount,
-        transfers: trCount,
-        orders: orderCount,
+        accounts: importResult?.accounts ?? regularConti.length,
+        transactions: importResult?.transactions ?? transactionRows.filter((row: any) => row.type !== 'investment').length,
+        investments: transactionRows.filter((row: any) => row.type === 'investment').length,
+        transfers: importResult?.transfers ?? transferRows.length,
+        orders: importResult?.orders ?? orderRows.length,
+        recurring: importResult?.recurring ?? recurringRows.length,
         skipped,
         skippedDetails,
         balanceChecks,
@@ -1187,8 +1313,8 @@ export default function KakeboImport({ onClose, onDirtyChange }: Props) {
       await refreshAll();
 
     } catch (e: any) {
-      setError(e.message || String(e));
-      setStep(invDetails.length > 0 ? 'inv_details' : 'options');
+      setError(formatImportError(e));
+      setStep(invDetails.length > 0 ? 'inv_details' : recurringDrafts.length > 0 ? 'recurring' : 'options');
     }
   };
 
@@ -1429,6 +1555,129 @@ export default function KakeboImport({ onClose, onDirtyChange }: Props) {
           {error && <p className="text-sm text-red-500 dark:text-red-400">{error}</p>}
           <div className="sticky bottom-0 bg-white dark:bg-gray-900 pt-3 border-t border-gray-100 dark:border-gray-800 flex gap-2">
             <button className="flex-1 btn-secondary text-sm" onClick={() => setStep('options')}>Indietro</button>
+            <button className="flex-1 btn-primary text-sm" onClick={handleGoToRecurring}>{t('kakebo.next')}</button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Recurring ── */}
+      {step === 'recurring' && parsed && (
+        <div className="space-y-4">
+          <div>
+            <div className="text-sm font-medium text-gray-700 dark:text-gray-300">Transazioni ricorrenti</div>
+            <div className="text-xs text-gray-500 dark:text-gray-400">
+              {recurringDrafts.length > 0
+                ? `${recurringDrafts.length} regole rilevate`
+                : 'Nessuna ricorrenza rilevata nel database Kakebo'}
+            </div>
+          </div>
+
+          <div className="space-y-3 max-h-[420px] overflow-y-auto pr-1">
+            {recurringDrafts.length > 0 ? recurringDrafts.map((rule) => (
+              <div
+                key={rule.movimentoId}
+                className={`rounded-2xl border p-4 space-y-3 ${rule.enabled
+                  ? 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900/40'
+                  : 'border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900/20 opacity-75'}`}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 text-sm font-medium text-gray-800 dark:text-gray-200">
+                      <span className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                        rule.type === 'income'
+                          ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300'
+                          : rule.type === 'expense'
+                            ? 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300'
+                            : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'
+                      }`}>
+                        {rule.type === 'income' ? 'Entrata' : rule.type === 'expense' ? 'Uscita' : 'Investimento'}
+                      </span>
+                      <span className="truncate">{rule.category}</span>
+                    </div>
+                    <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                      {rule.type === 'investment'
+                        ? `${rule.accountName} → ${rule.portfolioName}`
+                        : rule.subcategory
+                          ? `${rule.accountName} · ${rule.subcategory}`
+                          : rule.accountName}
+                    </div>
+                  </div>
+                  <label className="inline-flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 shrink-0">
+                    <input
+                      type="checkbox"
+                      checked={rule.enabled}
+                      onChange={(e) => updateRecurringDraft(rule.movimentoId, { enabled: e.target.checked })}
+                      className="rounded border-gray-300 text-primary-500 focus:ring-primary-500"
+                    />
+                    Importa
+                  </label>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-medium uppercase tracking-wide text-gray-400 mb-1">Importo</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={rule.amount}
+                      onChange={(e) => updateRecurringDraft(rule.movimentoId, { amount: e.target.value })}
+                      className="input-field text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-medium uppercase tracking-wide text-gray-400 mb-1">Frequenza</label>
+                    <div className="flex rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/60">
+                      {([
+                        ['weekly', 'Sett.'],
+                        ['monthly', 'Mens.'],
+                        ['yearly', 'Ann.'],
+                      ] as const).map(([freq, label]) => (
+                        <button
+                          key={freq}
+                          type="button"
+                          onClick={() => updateRecurringDraft(rule.movimentoId, { frequency: freq })}
+                          className={`flex-1 py-2 text-xs font-medium transition-colors ${
+                            rule.frequency === freq
+                              ? 'bg-primary-500 text-white'
+                              : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700/70'
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-medium uppercase tracking-wide text-gray-400 mb-1">Da</label>
+                    <input
+                      type="date"
+                      value={rule.startDate}
+                      onChange={(e) => updateRecurringDraft(rule.movimentoId, { startDate: e.target.value })}
+                      className="input-field text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-medium uppercase tracking-wide text-gray-400 mb-1">Descrizione</label>
+                    <input
+                      type="text"
+                      value={rule.description}
+                      onChange={(e) => updateRecurringDraft(rule.movimentoId, { description: e.target.value })}
+                      placeholder="Facoltativa"
+                      className="input-field text-sm"
+                    />
+                  </div>
+                </div>
+              </div>
+            )) : (
+              <div className="text-xs text-gray-400 dark:text-gray-500">
+                Nessuna regola da rivedere.
+              </div>
+            )}
+          </div>
+
+          {error && <p className="text-sm text-red-500 dark:text-red-400">{error}</p>}
+          <div className="sticky bottom-0 bg-white dark:bg-gray-900 pt-3 border-t border-gray-100 dark:border-gray-800 flex gap-2">
+            <button className="flex-1 btn-secondary text-sm" onClick={() => setStep('categories')}>Indietro</button>
             <button className="flex-1 btn-primary text-sm" onClick={handleGoToInvDetails}>{t('kakebo.next')}</button>
           </div>
         </div>
@@ -1648,7 +1897,7 @@ export default function KakeboImport({ onClose, onDirtyChange }: Props) {
           {error && <p className="text-sm text-red-500 dark:text-red-400">{error}</p>}
 
           <div className="sticky bottom-0 bg-white dark:bg-gray-900 pt-3 border-t border-gray-100 dark:border-gray-800 flex gap-2">
-            <button className="flex-1 btn-secondary text-sm" onClick={() => { setError(null); setStep('categories'); }}>Indietro</button>
+            <button className="flex-1 btn-secondary text-sm" onClick={() => { setError(null); setStep('recurring'); }}>Indietro</button>
             <button className="flex-1 btn-primary text-sm" onClick={() => handleImport()}>{t('kakebo.import')}</button>
           </div>
         </div>
@@ -1702,6 +1951,7 @@ export default function KakeboImport({ onClose, onDirtyChange }: Props) {
             <div className="text-sm text-green-700 dark:text-green-400 space-y-0.5">
               <div>{t('kakebo.accountsCreated', { count: result.accounts })}</div>
               <div>{t('kakebo.resultLine', { tx: result.transactions, inv: result.investments, tr: result.transfers })}</div>
+              {result.recurring > 0 && <div>{result.recurring} ricorrenze create</div>}
               {result.orders > 0 && <div>{t('kakebo.ordersCreated', { count: result.orders })}</div>}
               {result.skipped > 0 && <div className="text-xs opacity-75">{t('kakebo.skipped', { count: result.skipped })}</div>}
             </div>

@@ -132,10 +132,11 @@ function mapRecurringTransaction(row: any): RecurringTransaction {
 
 // Calcola la prossima data in base alla frequenza
 function getNextDueDate(dateStr: string, frequency: RecurringFrequency): string {
-  const d = new Date(dateStr + 'T00:00:00');
-  if (frequency === 'weekly')  d.setDate(d.getDate() + 7);
-  if (frequency === 'monthly') d.setMonth(d.getMonth() + 1);
-  if (frequency === 'yearly')  d.setFullYear(d.getFullYear() + 1);
+  const [year, month, day] = dateStr.split('-').map(Number);
+  const d = new Date(Date.UTC(year, month - 1, day));
+  if (frequency === 'weekly') d.setUTCDate(d.getUTCDate() + 7);
+  if (frequency === 'monthly') d.setUTCMonth(d.getUTCMonth() + 1);
+  if (frequency === 'yearly') d.setUTCFullYear(d.getUTCFullYear() + 1);
   return d.toISOString().split('T')[0];
 }
 
@@ -715,27 +716,34 @@ class ApiService {
           .select()
           .single();
 
-        if (!txErr && tx) {
-          created.push(mapTransaction(tx));
-          if (rule.type === 'investment' && rule.portfolio_id && rule.ticker) {
-            await supabase
-              .from('orders')
-              .insert({
-                user_id: userId,
-                portfolio_id: rule.portfolio_id,
-                symbol: rule.ticker,
-                isin: rule.isin,
-                name: rule.instrument_name,
-                exchange: rule.exchange,
-                currency: rule.currency || 'EUR',
-                quantity: rule.quantity ?? 0,
-                price: rule.price ?? 0,
-                commission: Math.max(0, Math.abs(rule.amount) - ((rule.quantity ?? 0) * (rule.price ?? 0))),
-                instrument_type: rule.instrument_type,
-                order_type: rule.order_type || 'buy',
-                date: nextDate,
-                transaction_id: tx.id,
-              });
+        if (txErr || !tx) {
+          console.error('Recurring transaction creation failed:', { ruleId: rule.id, nextDate, error: txErr });
+          throw txErr || new Error(`Failed to create recurring transaction for rule ${rule.id}`);
+        }
+
+        created.push(mapTransaction(tx));
+        if (rule.type === 'investment' && rule.portfolio_id && rule.ticker) {
+          const { error: orderErr } = await supabase
+            .from('orders')
+            .insert({
+              user_id: userId,
+              portfolio_id: rule.portfolio_id,
+              symbol: rule.ticker,
+              isin: rule.isin,
+              name: rule.instrument_name,
+              exchange: rule.exchange,
+              currency: rule.currency || 'EUR',
+              quantity: rule.quantity ?? 0,
+              price: rule.price ?? 0,
+              commission: Math.max(0, Math.abs(rule.amount) - ((rule.quantity ?? 0) * (rule.price ?? 0))),
+              instrument_type: rule.instrument_type,
+              order_type: rule.order_type || 'buy',
+              date: nextDate,
+              transaction_id: tx.id,
+            });
+          if (orderErr) {
+            console.error('Recurring investment order creation failed:', { ruleId: rule.id, nextDate, error: orderErr });
+            throw orderErr;
           }
         }
         nextDate = getNextDueDate(nextDate, rule.frequency);
