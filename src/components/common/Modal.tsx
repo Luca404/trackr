@@ -8,6 +8,7 @@ interface ModalProps {
   title: string | ReactNode;
   children: ReactNode;
   noBottomOffset?: boolean; // per pagine senza bottom nav (es. SettingsPage)
+  disableHistoryIntercept?: boolean;
 }
 
 // Stack globale per gestire modal annidati: solo il modal più in alto risponde al back
@@ -79,13 +80,19 @@ export function registerBackHandler(onBack: () => void): () => void {
   };
 }
 
-export default function Modal({ isOpen, onClose, onBackdropClick, title, children, noBottomOffset }: ModalProps) {
+export default function Modal({ isOpen, onClose, onBackdropClick, title, children, noBottomOffset, disableHistoryIntercept = false }: ModalProps) {
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
   const closedViaBackRef = useRef(false);
 
   useEffect(() => {
     if (!isOpen) return;
+    if (disableHistoryIntercept) {
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = '';
+      };
+    }
 
     const id = ++_nextId;
     closedViaBackRef.current = false;

@@ -5,18 +5,38 @@ import { useData } from '../../contexts/DataContext';
 import { useSwipeNavigation } from '../../hooks/useSwipeNavigation';
 import { useTranslation } from 'react-i18next';
 import { useRegisterSW } from 'virtual:pwa-register/react';
+import { apiService } from '../../services/api';
+import { getDueDatesUntil } from '../../services/recurring';
+import Modal from '../common/Modal';
+import TransactionForm from '../transactions/TransactionForm';
+import type { RecurringTransaction, TransactionFormData } from '../../types';
 
 interface LayoutProps {
   children: ReactNode;
 }
 
+interface InvestmentNotificationItem {
+  key: string;
+  rule: RecurringTransaction;
+  pendingCount: number;
+}
+
+const PENDING_NOTIFICATION_STORAGE_KEY = 'trackr_pending_investment_notification';
+
 export default function Layout({ children }: LayoutProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuth();
-  const { refreshAll } = useData();
+  const { refreshAll, activeProfile, portfolios } = useData();
   const [isRefreshing, setIsRefreshing] = useState(false);
   const { t } = useTranslation();
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const [investmentNotifications, setInvestmentNotifications] = useState<InvestmentNotificationItem[]>([]);
+  const [selectedNotification, setSelectedNotification] = useState<InvestmentNotificationItem | null>(null);
+  const [isNotificationModalOpen, setIsNotificationModalOpen] = useState(false);
+  const [headerBottom, setHeaderBottom] = useState(0);
+  const headerRef = useRef<HTMLElement>(null);
+  const notificationsRef = useRef<HTMLDivElement>(null);
 
   const swRegistrationRef = useRef<ServiceWorkerRegistration | undefined>(undefined);
   const { needRefresh: [needRefresh], updateServiceWorker } = useRegisterSW({
@@ -38,12 +58,159 @@ export default function Layout({ children }: LayoutProps) {
       .catch(() => {});
   }, [needRefresh]);
 
+  const loadInvestmentNotifications = async () => {
+    try {
+      const due = await apiService.getDueInvestmentRecurringTransactions();
+      const today = new Date().toISOString().split('T')[0];
+      const items = due.map((rule) => ({
+        key: `${rule.id}:${rule.next_due_date}`,
+        rule,
+        pendingCount: getDueDatesUntil(rule.next_due_date, rule.frequency, today).dueDates.length,
+      }));
+      setInvestmentNotifications(items);
+    } catch (error) {
+      console.error('Error loading investment recurring notifications:', error);
+    }
+  };
+
+  useEffect(() => {
+    if (!activeProfile) return;
+    loadInvestmentNotifications();
+  }, [activeProfile?.id]);
+
+  useEffect(() => {
+    const onRefresh = () => { loadInvestmentNotifications(); };
+    window.addEventListener('trackr:refresh', onRefresh);
+    return () => window.removeEventListener('trackr:refresh', onRefresh);
+  }, [activeProfile?.id]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (!notificationsRef.current?.contains(event.target as Node)) {
+        setIsNotificationsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  useEffect(() => {
+    const updateHeaderBottom = () => {
+      setHeaderBottom(headerRef.current?.getBoundingClientRect().bottom ?? 0);
+    };
+    updateHeaderBottom();
+    window.addEventListener('resize', updateHeaderBottom);
+    return () => window.removeEventListener('resize', updateHeaderBottom);
+  }, []);
+
+  useEffect(() => {
+    if (!isNotificationsOpen) return;
+    setHeaderBottom(headerRef.current?.getBoundingClientRect().bottom ?? 0);
+  }, [isNotificationsOpen]);
+
+  useEffect(() => {
+    if (location.pathname !== '/transactions') return;
+    const raw = sessionStorage.getItem(PENDING_NOTIFICATION_STORAGE_KEY);
+    if (!raw) return;
+
+    try {
+      const item = JSON.parse(raw) as InvestmentNotificationItem;
+      setSelectedNotification(item);
+      setIsNotificationModalOpen(true);
+    } catch (error) {
+      console.error('Error restoring pending investment notification:', error);
+    } finally {
+      sessionStorage.removeItem(PENDING_NOTIFICATION_STORAGE_KEY);
+    }
+  }, [location.pathname]);
+
   const handleRefresh = async () => {
     setIsRefreshing(true);
     swRegistrationRef.current?.update();
     await refreshAll();
+    await loadInvestmentNotifications();
     window.dispatchEvent(new CustomEvent('trackr:refresh'));
     setIsRefreshing(false);
+  };
+
+  const handleNotificationClick = (item: InvestmentNotificationItem) => {
+    setIsNotificationsOpen(false);
+    if (location.pathname !== '/transactions') {
+      sessionStorage.setItem(PENDING_NOTIFICATION_STORAGE_KEY, JSON.stringify(item));
+      navigate('/transactions');
+      return;
+    }
+    setSelectedNotification(item);
+    setIsNotificationModalOpen(true);
+  };
+
+  const closeNotificationModal = () => {
+    setIsNotificationModalOpen(false);
+    setSelectedNotification(null);
+    sessionStorage.removeItem(PENDING_NOTIFICATION_STORAGE_KEY);
+  };
+
+  const handleNotificationSubmit = async (data: TransactionFormData) => {
+    if (!selectedNotification) return;
+    const newTransaction = await apiService.createTransaction({
+      ...data,
+      recurring_id: selectedNotification.rule.id,
+      recurrence: undefined,
+    });
+
+    if (data.type === 'investment' && data.portfolio_id && data.ticker) {
+      const qty = data.quantity ?? 0;
+      const price = data.price ?? 0;
+      const grossAmount = Math.abs(data.amount);
+      const commission = grossAmount - qty * price;
+      await apiService.createOrder({
+        portfolio_id: data.portfolio_id,
+        symbol: data.ticker,
+        isin: data.isin,
+        name: data.instrument_name,
+        exchange: data.exchange,
+        instrument_type: data.instrument_type,
+        ter: data.ter,
+        currency: 'EUR',
+        quantity: qty,
+        price,
+        commission: commission > 0 ? commission : 0,
+        order_type: data.order_type || 'buy',
+        date: data.date,
+        transaction_id: newTransaction.id,
+      });
+      localStorage.removeItem('pf_summaries_cache');
+    }
+
+    await apiService.advanceRecurringTransactionOccurrence(selectedNotification.rule.id, selectedNotification.rule.next_due_date);
+    await refreshAll();
+    await loadInvestmentNotifications();
+    window.dispatchEvent(new CustomEvent('trackr:refresh'));
+    closeNotificationModal();
+  };
+
+  const notificationInitialData: TransactionFormData | undefined = selectedNotification ? {
+    type: 'investment',
+    category: selectedNotification.rule.category,
+    subcategory: selectedNotification.rule.subcategory,
+    amount: Number(selectedNotification.rule.amount),
+    description: selectedNotification.rule.description || '',
+    date: selectedNotification.rule.next_due_date,
+    account_id: selectedNotification.rule.account_id,
+    portfolio_id: selectedNotification.rule.portfolio_id,
+    ticker: selectedNotification.rule.ticker,
+    quantity: selectedNotification.rule.quantity ? Number(selectedNotification.rule.quantity) : undefined,
+    price: selectedNotification.rule.price ? Number(selectedNotification.rule.price) : undefined,
+    isin: selectedNotification.rule.isin,
+    instrument_name: selectedNotification.rule.instrument_name,
+    exchange: selectedNotification.rule.exchange,
+    instrument_type: selectedNotification.rule.instrument_type,
+    order_type: selectedNotification.rule.order_type,
+  } : undefined;
+
+  const getPortfolioName = (portfolioId?: number | null) => {
+    if (!portfolioId) return null;
+    return portfolios.find((portfolio) => portfolio.id === portfolioId)?.name ?? null;
   };
 
   const navItems = [
@@ -69,7 +236,7 @@ export default function Layout({ children }: LayoutProps) {
       }}
     >
       {/* Header */}
-      <header className="bg-white dark:bg-gray-800 shadow-sm flex-shrink-0 z-10">
+      <header ref={headerRef} className="bg-white dark:bg-gray-800 shadow-sm flex-shrink-0 z-10">
         <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
           <button
             onClick={() => navigate('/transactions')}
@@ -84,9 +251,80 @@ export default function Layout({ children }: LayoutProps) {
             <span className="text-sm text-gray-600 dark:text-gray-400 hidden sm:inline">
               {user?.name}
             </span>
+            <div className="relative flex h-6 items-center" ref={notificationsRef}>
+              <button
+                onClick={() => setIsNotificationsOpen(prev => !prev)}
+                className={`relative inline-flex h-6 w-6 items-center justify-center transition-colors ${
+                  isNotificationsOpen
+                    ? 'text-primary-600 dark:text-primary-400'
+                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+                }`}
+                title="Notifiche"
+              >
+                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0a3 3 0 11-6 0m6 0H9" />
+                </svg>
+                {investmentNotifications.length > 0 && (
+                  <span className="absolute -top-1 -right-1 min-w-[1.1rem] h-[1.1rem] px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center">
+                    {investmentNotifications.length}
+                  </span>
+                )}
+              </button>
+              {isNotificationsOpen && (
+                <div
+                  className="fixed left-0 right-0 z-50 border-t border-gray-200 dark:border-gray-700 bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm shadow-lg"
+                  style={{ top: `${headerBottom}px` }}
+                >
+                  <div className="max-w-7xl mx-auto px-4">
+                    {investmentNotifications.length > 0 ? (
+                      <div className="max-h-[min(26rem,calc(100dvh-10rem))] overflow-y-auto">
+                        {investmentNotifications.map((item) => (
+                          <button
+                            key={item.key}
+                            onClick={() => handleNotificationClick(item)}
+                            className="w-full px-1 py-3 text-left hover:bg-gray-50 dark:hover:bg-gray-700/60 transition-colors border-b last:border-b-0 border-gray-100 dark:border-gray-700"
+                          >
+                            <div className="flex items-start gap-3">
+                              <span className="text-xl">🔔</span>
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-2">
+                                  <div className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+                                    {item.rule.ticker || item.rule.instrument_name || item.rule.category}
+                                  </div>
+                                  {item.pendingCount > 1 && (
+                                    <span className="shrink-0 inline-flex min-w-[1.25rem] h-5 px-1.5 rounded-full bg-primary-100 dark:bg-primary-900/40 text-primary-700 dark:text-primary-300 text-[10px] font-bold items-center justify-center">
+                                      {item.pendingCount}
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                  {item.rule.next_due_date} · {item.rule.quantity ? `${item.rule.quantity} quote` : 'quantita da confermare'}
+                                </div>
+                                {getPortfolioName(item.rule.portfolio_id) && (
+                                  <div className="text-xs text-gray-500 dark:text-gray-400 mt-1 truncate">
+                                    {getPortfolioName(item.rule.portfolio_id)}
+                                  </div>
+                                )}
+                                {item.rule.description && (
+                                  <div className="text-xs text-gray-500 dark:text-gray-400 mt-1 truncate">{item.rule.description}</div>
+                                )}
+                              </div>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="py-6 text-sm text-gray-500 dark:text-gray-400 text-center">
+                        Nessuna notifica
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
             <button
               onClick={handleRefresh}
-              className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 transition-colors"
+              className="inline-flex h-6 w-6 items-center justify-center text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 transition-colors"
               title="Refresh"
             >
               <svg className={`w-6 h-6 ${isRefreshing ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -95,7 +333,7 @@ export default function Layout({ children }: LayoutProps) {
             </button>
             <button
               onClick={() => navigate('/settings')}
-              className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 transition-colors"
+              className="inline-flex h-6 w-6 items-center justify-center text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 transition-colors"
               title={t('settings.title')}
             >
               <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -163,6 +401,21 @@ export default function Layout({ children }: LayoutProps) {
           ))}
         </div>
       </nav>
+
+      <Modal
+        isOpen={isNotificationModalOpen}
+        onClose={closeNotificationModal}
+        title="Completa investimento ricorrente"
+        disableHistoryIntercept
+      >
+        <TransactionForm
+          onSubmit={handleNotificationSubmit}
+          onCancel={closeNotificationModal}
+          initialData={notificationInitialData}
+          initialRecurringId={selectedNotification?.rule.id}
+          disableRecurringEditing
+        />
+      </Modal>
     </div>
   );
 }

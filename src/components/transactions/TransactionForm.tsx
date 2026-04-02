@@ -20,14 +20,20 @@ interface TransactionFormProps {
   initialRecurringId?: number;
   onDeleteRecurringRule?: () => Promise<void>;
   initialTransactionId?: number;
+  disableRecurringEditing?: boolean;
 }
 
-export default function TransactionForm({ onSubmit, onCancel, initialData, isEditMode, onDelete, isRecurring, initialRecurringId, onDeleteRecurringRule, initialTransactionId }: TransactionFormProps) {
+export default function TransactionForm({ onSubmit, onCancel, initialData, isEditMode, onDelete, isRecurring, initialRecurringId, onDeleteRecurringRule, initialTransactionId, disableRecurringEditing = false }: TransactionFormProps) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { formatCurrency, numberFormat } = useSettings();
   const { categories: allCategories, accounts: allAccounts, portfolios: allPortfolios } = useData();
   const [currentType, setCurrentType] = useState<TransactionType>(initialData?.type || 'expense');
+  const initialPortfolio = initialData?.portfolio_id
+    ? allPortfolios.find(p => p.id === initialData.portfolio_id) ?? null
+    : initialData?.category
+      ? allPortfolios.find(p => p.name === initialData.category) ?? null
+      : null;
 
   const categories = useMemo(() => {
     if (currentType === 'transfer') return [];
@@ -63,7 +69,7 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
   });
   const [isInvestmentDraftValid, setIsInvestmentDraftValid] = useState(false);
 
-  const [selectedPortfolio, setSelectedPortfolio] = useState<Portfolio | null>(null);
+  const [selectedPortfolio, setSelectedPortfolio] = useState<Portfolio | null>(initialPortfolio);
   const [investmentOrders, setInvestmentOrders] = useState<Order[]>([]);
   const [linkedOrder, setLinkedOrder] = useState<Order | null>(null);
 
@@ -148,6 +154,18 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
       setSelectedPortfolio(allPortfolios[0] ?? null);
     }
   }, [isEditMode, currentType, allPortfolios, initialData?.portfolio_id, initialData?.category]);
+
+  // Nel flusso notifica il form non e in edit mode, ma il portafoglio e gia noto.
+  useEffect(() => {
+    if (isEditMode || currentType !== 'investment' || allPortfolios.length === 0 || selectedPortfolio) return;
+    if (initialData?.portfolio_id) {
+      const p = allPortfolios.find(portfolio => portfolio.id === initialData.portfolio_id);
+      if (p) setSelectedPortfolio(p);
+    } else if (initialData?.category) {
+      const p = allPortfolios.find(portfolio => portfolio.name === initialData.category);
+      if (p) setSelectedPortfolio(p);
+    }
+  }, [isEditMode, currentType, allPortfolios, initialData?.portfolio_id, initialData?.category, selectedPortfolio]);
 
   useEffect(() => {
     if (currentType !== 'investment' || !selectedPortfolio) {
@@ -497,9 +515,9 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
         onClose={() => setShowDateSelector(false)}
         date={date}
         onDateChange={setDate}
-        allowRecurring={currentType !== 'transfer'}
+        allowRecurring={!disableRecurringEditing && currentType !== 'transfer'}
         recurrence={recurrence}
-        onRecurrenceChange={setRecurrence}
+        onRecurrenceChange={disableRecurringEditing ? undefined : setRecurrence}
       />
 
       {/* Confirm Dialog */}
@@ -540,6 +558,26 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
   );
 
   // ── Griglia selezione portafoglio (investment, nuova transazione) ─────────
+  const isWaitingForInitialPortfolio =
+    disableRecurringEditing &&
+    currentType === 'investment' &&
+    !selectedPortfolio &&
+    Boolean(initialData?.portfolio_id || initialData?.category);
+
+  if (isWaitingForInitialPortfolio) {
+    return (
+      <div className="space-y-4">
+        {tabSelector}
+        <div className="flex flex-col items-center justify-center py-10 text-center">
+          <div className="w-8 h-8 border-2 border-primary-500 border-t-transparent rounded-full animate-spin mb-3" />
+          <div className="text-sm text-gray-600 dark:text-gray-400">
+            Caricamento portafoglio...
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (currentType === 'investment' && !selectedPortfolio) {
     return (
       <div onTouchStart={handleCategorySwipeStart} onTouchEnd={handleCategorySwipeEnd} className="space-y-4">

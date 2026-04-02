@@ -3,6 +3,7 @@ import { useConfirm } from '../hooks/useConfirm';
 import { useTranslation } from 'react-i18next';
 import { supabase } from '../services/supabase';
 import { apiService } from '../services/api';
+import { getNextDueDate } from '../services/recurring';
 import { useData } from '../contexts/DataContext';
 import type { RecurringFrequency } from '../types';
 
@@ -78,14 +79,6 @@ function mapCalendarFieldToFrequency(calendarField?: number | null): RecurringFr
   if (calendarField === 1) return 'yearly';
   if (calendarField === 2) return 'monthly';
   return 'weekly';
-}
-function getNextDueDate(dateStr: string, frequency: RecurringFrequency): string {
-  const [year, month, day] = dateStr.split('-').map(Number);
-  const d = new Date(Date.UTC(year, month - 1, day));
-  if (frequency === 'weekly') d.setUTCDate(d.getUTCDate() + 7);
-  if (frequency === 'monthly') d.setUTCMonth(d.getUTCMonth() + 1);
-  if (frequency === 'yearly') d.setUTCFullYear(d.getUTCFullYear() + 1);
-  return d.toISOString().slice(0, 10);
 }
 function normalizeLooseText(value?: string | null): string {
   return (value || '').trim().toLocaleLowerCase();

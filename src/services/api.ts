@@ -17,9 +17,14 @@ import type {
   OrderFormData,
   User,
   RecurringTransaction,
-  RecurringFrequency,
   UserProfile,
 } from '../types';
+import {
+  buildRecurringInsertPayload,
+  buildRecurringUpdatePayload,
+  getDueDatesUntil,
+  getNextDueDate,
+} from './recurring';
 
 async function getCurrentUserId(): Promise<string> {
   const { data: { user } } = await supabase.auth.getUser();
@@ -131,15 +136,6 @@ function mapRecurringTransaction(row: any): RecurringTransaction {
 }
 
 // Calcola la prossima data in base alla frequenza
-function getNextDueDate(dateStr: string, frequency: RecurringFrequency): string {
-  const [year, month, day] = dateStr.split('-').map(Number);
-  const d = new Date(Date.UTC(year, month - 1, day));
-  if (frequency === 'weekly') d.setUTCDate(d.getUTCDate() + 7);
-  if (frequency === 'monthly') d.setUTCMonth(d.getUTCMonth() + 1);
-  if (frequency === 'yearly') d.setUTCFullYear(d.getUTCFullYear() + 1);
-  return d.toISOString().split('T')[0];
-}
-
 function mapPortfolio(row: any): Portfolio {
   return {
     id: row.id,
@@ -626,14 +622,13 @@ class ApiService {
   ): Promise<RecurringTransaction> {
     const userId = await getCurrentUserId();
     const profileId = this.getActiveProfileId();
+    const payload = buildRecurringInsertPayload(formData, {
+      user_id: userId,
+      profile_id: profileId,
+    });
     const { data, error } = await supabase
       .from('recurring_transactions')
-      .insert({
-        ...formData,
-        user_id: userId,
-        profile_id: profileId,
-        next_due_date: getNextDueDate(formData.start_date, formData.frequency),
-      })
+      .insert(payload)
       .select()
       .single();
     if (error) throw error;
@@ -650,16 +645,29 @@ class ApiService {
     return data ? mapRecurringTransaction(data) : null;
   }
 
+  async getDueInvestmentRecurringTransactions(): Promise<RecurringTransaction[]> {
+    const profileId = this.getActiveProfileId();
+    const today = new Date().toISOString().split('T')[0];
+    const { data, error } = await supabase
+      .from('recurring_transactions')
+      .select('*')
+      .eq('profile_id', profileId)
+      .eq('type', 'investment')
+      .lte('next_due_date', today)
+      .order('next_due_date', { ascending: true })
+      .order('id', { ascending: true });
+    if (error) throw error;
+    return (data || []).map(mapRecurringTransaction);
+  }
+
   async updateRecurringTransaction(
     id: number,
     formData: Partial<Omit<RecurringTransaction, 'id' | 'user_id' | 'created_at' | 'next_due_date'>>
   ): Promise<RecurringTransaction> {
-    const payload: Record<string, any> = { ...formData };
-    const startDate = (formData.start_date as string | undefined) ?? undefined;
-    const frequency = (formData.frequency as RecurringFrequency | undefined) ?? undefined;
-    if (startDate && frequency) {
-      payload.next_due_date = getNextDueDate(startDate, frequency);
-    }
+    const current = await this.getRecurringTransaction(id);
+    if (!current) throw new Error('Recurring transaction not found');
+
+    const payload = buildRecurringUpdatePayload(current, formData);
     const { data, error } = await supabase
       .from('recurring_transactions')
       .update(payload)
@@ -675,6 +683,35 @@ class ApiService {
     if (error) throw error;
   }
 
+  async advanceRecurringTransactionOccurrence(id: number, dueDate: string): Promise<RecurringTransaction> {
+    const current = await this.getRecurringTransaction(id);
+    if (!current) throw new Error('Recurring transaction not found');
+    const next_due_date = getNextDueDate(dueDate, current.frequency);
+    const { data, error } = await supabase
+      .from('recurring_transactions')
+      .update({ next_due_date })
+      .eq('id', id)
+      .select()
+      .single();
+    if (error) throw error;
+    return mapRecurringTransaction(data);
+  }
+
+  async rewindRecurringTransactionOccurrence(id: number, dueDate: string): Promise<RecurringTransaction> {
+    const current = await this.getRecurringTransaction(id);
+    if (!current) throw new Error('Recurring transaction not found');
+
+    const next_due_date = current.next_due_date <= dueDate ? current.next_due_date : dueDate;
+    const { data, error } = await supabase
+      .from('recurring_transactions')
+      .update({ next_due_date })
+      .eq('id', id)
+      .select()
+      .single();
+    if (error) throw error;
+    return mapRecurringTransaction(data);
+  }
+
   // Controlla tutte le regole con next_due_date <= oggi e crea le transazioni mancanti.
   // Chiamato all'avvio dell'app in DataContext.
   async processRecurringTransactions(): Promise<Transaction[]> {
@@ -685,6 +722,7 @@ class ApiService {
       .from('recurring_transactions')
       .select('*')
       .eq('user_id', userId)
+      .neq('type', 'investment')
       .lte('next_due_date', today);
 
     if (error) throw error;
@@ -693,9 +731,9 @@ class ApiService {
     const created: Transaction[] = [];
 
     for (const rule of due) {
-      let nextDate: string = rule.next_due_date;
+      const { dueDates, nextDueDate } = getDueDatesUntil(rule.next_due_date, rule.frequency, today);
 
-      while (nextDate <= today) {
+      for (const nextDate of dueDates) {
         const { data: tx, error: txErr } = await supabase
           .from('transactions')
           .insert({
@@ -746,12 +784,11 @@ class ApiService {
             throw orderErr;
           }
         }
-        nextDate = getNextDueDate(nextDate, rule.frequency);
       }
 
       await supabase
         .from('recurring_transactions')
-        .update({ next_due_date: nextDate })
+        .update({ next_due_date: nextDueDate })
         .eq('id', rule.id);
     }
 

@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { apiService } from '../services/api';
+import { buildRecurringRuleDraftFromTransactionForm } from '../services/recurring';
 import { useData } from '../contexts/DataContext';
 import Layout from '../components/layout/Layout';
 import Modal from '../components/common/Modal';
@@ -35,6 +36,8 @@ export default function TransactionsPage() {
     addTransfer,
     updateTransfer: updateTransferCache,
     deleteTransfer: deleteTransferCache,
+    refreshTransactions,
+    refreshPortfolios,
   } = useData();
 
   const totalCount = allTransactions.length + allTransfers.length;
@@ -110,26 +113,7 @@ export default function TransactionsPage() {
       return;
     }
     if (data.recurrence) {
-      const rule = await apiService.createRecurringTransaction({
-        account_id: data.account_id!,
-        type: data.type,
-        portfolio_id: data.portfolio_id,
-        category: data.category,
-        subcategory: data.subcategory,
-        amount: data.amount,
-        description: data.description,
-        frequency: data.recurrence,
-        start_date: data.date,
-        ticker: data.ticker,
-        isin: data.isin,
-        instrument_name: data.instrument_name,
-        exchange: data.exchange,
-        instrument_type: data.instrument_type,
-        order_type: data.order_type,
-        currency: 'EUR',
-        quantity: data.quantity,
-        price: data.price,
-      });
+      const rule = await apiService.createRecurringTransaction(buildRecurringRuleDraftFromTransactionForm(data));
       const newTransaction = await apiService.createTransaction({ ...data, recurring_id: rule.id });
       addTransaction(newTransaction);
       if (data.type === 'investment' && data.portfolio_id && data.ticker) {
@@ -187,6 +171,11 @@ export default function TransactionsPage() {
   const handleDeleteRecurringRule = async () => {
     if (selectedTransaction?.recurring_id) {
       await apiService.deleteRecurringTransaction(selectedTransaction.recurring_id);
+      await refreshTransactions();
+      if (selectedTransaction.type === 'investment') {
+        await refreshPortfolios();
+      }
+      window.dispatchEvent(new CustomEvent('trackr:refresh'));
     }
     closeModal();
   };
@@ -201,26 +190,7 @@ export default function TransactionsPage() {
     if (selectedTransaction) {
       let recurringId = selectedTransaction.recurring_id;
       if (data.recurrence) {
-        const recurringPayload = {
-          account_id: data.account_id!,
-          type: data.type,
-          portfolio_id: data.portfolio_id,
-          category: data.category,
-          subcategory: data.subcategory,
-          amount: data.amount,
-          description: data.description,
-          frequency: data.recurrence,
-          start_date: data.date,
-          ticker: data.ticker,
-          isin: data.isin,
-          instrument_name: data.instrument_name,
-          exchange: data.exchange,
-          instrument_type: data.instrument_type,
-          order_type: data.order_type,
-          currency: 'EUR',
-          quantity: data.quantity,
-          price: data.price,
-        };
+        const recurringPayload = buildRecurringRuleDraftFromTransactionForm(data);
         if (selectedTransaction.recurring_id) {
           await apiService.updateRecurringTransaction(selectedTransaction.recurring_id, recurringPayload);
         } else {
@@ -266,12 +236,20 @@ export default function TransactionsPage() {
       return;
     }
     if (selectedTransaction) {
+      if (selectedTransaction.recurring_id) {
+        await apiService.rewindRecurringTransactionOccurrence(selectedTransaction.recurring_id, selectedTransaction.date).catch(console.error);
+      }
       if (selectedTransaction.type === 'investment') {
         await apiService.deleteOrderByTransactionId(selectedTransaction.id).catch(console.error);
         localStorage.removeItem('pf_summaries_cache');
       }
       await apiService.deleteTransaction(selectedTransaction.id);
       deleteTransactionCache(selectedTransaction.id);
+      await refreshTransactions();
+      if (selectedTransaction.type === 'investment') {
+        await refreshPortfolios();
+      }
+      window.dispatchEvent(new CustomEvent('trackr:refresh'));
       closeModal();
     }
   };
