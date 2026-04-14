@@ -106,6 +106,7 @@ export interface TransactionFormData {
 
   recurrence?: RecurringFrequency; // solo per nuove transazioni
   recurring_id?: number;           // impostato internamente al salvataggio
+  free_quote?: boolean;            // quota gratuita: crea solo l'ordine, nessun addebito su conto
 }
 
 export interface TransactionStats {

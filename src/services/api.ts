@@ -893,6 +893,37 @@ class ApiService {
     if (error) throw error;
   }
 
+  // Ordini senza transaction_id (quote gratuite, saveback, bonus broker)
+  async getFreeOrders(): Promise<Order[]> {
+    const userId = await getCurrentUserId();
+    const { data, error } = await supabase
+      .from('orders')
+      .select('*')
+      .eq('user_id', userId)
+      .is('transaction_id', null)
+      .order('date', { ascending: false });
+    if (error) throw error;
+    return (data || []).map((row: any): Order => ({
+      id: row.id,
+      user_id: row.user_id,
+      portfolio_id: row.portfolio_id,
+      symbol: row.symbol,
+      isin: row.isin,
+      name: row.name,
+      exchange: row.exchange,
+      currency: row.currency ?? 'EUR',
+      quantity: row.quantity,
+      price: row.price,
+      commission: row.commission ?? 0,
+      instrument_type: row.instrument_type,
+      order_type: row.order_type,
+      date: row.date,
+      ter: row.ter,
+      transaction_id: row.transaction_id,
+      created_at: row.created_at,
+    }));
+  }
+
   async getOrderByTransactionId(transactionId: number): Promise<Order | null> {
     const { data, error } = await supabase
       .from('orders')

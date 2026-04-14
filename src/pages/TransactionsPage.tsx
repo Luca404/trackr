@@ -10,7 +10,9 @@ import { useSkeletonCount } from '../hooks/useSkeletonCount';
 import PeriodSelector from '../components/common/PeriodSelector';
 import DateRangePicker from '../components/common/DateRangePicker';
 import { usePeriod } from '../hooks/usePeriod';
-import type { Transaction, Transfer, TransactionFormData } from '../types';
+import type { Transaction, Transfer, TransactionFormData, Order } from '../types';
+import InvestmentOrderForm, { type InvestmentOrderInput } from '../components/investments/InvestmentOrderForm';
+import ConfirmDialog from '../components/common/ConfirmDialog';
 import { useTranslation } from 'react-i18next';
 import { useSettings } from '../contexts/SettingsContext';
 
@@ -18,7 +20,8 @@ type PeriodType = 'day' | 'week' | 'month' | 'year' | 'all' | 'custom';
 
 type ListItem =
   | { kind: 'transaction'; data: Transaction }
-  | { kind: 'transfer'; data: Transfer };
+  | { kind: 'transfer'; data: Transfer }
+  | { kind: 'free_order'; data: Order };
 
 export default function TransactionsPage() {
   const { t } = useTranslation();
@@ -26,6 +29,7 @@ export default function TransactionsPage() {
   const {
     transactions: allTransactions,
     transfers: allTransfers,
+    freeOrders,
     accounts,
     categories,
     portfolios,
@@ -36,6 +40,9 @@ export default function TransactionsPage() {
     addTransfer,
     updateTransfer: updateTransferCache,
     deleteTransfer: deleteTransferCache,
+    addFreeOrder,
+    updateFreeOrder,
+    deleteFreeOrder,
     refreshTransactions,
     refreshPortfolios,
   } = useData();
@@ -48,6 +55,10 @@ export default function TransactionsPage() {
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
   const [selectedTransfer, setSelectedTransfer] = useState<Transfer | null>(null);
   const [isEditMode, setIsEditMode] = useState(false);
+
+  const [selectedFreeOrder, setSelectedFreeOrder] = useState<Order | null>(null);
+  const [isFreeOrderModalOpen, setIsFreeOrderModalOpen] = useState(false);
+  const [isFreeOrderDeleteOpen, setIsFreeOrderDeleteOpen] = useState(false);
 
   const { startDate, endDate, setPeriod } = usePeriod();
 
@@ -67,7 +78,14 @@ export default function TransactionsPage() {
       })
       .map(t => ({ kind: 'transfer', data: t }));
 
-    return [...txItems, ...trItems].sort((a, b) => {
+    const foItems: ListItem[] = freeOrders
+      .filter(o => {
+        const d = new Date(o.date);
+        return d >= startDate && d <= endDate;
+      })
+      .map(o => ({ kind: 'free_order', data: o }));
+
+    return [...txItems, ...trItems, ...foItems].sort((a, b) => {
       const dateA = new Date(a.data.date).getTime();
       const dateB = new Date(b.data.date).getTime();
       if (dateB !== dateA) return dateB - dateA;
@@ -112,6 +130,30 @@ export default function TransactionsPage() {
       addTransfer(transfer);
       return;
     }
+    // Quota gratuita: crea solo l'ordine, nessuna transazione su conto
+    if (data.type === 'investment' && data.free_quote && data.portfolio_id && data.ticker) {
+      const qty = data.quantity ?? 0;
+      const price = data.price ?? 0;
+      const newOrder = await apiService.createOrder({
+        portfolio_id: data.portfolio_id,
+        symbol: data.ticker,
+        isin: data.isin,
+        name: data.instrument_name,
+        exchange: data.exchange,
+        instrument_type: data.instrument_type,
+        ter: data.ter,
+        currency: 'EUR',
+        quantity: qty,
+        price,
+        commission: 0,
+        order_type: 'buy',
+        date: data.date,
+      });
+      addFreeOrder(newOrder);
+      localStorage.removeItem('pf_summaries_cache');
+      return;
+    }
+
     if (data.recurrence) {
       const rule = await apiService.createRecurringTransaction(buildRecurringRuleDraftFromTransactionForm(data));
       const newTransaction = await apiService.createTransaction({ ...data, recurring_id: rule.id });
@@ -255,6 +297,11 @@ export default function TransactionsPage() {
   };
 
   const handleItemClick = (item: ListItem) => {
+    if (item.kind === 'free_order') {
+      setSelectedFreeOrder(item.data);
+      setIsFreeOrderModalOpen(true);
+      return;
+    }
     if (item.kind === 'transfer') {
       setSelectedTransfer(item.data);
       setSelectedTransaction(null);
@@ -264,6 +311,35 @@ export default function TransactionsPage() {
     }
     setIsEditMode(true);
     setIsModalOpen(true);
+  };
+
+  const handleFreeOrderUpdate = async (draft: InvestmentOrderInput) => {
+    if (!selectedFreeOrder) return;
+    const updated = await apiService.updateOrder(selectedFreeOrder.id, {
+      symbol: draft.symbol,
+      isin: draft.isin,
+      name: draft.name,
+      exchange: draft.exchange,
+      instrument_type: draft.instrumentType,
+      ter: draft.ter,
+      quantity: draft.quantity,
+      price: draft.price,
+      commission: draft.commission,
+      order_type: draft.orderType,
+      date: draft.date,
+    });
+    updateFreeOrder(updated);
+    localStorage.removeItem('pf_summaries_cache');
+    setIsFreeOrderModalOpen(false);
+  };
+
+  const handleFreeOrderDelete = async () => {
+    if (!selectedFreeOrder) return;
+    await apiService.deleteOrder(selectedFreeOrder.id);
+    deleteFreeOrder(selectedFreeOrder.id);
+    localStorage.removeItem('pf_summaries_cache');
+    setIsFreeOrderDeleteOpen(false);
+    setIsFreeOrderModalOpen(false);
   };
 
   const handleNewTransaction = () => {
@@ -368,6 +444,41 @@ export default function TransactionsPage() {
                   );
                 }
 
+                if (item.kind === 'free_order') {
+                  const order = item.data;
+                  const portfolio = portfolios.find(p => p.id === order.portfolio_id);
+                  return (
+                    <div
+                      key={`free-order-${order.id}`}
+                      className="card flex items-center justify-between hover:shadow-md transition-shadow cursor-pointer"
+                      onClick={() => handleItemClick(item)}
+                    >
+                      <div className="flex items-center gap-3 flex-1">
+                        <span className="text-2xl">🎁</span>
+                        <div className="flex-1">
+                          <div className="font-medium text-gray-900 dark:text-gray-100">
+                            {portfolio?.name || t('transactions.investment', 'Investimento')}
+                          </div>
+                          <div className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+                            {order.symbol} • {order.quantity} x {formatCurrency(order.price)}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="text-right ml-4">
+                        <div className="text-xs text-emerald-600 dark:text-emerald-400 mb-1">
+                          {t('transactions.freeQuote', 'Quota gratuita')}
+                        </div>
+                        <div className="font-bold text-lg text-emerald-600 dark:text-emerald-400">
+                          +{formatCurrency(order.quantity * order.price)}
+                        </div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400">
+                          {formatDate(order.date)}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                }
+
                 const transaction = item.data;
                 return (
                   <div
@@ -440,6 +551,59 @@ export default function TransactionsPage() {
             initialTransactionId={selectedTransaction?.id}
           />
         </Modal>
+
+        {/* Modale edit quota gratuita */}
+        <Modal
+          isOpen={isFreeOrderModalOpen}
+          onClose={() => setIsFreeOrderModalOpen(false)}
+          title={t('transactions.freeQuote', 'Quota gratuita')}
+        >
+          {selectedFreeOrder && (
+            <div className="space-y-4">
+              <InvestmentOrderForm
+                key={`free-order-edit-${selectedFreeOrder.id}`}
+                currency={selectedFreeOrder.currency ?? 'EUR'}
+                showActions={true}
+                existingOrders={[]}
+                ignoreOrderId={selectedFreeOrder.id}
+                initialData={{
+                  symbol: selectedFreeOrder.symbol,
+                  isin: selectedFreeOrder.isin,
+                  name: selectedFreeOrder.name,
+                  exchange: selectedFreeOrder.exchange,
+                  ter: selectedFreeOrder.ter,
+                  quantity: selectedFreeOrder.quantity,
+                  price: selectedFreeOrder.price,
+                  commission: selectedFreeOrder.commission ?? 0,
+                  date: selectedFreeOrder.date,
+                  orderType: 'buy',
+                  instrumentType: (selectedFreeOrder.instrument_type as 'etf' | 'stock' | 'bond') ?? 'etf',
+                }}
+                onSubmit={handleFreeOrderUpdate}
+                onCancel={() => setIsFreeOrderModalOpen(false)}
+              />
+              <button
+                type="button"
+                onClick={() => setIsFreeOrderDeleteOpen(true)}
+                className="w-full px-4 py-2.5 rounded-lg bg-red-500 text-white hover:bg-red-600 transition-colors text-sm font-medium flex items-center justify-center gap-2"
+              >
+                <span>🗑️</span>
+                <span>{t('common.delete')}</span>
+              </button>
+            </div>
+          )}
+        </Modal>
+
+        <ConfirmDialog
+          isOpen={isFreeOrderDeleteOpen}
+          onClose={() => setIsFreeOrderDeleteOpen(false)}
+          onConfirm={handleFreeOrderDelete}
+          title={t('transactions.deleteTransaction')}
+          message={t('transactions.deleteTransactionMsg')}
+          confirmText={t('common.delete')}
+          cancelText={t('common.cancel')}
+          isDestructive={true}
+        />
 
         {/* Date Range Picker */}
         <DateRangePicker

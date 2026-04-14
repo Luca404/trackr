@@ -2,7 +2,7 @@ import { createContext, useContext, useState, useEffect, useRef, type ReactNode 
 import i18n from '../i18n';
 import { apiService } from '../services/api';
 import { supabase } from '../services/supabase';
-import type { Account, Category, Transaction, Transfer, Portfolio, UserProfile } from '../types';
+import type { Account, Category, Transaction, Transfer, Portfolio, UserProfile, Order } from '../types';
 
 interface DataContextType {
   // Data
@@ -10,6 +10,7 @@ interface DataContextType {
   categories: Category[];
   transactions: Transaction[];
   transfers: Transfer[];
+  freeOrders: Order[];
   portfolios: Portfolio[];
   userProfiles: UserProfile[];
   activeProfile: UserProfile | null;
@@ -41,6 +42,11 @@ interface DataContextType {
   updateTransfer: (transfer: Transfer) => void;
   deleteTransfer: (id: number) => void;
 
+  addFreeOrder: (order: Order) => void;
+  updateFreeOrder: (order: Order) => void;
+  deleteFreeOrder: (id: number) => void;
+  refreshFreeOrders: () => Promise<void>;
+
   addPortfolio: (portfolio: Portfolio) => void;
   updatePortfolio: (portfolio: Portfolio) => void;
   deletePortfolio: (id: number) => void;
@@ -68,6 +74,7 @@ export function DataProvider({ children }: DataProviderProps) {
   const [categories, setCategories] = useState<Category[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [transfers, setTransfers] = useState<Transfer[]>([]);
+  const [freeOrders, setFreeOrders] = useState<Order[]>([]);
   const [portfolios, setPortfolios] = useState<Portfolio[]>([]);
   const [userProfiles, setUserProfiles] = useState<UserProfile[]>([]);
   const [activeProfile, setActiveProfile] = useState<UserProfile | null>(null);
@@ -174,7 +181,7 @@ export function DataProvider({ children }: DataProviderProps) {
       setCategories(finalCategories);
       // Crea transazioni ricorrenti scadute, poi carica tutto fresco
       await apiService.processRecurringTransactions().catch(console.error);
-      await Promise.all([refreshTransactions(), refreshTransfers(), refreshPortfolios()]);
+      await Promise.all([refreshTransactions(), refreshTransfers(), refreshPortfolios(), refreshFreeOrders()]);
     } catch (error) {
       console.error('Error fetching all data:', error);
     } finally {
@@ -236,6 +243,15 @@ export function DataProvider({ children }: DataProviderProps) {
     }
   };
 
+  const refreshFreeOrders = async () => {
+    try {
+      const data = await apiService.getFreeOrders();
+      setFreeOrders(data);
+    } catch (error) {
+      console.error('Error refreshing free orders:', error);
+    }
+  };
+
   const refreshAll = async () => {
     localStorage.removeItem('pf_summaries_cache');
     await fetchAllData();
@@ -246,6 +262,7 @@ export function DataProvider({ children }: DataProviderProps) {
     setCategories([]);
     setTransactions([]);
     setTransfers([]);
+    setFreeOrders([]);
     setPortfolios([]);
     setUserProfiles([]);
     setActiveProfile(null);
@@ -264,6 +281,7 @@ export function DataProvider({ children }: DataProviderProps) {
     setCategories([]);
     setTransactions([]);
     setTransfers([]);
+    setFreeOrders([]);
     setPortfolios([]);
     setIsInitialized(false);
     await fetchAllData();
@@ -356,6 +374,18 @@ export function DataProvider({ children }: DataProviderProps) {
   };
 
   // Portfolio operations
+  const addFreeOrder = (order: Order) => {
+    setFreeOrders(prev => [order, ...prev]);
+  };
+
+  const updateFreeOrder = (order: Order) => {
+    setFreeOrders(prev => prev.map(o => o.id === order.id ? order : o));
+  };
+
+  const deleteFreeOrder = (id: number) => {
+    setFreeOrders(prev => prev.filter(o => o.id !== id));
+  };
+
   const addPortfolio = (portfolio: Portfolio) => {
     setPortfolios(prev => [...prev, portfolio]);
   };
@@ -373,6 +403,7 @@ export function DataProvider({ children }: DataProviderProps) {
     categories,
     transactions,
     transfers,
+    freeOrders,
     portfolios,
     userProfiles,
     activeProfile,
@@ -394,6 +425,10 @@ export function DataProvider({ children }: DataProviderProps) {
     addTransfer,
     updateTransfer,
     deleteTransfer,
+    addFreeOrder,
+    updateFreeOrder,
+    deleteFreeOrder,
+    refreshFreeOrders,
     addPortfolio,
     updatePortfolio,
     deletePortfolio,

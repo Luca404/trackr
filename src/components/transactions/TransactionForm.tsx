@@ -73,6 +73,7 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
   const [investmentOrders, setInvestmentOrders] = useState<Order[]>([]);
   const [linkedOrder, setLinkedOrder] = useState<Order | null>(null);
 
+  const [isFreeQuote, setIsFreeQuote] = useState(false);
   const [recurrence, setRecurrence] = useState<RecurringFrequency | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
@@ -103,6 +104,7 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
   useEffect(() => {
     setSelectedCategory(null);
     setSelectedSubcategory(null);
+    setIsFreeQuote(false);
     if (currentType !== 'investment') setSelectedPortfolio(null);
     // Per il trasferimento: auto-seleziona il primo conto diverso da quello di origine
     if (currentType === 'transfer' && !selectedToAccount && allAccounts.length >= 2) {
@@ -297,12 +299,12 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
 
-    if (!selectedAccount) return;
+    if (!selectedAccount && !isFreeQuote) return;
 
     let submitData: TransactionFormData;
 
     if (currentType === 'transfer') {
-      if (!selectedToAccount) return;
+      if (!selectedAccount || !selectedToAccount) return;
       if (selectedToAccount.id === selectedAccount.id) return;
       const amountNum = parseFloat(amount) || 0;
       if (amountNum <= 0) return;
@@ -336,10 +338,10 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
       submitData = {
         type: currentType,
         category: selectedPortfolio?.name || t('transactions.investment', 'Investment'),
-        amount: total,
+        amount: isFreeQuote ? 0 : total,
         description,
         date: investmentDate,
-        account_id: selectedAccount.id,
+        account_id: isFreeQuote ? undefined : selectedAccount?.id,
         ticker: symbol || undefined,
         quantity: quantity || undefined,
         price: price || undefined,
@@ -351,11 +353,13 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
         order_type: orderType,
         ter: ter || undefined,
         recurrence: recurrence ?? undefined,
+        free_quote: isFreeQuote || undefined,
       };
     } else {
       if (!selectedCategory) return;
       const amountNum = parseFloat(amount) || 0;
       if (amountNum <= 0) return;
+      if (!selectedAccount) return;
       submitData = {
         type: currentType,
         category: selectedCategory.name,
@@ -619,7 +623,7 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
     const noFill = { autoComplete: "off", autoCorrect: "off", spellCheck: false } as const;
     const grossAmount = investmentDraft.quantity * investmentDraft.price + investmentDraft.commission;
     const isInvestmentFormValid = Boolean(
-      selectedAccount &&
+      (selectedAccount || isFreeQuote) &&
       selectedPortfolio &&
       isInvestmentDraftValid &&
       grossAmount > 0
@@ -652,16 +656,45 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
             </div>
             <span className="text-gray-400">›</span>
           </button>
-          <button type="button" onClick={() => setShowAccountPicker(true)}
-            className="flex-1 flex items-center gap-2 p-3 rounded-lg border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 hover:border-primary-500 transition-colors">
-            <span className="text-2xl">{selectedAccount?.icon || '💳'}</span>
-            <div className="flex-1 text-left">
-              <div className="text-xs text-gray-500 dark:text-gray-400">{t('transactions.account')}</div>
-              <div className="font-medium text-gray-900 dark:text-gray-100">{selectedAccount?.name || t('transactions.select')}</div>
+          {isFreeQuote ? (
+            <div className="flex-1 flex items-center gap-2 p-3 rounded-lg border-2 border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-900/20">
+              <span className="text-2xl">🎁</span>
+              <div className="flex-1 text-left">
+                <div className="text-xs text-emerald-600 dark:text-emerald-400">{t('transactions.account')}</div>
+                <div className="font-medium text-emerald-700 dark:text-emerald-300">{t('transactions.freeQuote', 'Quota gratuita')}</div>
+              </div>
             </div>
-            <span className="text-gray-400">›</span>
-          </button>
+          ) : (
+            <button type="button" onClick={() => setShowAccountPicker(true)}
+              className="flex-1 flex items-center gap-2 p-3 rounded-lg border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 hover:border-primary-500 transition-colors">
+              <span className="text-2xl">{selectedAccount?.icon || '💳'}</span>
+              <div className="flex-1 text-left">
+                <div className="text-xs text-gray-500 dark:text-gray-400">{t('transactions.account')}</div>
+                <div className="font-medium text-gray-900 dark:text-gray-100">{selectedAccount?.name || t('transactions.select')}</div>
+              </div>
+              <span className="text-gray-400">›</span>
+            </button>
+          )}
         </div>
+
+        {/* Toggle quota gratuita */}
+        {!isEditMode && (
+          <button
+            type="button"
+            onClick={() => setIsFreeQuote(v => !v)}
+            className={`flex items-center gap-2 w-full px-3 py-2 rounded-lg border transition-colors text-sm ${
+              isFreeQuote
+                ? 'border-emerald-400 dark:border-emerald-600 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300'
+                : 'border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400'
+            }`}
+          >
+            <span>🎁</span>
+            <span className="flex-1 text-left">{t('transactions.freeQuoteToggle', 'Quota gratuita (es. saveback, bonus broker)')}</span>
+            <span className={`relative inline-flex h-5 w-9 shrink-0 rounded-full transition-colors ${isFreeQuote ? 'bg-emerald-400' : 'bg-gray-300 dark:bg-gray-600'}`}>
+              <span className={`inline-block h-5 w-5 rounded-full bg-white shadow transform transition-transform ${isFreeQuote ? 'translate-x-4' : 'translate-x-0'}`} />
+            </span>
+          </button>
+        )}
 
         <InvestmentOrderForm
           key={`investment-${initialTransactionId ?? 'new'}-${linkedOrder?.id ?? 'none'}`}
