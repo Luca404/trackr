@@ -79,14 +79,13 @@ Desktop.ini
 # ========================
 # Misc
 # ========================
-*.local
 .eslintcache
 .stylelintcache
 
 # ========================
 # AI / Internal docs
 # ========================
-CLAUDE.md
+.claude/settings.local.json
 .codex
 
 # ========================
