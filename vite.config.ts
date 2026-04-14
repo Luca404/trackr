@@ -90,7 +90,8 @@ export default defineConfig({
         navigateFallback: '/index.html',
       },
       devOptions: {
-        enabled: true
+        enabled: true,
+        suppressWarnings: true,
       }
     })
   ],
