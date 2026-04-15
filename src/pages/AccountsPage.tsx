@@ -15,7 +15,8 @@ const ACCOUNT_ICONS = ['💳', '🏦', '💰', '💵', '💶', '💷', '💴', '
 export default function AccountsPage() {
   const { t } = useTranslation();
   const { formatCurrency } = useSettings();
-  const { accounts, transactions, transfers, isLoading, addAccount, updateAccount: updateAccountCache, deleteAccount: deleteAccountCache, refreshAccounts } = useData();
+  const { accounts, transactions, transfers, isLoading, addAccount, updateAccount: updateAccountCache, deleteAccount: deleteAccountCache, refreshAccounts, activeProfile } = useData();
+  const isViewer = activeProfile?.role === 'viewer';
   const skeletonCount = useSkeletonCount('accounts', accounts.length, isLoading, 3);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [hideBalances, setHideBalances] = useState(() => localStorage.getItem('hideBalances') === 'true');
@@ -311,13 +312,15 @@ export default function AccountsPage() {
               </div>
           ))}
           {/* Aggiungi nuovo conto */}
-          <div
-            className="card flex items-center justify-center border-2 border-dashed border-gray-200 dark:border-gray-700 cursor-pointer outline-none select-none md:col-span-2"
-            style={{ WebkitTapHighlightColor: 'transparent' }}
-            onClick={() => handleOpenModal()}
-          >
-            <div className="w-10 h-10 rounded-full border-2 border-gray-300 dark:border-gray-600 flex items-center justify-center text-gray-400 dark:text-gray-500 font-bold text-2xl">+</div>
-          </div>
+          {!isViewer && (
+            <div
+              className="card flex items-center justify-center border-2 border-dashed border-gray-200 dark:border-gray-700 cursor-pointer outline-none select-none md:col-span-2"
+              style={{ WebkitTapHighlightColor: 'transparent' }}
+              onClick={() => handleOpenModal()}
+            >
+              <div className="w-10 h-10 rounded-full border-2 border-gray-300 dark:border-gray-600 flex items-center justify-center text-gray-400 dark:text-gray-500 font-bold text-2xl">+</div>
+            </div>
+          )}
         </div>
 
         {/* Modal per creare/modificare conto */}

@@ -209,6 +209,22 @@
     "profileNamePlaceholder": "Nome profilo",
     "errorProfileSave": "Errore nel salvataggio del profilo",
     "errorProfileDelete": "Errore nell'eliminazione del profilo",
+    "manageMembers": "Gestisci membri",
+    "members": "Membri",
+    "invite": "Invita",
+    "inviteEmailPlaceholder": "email@esempio.com",
+    "inviteSent": "Se questo indirizzo è registrato su Trackr, riceverà un invito a breve.",
+    "inviteErrorAlreadyMember": "Questo utente è già membro del profilo.",
+    "inviteErrorPending": "Esiste già un invito in attesa per questa email.",
+    "inviteErrorRateLimit": "Troppi inviti inviati. Riprova tra un'ora.",
+    "inviteError": "Errore durante l'invio dell'invito.",
+    "remove": "Rimuovi",
+    "leaveProfile": "Lascia profilo",
+    "confirmRemoveMember": "Rimuovere questo membro dal profilo?",
+    "confirmLeaveProfile": "Lasciare questo profilo condiviso?",
+    "role_owner": "owner",
+    "role_editor": "editor",
+    "role_viewer": "viewer",
     "account": "Account",
     "activeAccount": "Account attivo",
     "changePassword": "Cambia password",
@@ -309,5 +325,14 @@
     "skipped": "{{count}} record ignorati",
     "importAndReset": "⚠️ Importa e azzera",
     "import": "Importa"
+  },
+  "layout": {
+    "viewerBanner": "Stai visualizzando questo profilo in sola lettura"
+  },
+  "notifications": {
+    "profileInviteTitle": "Invito profilo condiviso",
+    "profileInviteBody": "Sei stato invitato a collaborare su \"{{profileName}}\" come {{role}}",
+    "accept": "Accetta",
+    "reject": "Rifiuta"
   }
 }

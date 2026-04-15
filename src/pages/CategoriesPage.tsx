@@ -162,7 +162,8 @@ const getSuggestedIcons = (name: string): string[] => {
 export default function CategoriesPage() {
   const { t } = useTranslation();
   const { formatCurrency } = useSettings();
-  const { categories: baseCategories, transactions: allTransactions, isLoading, addCategory, updateCategory: updateCategoryCache, deleteCategory: deleteCategoryCache, refreshTransactions } = useData();
+  const { categories: baseCategories, transactions: allTransactions, isLoading, addCategory, updateCategory: updateCategoryCache, deleteCategory: deleteCategoryCache, refreshTransactions, activeProfile } = useData();
+  const isViewer = activeProfile?.role === 'viewer';
   const [filter, setFilter] = useState<CategoryFilter>('expense');
   const [selectedCategory, setSelectedCategory] = useState<CategoryWithStats | null>(null);
   const [isSubcategoryModalOpen, setIsSubcategoryModalOpen] = useState(false);
@@ -520,7 +521,7 @@ export default function CategoriesPage() {
               </button>
           ))}
           {/* Aggiungi nuova categoria */}
-          {!isLoading && <button
+          {!isLoading && !isViewer && <button
             onClick={() => {
               setIsEditMode(false);
               setCategoryFormData({ name: '', icon: '📌', color: randomPresetColor(), category_type: filter });

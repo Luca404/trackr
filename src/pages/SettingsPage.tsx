@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import type { ProfileMember } from '../types';
 import { useNavigate } from 'react-router-dom';
 import { apiService } from '../services/api';
 import { supabase } from '../services/supabase';
@@ -41,7 +42,7 @@ export default function SettingsPage() {
   const { t } = useTranslation();
   const { numberFormat, setNumberFormat } = useSettings();
   const { confirm: confirmDialog, dialog: confirmDialogEl } = useConfirm();
-  const { userProfiles, activeProfile, switchProfile, createUserProfile, updateUserProfile, deleteUserProfile } = useData();
+  const { userProfiles, activeProfile, switchProfile, createUserProfile, updateUserProfile, deleteUserProfile, leaveProfile } = useData();
   const [theme, setTheme] = useState<'dark' | 'light' | 'system'>(getTheme);
   const [currentLang, setCurrentLang] = useState<string>(() => {
     const l = i18n.language?.slice(0, 2);
@@ -63,6 +64,14 @@ export default function SettingsPage() {
   const [showAddProfile, setShowAddProfile] = useState(false);
   const [profileLoading, setProfileLoading] = useState(false);
   const [profileMsg, setProfileMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // Condivisione profili
+  const [expandedProfileId, setExpandedProfileId] = useState<string | null>(null);
+  const [profileMembers, setProfileMembers] = useState<Record<string, ProfileMember[]>>({});
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteRole, setInviteRole] = useState<'editor' | 'viewer'>('editor');
+  const [inviteLoading, setInviteLoading] = useState(false);
+  const [inviteMsg, setInviteMsg] = useState<string | null>(null);
 
   const [exportMessage, setExportMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [showKakeboImport, setShowKakeboImport] = useState(false);
@@ -175,6 +184,62 @@ export default function SettingsPage() {
     }
   };
 
+  const handleToggleMembers = async (profileId: string) => {
+    if (expandedProfileId === profileId) {
+      setExpandedProfileId(null);
+      return;
+    }
+    setExpandedProfileId(profileId);
+    setInviteEmail('');
+    setInviteMsg(null);
+    if (!profileMembers[profileId]) {
+      const members = await apiService.getProfileMembers(profileId);
+      setProfileMembers(prev => ({ ...prev, [profileId]: members }));
+    }
+  };
+
+  const handleInvite = async (profileId: string) => {
+    if (!inviteEmail.trim()) return;
+    setInviteLoading(true);
+    setInviteMsg(null);
+    try {
+      await apiService.inviteToProfile(profileId, inviteEmail.trim(), inviteRole);
+      setInviteMsg(t('settings.inviteSent'));
+      setInviteEmail('');
+    } catch (e: any) {
+      if (e.message === 'already_member') setInviteMsg(t('settings.inviteErrorAlreadyMember'));
+      else if (e.message === 'invite_pending') setInviteMsg(t('settings.inviteErrorPending'));
+      else if (e.message === 'rate_limited') setInviteMsg(t('settings.inviteErrorRateLimit'));
+      else setInviteMsg(t('settings.inviteError'));
+    } finally {
+      setInviteLoading(false);
+    }
+  };
+
+  const handleRemoveMember = async (profileId: string, userId: string) => {
+    const confirmed = await confirmDialog(t('settings.confirmRemoveMember'), { isDestructive: true, noBottomOffset: true });
+    if (!confirmed) return;
+    await apiService.removeProfileMember(profileId, userId);
+    setProfileMembers(prev => ({
+      ...prev,
+      [profileId]: (prev[profileId] ?? []).filter(m => m.user_id !== userId),
+    }));
+  };
+
+  const handleLeaveProfile = async (profileId: string) => {
+    const confirmed = await confirmDialog(t('settings.confirmLeaveProfile'), { isDestructive: true, noBottomOffset: true });
+    if (!confirmed) return;
+    setProfileLoading(true);
+    try {
+      await leaveProfile(profileId);
+      setExpandedProfileId(null);
+    } catch {
+      setProfileMsg({ type: 'error', text: t('settings.errorProfileDelete') });
+    } finally {
+      setProfileLoading(false);
+    }
+  };
+
   const handleExport = async () => {
     try {
       await apiService.exportData();
@@ -219,51 +284,134 @@ export default function SettingsPage() {
 
           <div className="space-y-2">
             {userProfiles.map(profile => (
-              <div key={profile.id} className={`flex items-center gap-2 px-3 py-2.5 rounded-lg border-2 transition-colors ${activeProfile?.id === profile.id ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20' : 'border-gray-200 dark:border-gray-700'}`}>
-                {editingProfileId === profile.id ? (
-                  <input
-                    className="flex-1 px-3 py-1.5 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                    value={editingProfileName}
-                    onChange={e => setEditingProfileName(e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter') handleSaveProfileName(profile.id); if (e.key === 'Escape') setEditingProfileId(null); }}
-                    autoFocus
-                  />
-                ) : (
-                  <button
-                    className="flex-1 text-left text-sm font-medium text-gray-800 dark:text-gray-100"
-                    onClick={() => { if (activeProfile?.id !== profile.id) switchProfile(profile); }}
-                  >
-                    {profile.name}
-                    {activeProfile?.id === profile.id && <span className="ml-2 text-xs text-primary-500 font-normal">{t('settings.activeProfile')}</span>}
-                  </button>
-                )}
-
-                {editingProfileId === profile.id ? (
-                  <div className="flex gap-1">
-                    <button onClick={() => setEditingProfileId(null)} className="text-xs px-2 py-1 rounded bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200">{t('common.cancel')}</button>
-                    <button onClick={() => handleSaveProfileName(profile.id)} disabled={profileLoading} className="text-xs px-2 py-1 rounded bg-primary-500 text-white">{t('common.save')}</button>
-                  </div>
-                ) : (
-                  <div className="flex gap-1">
+              <div key={profile.id} className={`rounded-xl border-2 transition-colors ${activeProfile?.id === profile.id ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20' : 'border-gray-200 dark:border-gray-700'}`}>
+                {/* Riga principale profilo */}
+                <div className="flex items-center gap-2 px-3 py-2.5">
+                  {editingProfileId === profile.id ? (
+                    <input
+                      className="flex-1 input-field text-sm"
+                      value={editingProfileName}
+                      onChange={e => setEditingProfileName(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') handleSaveProfileName(profile.id); if (e.key === 'Escape') setEditingProfileId(null); }}
+                      autoFocus
+                    />
+                  ) : (
                     <button
-                      onClick={() => { setEditingProfileId(profile.id); setEditingProfileName(profile.name); }}
-                      className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+                      className="flex-1 text-left flex items-center gap-2"
+                      onClick={() => { if (activeProfile?.id !== profile.id) switchProfile(profile); }}
                     >
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536M9 11l6-6 3 3-6 6H9v-3z" />
-                      </svg>
+                      <span className="font-medium text-sm text-gray-800 dark:text-gray-100">{profile.name}</span>
+                      {activeProfile?.id === profile.id && (
+                        <span className="text-xs text-primary-500 font-normal">{t('settings.activeProfile')}</span>
+                      )}
+                      {profile.role !== 'owner' && (
+                        <span className="text-xs text-gray-400 dark:text-gray-500 font-normal">
+                          {profile.role === 'editor' ? '✏️' : '👁️'} {t(`settings.role_${profile.role}`)}
+                        </span>
+                      )}
                     </button>
-                    {userProfiles.length > 1 && (
-                      <button
-                        onClick={() => handleDeleteProfile(profile.id)}
-                        disabled={profileLoading}
-                        className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"
-                      >
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                      </button>
+                  )}
+
+                  {editingProfileId === profile.id ? (
+                    <div className="flex gap-1">
+                      <button onClick={() => setEditingProfileId(null)} className="text-xs px-2 py-1 rounded bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200">{t('common.cancel')}</button>
+                      <button onClick={() => handleSaveProfileName(profile.id)} disabled={profileLoading} className="text-xs px-2 py-1 rounded bg-primary-500 text-white">{t('common.save')}</button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-1">
+                      {profile.role === 'owner' && (
+                        <>
+                          <button
+                            onClick={() => { setEditingProfileId(profile.id); setEditingProfileName(profile.name); }}
+                            className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+                          >
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536M9 11l6-6 3 3-6 6H9v-3z" />
+                            </svg>
+                          </button>
+                          <button
+                            onClick={() => handleToggleMembers(profile.id)}
+                            className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+                            title={t('settings.manageMembers')}
+                          >👥</button>
+                          {userProfiles.length > 1 && (
+                            <button
+                              onClick={() => handleDeleteProfile(profile.id)}
+                              disabled={profileLoading}
+                              className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"
+                            >
+                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                            </button>
+                          )}
+                        </>
+                      )}
+                      {profile.role !== 'owner' && (
+                        <button
+                          onClick={() => handleLeaveProfile(profile.id)}
+                          className="text-xs px-2 py-1 rounded text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"
+                        >{t('settings.leaveProfile')}</button>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Sezione membri espandibile (solo owner) */}
+                {profile.role === 'owner' && expandedProfileId === profile.id && (
+                  <div className="border-t border-gray-100 dark:border-gray-700 px-3 pb-3 pt-2">
+                    <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">
+                      {t('settings.members')}
+                    </p>
+
+                    {/* Lista membri correnti */}
+                    {(profileMembers[profile.id] ?? []).map(member => (
+                      <div key={member.user_id} className="flex items-center gap-2 mb-1.5">
+                        <div className="w-7 h-7 rounded-full bg-primary-100 dark:bg-primary-900/40 flex items-center justify-center text-xs font-semibold text-primary-600 dark:text-primary-400">
+                          {(member.email ?? '?')[0].toUpperCase()}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm truncate">{member.email ?? member.user_id}</p>
+                          <p className="text-xs text-gray-400">{t(`settings.role_${member.role}`)}</p>
+                        </div>
+                        {member.role !== 'owner' && (
+                          <button
+                            onClick={() => handleRemoveMember(profile.id, member.user_id)}
+                            className="text-xs text-red-400 hover:text-red-600 px-1"
+                          >{t('settings.remove')}</button>
+                        )}
+                      </div>
+                    ))}
+
+                    {/* Feedback invito */}
+                    {inviteMsg && (
+                      <p className="text-xs text-primary-600 dark:text-primary-400 mb-2">{inviteMsg}</p>
                     )}
+
+                    {/* Form invito */}
+                    <div className="flex gap-1.5 mt-2">
+                      <input
+                        className="flex-1 input-field text-sm"
+                        placeholder={t('settings.inviteEmailPlaceholder')}
+                        value={inviteEmail}
+                        onChange={e => { setInviteEmail(e.target.value); setInviteMsg(null); }}
+                        onKeyDown={e => { if (e.key === 'Enter') handleInvite(profile.id); }}
+                        type="email"
+                      />
+                      <select
+                        className="input-field text-sm w-auto px-2"
+                        value={inviteRole}
+                        onChange={e => setInviteRole(e.target.value as 'editor' | 'viewer')}
+                      >
+                        <option value="editor">{t('settings.role_editor')}</option>
+                        <option value="viewer">{t('settings.role_viewer')}</option>
+                      </select>
+                      <button
+                        onClick={() => handleInvite(profile.id)}
+                        disabled={inviteLoading || !inviteEmail.trim()}
+                        className="btn-primary text-sm px-3"
+                      >{t('settings.invite')}</button>
+                    </div>
                   </div>
                 )}
               </div>

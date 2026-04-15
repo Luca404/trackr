@@ -11,11 +11,32 @@ export interface AuthResponse {
 }
 
 
+export type ProfileRole = 'owner' | 'editor' | 'viewer';
+
 export interface UserProfile {
   id: string;       // UUID (= auth.uid() per il profilo principale)
   user_id: string;  // FK a auth.users
   name: string;
+  role: ProfileRole;  // 'owner' se è tuo, 'editor'/'viewer' se condiviso
   created_at?: string;
+}
+
+export interface ProfileMember {
+  profile_id: string;
+  user_id: string;
+  role: ProfileRole;
+  email?: string;   // copiata da auth.users al momento dell'accettazione
+  joined_at: string;
+}
+
+export interface ProfileInvitation {
+  id: string;
+  profile_id: string;
+  profile_name?: string;      // join client-side per display
+  invited_by_email?: string;  // email del mittente (da invited_by join)
+  role: 'editor' | 'viewer';
+  status: 'pending' | 'accepted' | 'rejected' | 'cancelled';
+  expires_at: string;
 }
 
 export type TransactionCategory = string;

@@ -2,7 +2,7 @@ import { createContext, useContext, useState, useEffect, useRef, type ReactNode 
 import i18n from '../i18n';
 import { apiService } from '../services/api';
 import { supabase } from '../services/supabase';
-import type { Account, Category, Transaction, Transfer, Portfolio, UserProfile, Order } from '../types';
+import type { Account, Category, Transaction, Transfer, Portfolio, UserProfile, Order, ProfileInvitation } from '../types';
 
 interface DataContextType {
   // Data
@@ -14,6 +14,7 @@ interface DataContextType {
   portfolios: Portfolio[];
   userProfiles: UserProfile[];
   activeProfile: UserProfile | null;
+  pendingInvitations: ProfileInvitation[];
 
   // Loading states
   isLoading: boolean;
@@ -24,6 +25,11 @@ interface DataContextType {
   createUserProfile: (name: string) => Promise<UserProfile>;
   updateUserProfile: (id: string, name: string) => Promise<void>;
   deleteUserProfile: (id: string) => Promise<void>;
+
+  // Sharing actions
+  acceptInvitation: (invitationId: string) => Promise<void>;
+  rejectInvitation: (invitationId: string) => Promise<void>;
+  leaveProfile: (profileId: string) => Promise<void>;
 
   // CRUD operations
   addAccount: (account: Account) => void;
@@ -78,6 +84,7 @@ export function DataProvider({ children }: DataProviderProps) {
   const [portfolios, setPortfolios] = useState<Portfolio[]>([]);
   const [userProfiles, setUserProfiles] = useState<UserProfile[]>([]);
   const [activeProfile, setActiveProfile] = useState<UserProfile | null>(null);
+  const [pendingInvitations, setPendingInvitations] = useState<ProfileInvitation[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isInitialized, setIsInitialized] = useState(false);
   const isFetchingRef = useRef(false);
@@ -152,6 +159,10 @@ export function DataProvider({ children }: DataProviderProps) {
         return;
       }
       setUserProfiles(profiles);
+
+      // Carica inviti in arrivo
+      const invitations = await apiService.getPendingInvitations();
+      setPendingInvitations(invitations);
 
       // Determina il profilo attivo
       const savedId = localStorage.getItem('activeProfileId');
@@ -266,6 +277,7 @@ export function DataProvider({ children }: DataProviderProps) {
     setPortfolios([]);
     setUserProfiles([]);
     setActiveProfile(null);
+    setPendingInvitations([]);
     apiService.clearActiveProfile();
     setIsInitialized(false);
   };
@@ -302,6 +314,28 @@ export function DataProvider({ children }: DataProviderProps) {
   const deleteUserProfile = async (id: string): Promise<void> => {
     await apiService.deleteProfile(id);
     setUserProfiles(prev => prev.filter(p => p.id !== id));
+  };
+
+  const acceptInvitation = async (invitationId: string): Promise<void> => {
+    await apiService.acceptInvitation(invitationId);
+    setPendingInvitations(prev => prev.filter(i => i.id !== invitationId));
+    const updatedProfiles = await apiService.getProfiles();
+    setUserProfiles(updatedProfiles);
+  };
+
+  const rejectInvitation = async (invitationId: string): Promise<void> => {
+    await apiService.rejectInvitation(invitationId);
+    setPendingInvitations(prev => prev.filter(i => i.id !== invitationId));
+  };
+
+  const leaveProfile = async (profileId: string): Promise<void> => {
+    await apiService.leaveProfile(profileId);
+    const updatedProfiles = await apiService.getProfiles();
+    setUserProfiles(updatedProfiles);
+    if (activeProfile?.id === profileId) {
+      const next = updatedProfiles[0];
+      if (next) await switchProfile(next);
+    }
   };
 
   // Account operations
@@ -407,12 +441,16 @@ export function DataProvider({ children }: DataProviderProps) {
     portfolios,
     userProfiles,
     activeProfile,
+    pendingInvitations,
     isLoading,
     isInitialized,
     switchProfile,
     createUserProfile,
     updateUserProfile,
     deleteUserProfile,
+    acceptInvitation,
+    rejectInvitation,
+    leaveProfile,
     addAccount,
     updateAccount,
     deleteAccount,

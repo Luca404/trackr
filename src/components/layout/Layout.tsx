@@ -27,7 +27,7 @@ export default function Layout({ children }: LayoutProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuth();
-  const { refreshAll, activeProfile, portfolios } = useData();
+  const { refreshAll, activeProfile, portfolios, pendingInvitations, acceptInvitation, rejectInvitation } = useData();
   const [isRefreshing, setIsRefreshing] = useState(false);
   const { t } = useTranslation();
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
@@ -264,9 +264,9 @@ export default function Layout({ children }: LayoutProps) {
                 <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0a3 3 0 11-6 0m6 0H9" />
                 </svg>
-                {investmentNotifications.length > 0 && (
+                {(investmentNotifications.length + pendingInvitations.length) > 0 && (
                   <span className="absolute -top-1 -right-1 min-w-[1.1rem] h-[1.1rem] px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center">
-                    {investmentNotifications.length}
+                    {investmentNotifications.length + pendingInvitations.length}
                   </span>
                 )}
               </button>
@@ -276,6 +276,43 @@ export default function Layout({ children }: LayoutProps) {
                   style={{ top: `${headerBottom}px` }}
                 >
                   <div className="max-w-7xl mx-auto px-4">
+                    {/* Inviti profilo condiviso */}
+                    {pendingInvitations.length > 0 && (
+                      <div className="py-2">
+                        {pendingInvitations.map(inv => (
+                          <div
+                            key={inv.id}
+                            className="bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-xl p-3 mb-2"
+                          >
+                            <div className="flex items-start gap-2">
+                              <span className="text-lg mt-0.5">👥</span>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-semibold text-gray-800 dark:text-gray-200">
+                                  {t('notifications.profileInviteTitle')}
+                                </p>
+                                <p className="text-xs text-gray-600 dark:text-gray-400 mt-0.5 mb-2">
+                                  {t('notifications.profileInviteBody', {
+                                    profileName: inv.profile_name ?? '',
+                                    role: t(`settings.role_${inv.role}`),
+                                  })}
+                                </p>
+                                <div className="flex gap-2">
+                                  <button
+                                    onClick={() => acceptInvitation(inv.id)}
+                                    className="text-xs px-3 py-1.5 bg-indigo-600 text-white rounded-lg font-semibold"
+                                  >{t('notifications.accept')}</button>
+                                  <button
+                                    onClick={() => rejectInvitation(inv.id)}
+                                    className="text-xs px-3 py-1.5 bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-lg border border-gray-200 dark:border-gray-600"
+                                  >{t('notifications.reject')}</button>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
                     {investmentNotifications.length > 0 ? (
                       <div className="max-h-[min(26rem,calc(100dvh-10rem))] overflow-y-auto">
                         {investmentNotifications.map((item) => (
@@ -313,11 +350,11 @@ export default function Layout({ children }: LayoutProps) {
                           </button>
                         ))}
                       </div>
-                    ) : (
+                    ) : pendingInvitations.length === 0 ? (
                       <div className="py-6 text-sm text-gray-500 dark:text-gray-400 text-center">
                         Nessuna notifica
                       </div>
-                    )}
+                    ) : null}
                   </div>
                 </div>
               )}
@@ -349,6 +386,12 @@ export default function Layout({ children }: LayoutProps) {
       <main
         className="flex-1 max-w-7xl w-full mx-auto px-4 py-3 overflow-y-auto overscroll-y-none"
       >
+        {activeProfile?.role === 'viewer' && (
+          <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg px-4 py-2 mb-3 text-xs text-amber-700 dark:text-amber-400 flex items-center gap-2">
+            <span>👁️</span>
+            <span>{t('layout.viewerBanner')}</span>
+          </div>
+        )}
         <div
           style={{
             paddingBottom: '6rem',
