@@ -272,7 +272,7 @@ class ApiService {
     if (error) throw error;
     return (data ?? []).map((row: any) => ({
       id: row.id,
-      user_id: row.user_id,
+      user_id: row.uid,
       name: row.name,
       role: row.role as ProfileRole,
       created_at: row.created_at,
