@@ -152,17 +152,8 @@ export function DataProvider({ children }: DataProviderProps) {
         return;
       }
       // Carica i profili utente
-      let profiles = await apiService.getProfiles();
-      if (!profiles.length) {
-        // Membership mancante (nuovo utente post-migrazione): ripara e riprova
-        await supabase.rpc('repair_own_membership');
-        profiles = await apiService.getProfiles();
-      }
-      if (!profiles.length) {
-        console.warn('No profiles found, signing out');
-        await supabase.auth.signOut();
-        return;
-      }
+      await supabase.rpc('repair_own_membership');
+      const profiles = await apiService.getProfiles();
       setUserProfiles(profiles);
 
       // Carica inviti in arrivo
@@ -172,6 +163,7 @@ export function DataProvider({ children }: DataProviderProps) {
       // Determina il profilo attivo
       const savedId = localStorage.getItem('activeProfileId');
       const resolved = profiles.find(p => p.id === savedId) ?? profiles[0];
+      if (!resolved) return;
       setActiveProfile(resolved);
       apiService.setActiveProfile(resolved.id);
 
