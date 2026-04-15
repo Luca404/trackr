@@ -152,7 +152,18 @@ export function DataProvider({ children }: DataProviderProps) {
         return;
       }
       // Carica i profili utente
-      const profiles = await apiService.getProfiles();
+      let profiles = await apiService.getProfiles();
+      if (!profiles.length) {
+        // Membership mancante (nuovo utente o migrazione): ripara e riprova
+        await supabase.rpc('repair_own_membership');
+        profiles = await apiService.getProfiles();
+      }
+      if (!profiles.length) {
+        // Nessun profilo esistente → crea "Principale"
+        await apiService.createProfile('Principale');
+        await supabase.rpc('repair_own_membership');
+        profiles = await apiService.getProfiles();
+      }
       if (!profiles.length) {
         console.warn('No profiles found, signing out');
         await supabase.auth.signOut();
