@@ -304,9 +304,6 @@ export default function SettingsPage() {
                       {activeProfile?.id === profile.id && (
                         <span className="text-xs text-primary-500 font-normal">{t('settings.activeProfile')}</span>
                       )}
-                      {profile.role === 'owner' && (profile.member_count ?? 1) > 1 && (
-                        <span className="text-xs text-gray-400 dark:text-gray-500 font-normal">👥 {profile.member_count}</span>
-                      )}
                       {profile.role !== 'owner' && (
                         <span className="text-xs text-gray-400 dark:text-gray-500 font-normal">
                           {profile.role === 'editor' ? '✏️' : '👁️'} {t(`settings.role_${profile.role}`)}
@@ -334,9 +331,14 @@ export default function SettingsPage() {
                           </button>
                           <button
                             onClick={() => handleToggleMembers(profile.id)}
-                            className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+                            className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-0.5"
                             title={t('settings.manageMembers')}
-                          >👥</button>
+                          >
+                            <span>👥</span>
+                            {(profile.member_count ?? 1) > 1 && (
+                              <span className="text-[10px] font-semibold leading-none">{profile.member_count}</span>
+                            )}
+                          </button>
                           {userProfiles.length > 1 && (
                             <button
                               onClick={() => handleDeleteProfile(profile.id)}
