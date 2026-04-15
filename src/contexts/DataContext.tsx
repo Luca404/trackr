@@ -154,13 +154,7 @@ export function DataProvider({ children }: DataProviderProps) {
       // Carica i profili utente
       let profiles = await apiService.getProfiles();
       if (!profiles.length) {
-        // Membership mancante (nuovo utente o migrazione): ripara e riprova
-        await supabase.rpc('repair_own_membership');
-        profiles = await apiService.getProfiles();
-      }
-      if (!profiles.length) {
-        // Nessun profilo esistente → crea "Principale"
-        await apiService.createProfile('Principale');
+        // Membership mancante (nuovo utente post-migrazione): ripara e riprova
         await supabase.rpc('repair_own_membership');
         profiles = await apiService.getProfiles();
       }
