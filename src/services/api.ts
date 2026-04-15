@@ -268,20 +268,15 @@ class ApiService {
   // ==================== PROFILES ====================
 
   async getProfiles(): Promise<UserProfile[]> {
-    const userId = await getCurrentUserId();
-    const { data, error } = await supabase
-      .from('profile_members')
-      .select('role, joined_at, profiles(*)')
-      .eq('user_id', userId);
+    const { data, error } = await supabase.rpc('get_my_profiles');
     if (error) throw error;
-    return (data ?? [])
-      .map((row: any) => ({
-        ...row.profiles,
-        role: row.role as ProfileRole,
-      }))
-      .sort((a: any, b: any) =>
-        new Date(a.created_at ?? 0).getTime() - new Date(b.created_at ?? 0).getTime()
-      );
+    return (data ?? []).map((row: any) => ({
+      id: row.id,
+      user_id: row.user_id,
+      name: row.name,
+      role: row.role as ProfileRole,
+      created_at: row.created_at,
+    }));
   }
 
   async createProfile(name: string): Promise<UserProfile> {

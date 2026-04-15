@@ -151,8 +151,7 @@ export function DataProvider({ children }: DataProviderProps) {
         await supabase.auth.signOut();
         return;
       }
-      // Carica i profili utente
-      await supabase.rpc('repair_own_membership');
+      // Carica i profili utente (get_my_profiles fa repair + query in una RPC SECURITY DEFINER)
       const profiles = await apiService.getProfiles();
       setUserProfiles(profiles);
 
