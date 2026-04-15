@@ -271,14 +271,17 @@ class ApiService {
     const userId = await getCurrentUserId();
     const { data, error } = await supabase
       .from('profile_members')
-      .select('role, profiles(*)')
-      .eq('user_id', userId)
-      .order('profiles(created_at)');
+      .select('role, joined_at, profiles(*)')
+      .eq('user_id', userId);
     if (error) throw error;
-    return (data ?? []).map((row: any) => ({
-      ...row.profiles,
-      role: row.role as ProfileRole,
-    }));
+    return (data ?? [])
+      .map((row: any) => ({
+        ...row.profiles,
+        role: row.role as ProfileRole,
+      }))
+      .sort((a: any, b: any) =>
+        new Date(a.created_at ?? 0).getTime() - new Date(b.created_at ?? 0).getTime()
+      );
   }
 
   async createProfile(name: string): Promise<UserProfile> {
