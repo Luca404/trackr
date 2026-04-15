@@ -275,6 +275,7 @@ class ApiService {
       user_id: row.uid,
       name: row.name,
       role: row.role as ProfileRole,
+      member_count: Number(row.member_count ?? 1),
       created_at: row.created_at,
     }));
   }

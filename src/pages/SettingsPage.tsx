@@ -286,7 +286,7 @@ export default function SettingsPage() {
             {userProfiles.map(profile => (
               <div key={profile.id} className={`rounded-xl border-2 transition-colors ${activeProfile?.id === profile.id ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20' : 'border-gray-200 dark:border-gray-700'}`}>
                 {/* Riga principale profilo */}
-                <div className="flex items-center gap-2 px-3 py-2.5">
+                <div className="flex items-center gap-2 px-3 py-2.5 min-h-[52px]">
                   {editingProfileId === profile.id ? (
                     <input
                       className="flex-1 input-field text-sm"
@@ -303,6 +303,9 @@ export default function SettingsPage() {
                       <span className="font-medium text-sm text-gray-800 dark:text-gray-100">{profile.name}</span>
                       {activeProfile?.id === profile.id && (
                         <span className="text-xs text-primary-500 font-normal">{t('settings.activeProfile')}</span>
+                      )}
+                      {profile.role === 'owner' && (profile.member_count ?? 1) > 1 && (
+                        <span className="text-xs text-gray-400 dark:text-gray-500 font-normal">👥 {profile.member_count}</span>
                       )}
                       {profile.role !== 'owner' && (
                         <span className="text-xs text-gray-400 dark:text-gray-500 font-normal">

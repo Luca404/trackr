@@ -18,6 +18,7 @@ export interface UserProfile {
   user_id: string;  // FK a auth.users
   name: string;
   role: ProfileRole;  // 'owner' se è tuo, 'editor'/'viewer' se condiviso
+  member_count?: number;
   created_at?: string;
 }
 
