@@ -87,6 +87,7 @@ Desktop.ini
 # ========================
 .claude/settings.local.json
 .codex
+.superpowers/
 
 # ========================
 # Local Supabase

@@ -130,18 +130,49 @@ interface Portfolio {
 }
 ```
 
-## Profili multipli
+## Profili multipli e condivisibili
 
-Ogni account (email) può avere più profili, ciascuno con dati separati (conti, categorie, transazioni, trasferimenti, portafogli). Un profilo corrisponde a un insieme di dati indipendente (es. "Personale" vs "Freelance").
+Ogni account (email) può avere più profili, ciascuno con dati separati (conti, categorie, transazioni, trasferimenti, portafogli). Un profilo può essere condiviso con altri utenti registrati come `editor` (lettura+scrittura) o `viewer` (sola lettura).
 
-- Tabella `profiles`: `id UUID`, `user_id UUID` (FK auth.users), `name TEXT`. Il profilo principale ha `id = auth.uid()`.
-- Tutte le tabelle dati (`accounts`, `categories`, `transactions`, `transfers`, `portfolios`, `recurring_transactions`) hanno `profile_id UUID` (FK → `profiles.id`, ON DELETE CASCADE)
-- Il profilo attivo è in `localStorage['activeProfileId']` e in `apiService._activeProfileId`
-- `apiService.setActiveProfile(id)` va chiamato prima di qualsiasi query — lo fa `DataContext.fetchAllData` all'avvio
-- Tutte le query GET filtrano per `profile_id`; tutte le INSERT includono `profile_id`
-- Il selettore profili è in `SettingsPage` (sezione "Profili"): switch, rinomina, aggiungi, elimina
-- Il profilo principale (`id = user_id`) non è eliminabile (RLS blocca DELETE dove `id = user_id`)
-- Al cambio profilo, `pf_summaries_cache` in localStorage viene rimosso per forzare il reload dei dati portafoglio
+### Struttura DB
+
+- `profiles`: `id UUID`, `user_id UUID` (FK auth.users), `name TEXT`. Il profilo principale ha `id = auth.uid()`.
+- `profile_members`: `(profile_id, user_id)` PK, `role` ('owner'|'editor'|'viewer'), `email`, `joined_at`. **Unica source-of-truth per i permessi**.
+- `profile_share_invitations`: `id UUID`, `profile_id`, `invited_email`, `invited_by`, `role`, `status` ('pending'|'accepted'|'rejected'|'cancelled'), `expires_at` (7 giorni).
+- Tutte le tabelle dati hanno `profile_id UUID` (FK → `profiles.id`, ON DELETE CASCADE).
+
+### RLS e helper functions
+
+- `is_profile_member(profile_id, user_id)` — SECURITY DEFINER, usata da tutte le policy RLS.
+- `is_profile_owner(profile_id, user_id)` — SECURITY DEFINER.
+- `profiles_select` policy: accesso a owner, membri, e invitati pending (per mostrare il nome del profilo nella notifica).
+- Tutte le tabelle dati: SELECT via `is_profile_member`; INSERT/UPDATE/DELETE richiedono `role IN ('owner', 'editor')`.
+
+### RPC server-side
+
+- `get_my_profiles()` — SECURITY DEFINER: repair membership + crea profilo se mancante + restituisce `(id, uid, name, role, created_at, member_count)`. Unico punto di ingresso all'avvio. **`uid` è `user_id` rinominato per evitare ambiguità PL/pgSQL in RETURNS TABLE.**
+- `create_profile_invitation(p_profile_id, p_email, p_role)` — rate-limited (10/h), anti-enumeration (silenzio se email non esiste).
+- `accept_profile_invitation(p_invitation_id)` — atomico: crea membership + aggiorna status.
+- `repair_own_membership()` — tenuta come safety net, superseded da `get_my_profiles()`.
+
+### Logica client
+
+- Il profilo attivo è in `localStorage['activeProfileId']` e in `apiService._activeProfileId`.
+- `apiService.setActiveProfile(id)` va chiamato prima di qualsiasi query — lo fa `DataContext.fetchAllData` all'avvio.
+- `DataContext` espone `userProfiles`, `activeProfile`, `pendingInvitations`, e le actions: `switchProfile`, `createUserProfile`, `updateUserProfile`, `deleteUserProfile`, `acceptInvitation`, `rejectInvitation`, `leaveProfile`.
+- Il profilo principale (`id = user_id`) non è eliminabile (RLS blocca DELETE dove `id = user_id`).
+- Al cambio profilo, `pf_summaries_cache` in localStorage viene rimosso per forzare il reload dei dati portafoglio.
+
+### UI
+
+- `SettingsPage`: switch, rinomina, aggiungi, elimina profili. Per i profili `owner`: sezione espandibile con lista membri, form invito (email + ruolo). Numero di membri accanto all'icona 👥. Per i profili non-owner: bottone "Lascia profilo".
+- `Layout.tsx`: badge notifiche include `pendingInvitations.length`. Panel notifiche mostra card di invito con Accept/Reject. Banner viewer in alto (`activeProfile.role === 'viewer'`).
+- Pagine con scrittura (`TransactionsPage`, `AccountsPage`, `CategoriesPage`): pulsanti add/edit/delete nascosti se `activeProfile.role === 'viewer'`.
+
+### Note per il merge in main
+
+1. Aggiornare il trigger `on_auth_user_created` in Supabase per inserire anche in `profile_members` — così `repair_own_membership()` non serve più per i nuovi utenti.
+2. Verificare che la vecchia policy `profiles_select` sia stata droppata e sostituita correttamente.
 
 ## Contesti React
 
@@ -149,7 +180,7 @@ Ogni account (email) può avere più profili, ciascuno con dati separati (conti,
 - Tiene in memoria accounts, categories, transactions, transfers, portfolios (cache in-memory, no localStorage)
 - Si inizializza alla detection della sessione Supabase via `onAuthStateChange`
 - Espone `refreshAll()`, `refreshTransactions(startDate?, endDate?)`, `refreshTransfers()`, `refreshPortfolios()`, e CRUD ottimistico per tutti i tipi
-- Espone `userProfiles`, `activeProfile`, `switchProfile(profile)`, `createUserProfile(name)`, `updateUserProfile(id, name)`, `deleteUserProfile(id)`
+- Espone `userProfiles`, `activeProfile`, `pendingInvitations`, `switchProfile(profile)`, `createUserProfile(name)`, `updateUserProfile(id, name)`, `deleteUserProfile(id)`, `acceptInvitation(id)`, `rejectInvitation(id)`, `leaveProfile(id)`
 - All'avvio carica i profili, risolve il profilo attivo da localStorage, chiama `apiService.setActiveProfile()` prima di caricare i dati
 - Ricalcola `current_balance` degli account via `useEffect` ogni volta che cambiano transactions o transfers:
   - transactions: income +, expense/investment -
@@ -175,9 +206,9 @@ Ogni account (email) può avere più profili, ciascuno con dati separati (conti,
 - **Attenzione**: evitare `const t = ...` come nome variabile locale nei componenti che importano `useTranslation` (conflitto con il nome della funzione `t`)
 
 ## Supabase DB (schema unificato con portfolio-tracker)
-Tabelle: `profiles`, `accounts`, `categories`, `subcategories`, `transactions`, `recurring_transactions`, `transfers`, `portfolios`, `orders`
-- RLS abilitato su tutte le tabelle (`user_id = auth.uid()`)
-- Trigger `on_auth_user_created` crea automaticamente il profilo al signup
+Tabelle: `profiles`, `profile_members`, `profile_share_invitations`, `accounts`, `categories`, `subcategories`, `transactions`, `recurring_transactions`, `transfers`, `portfolios`, `orders`
+- RLS abilitato su tutte le tabelle. Dopo la migrazione `shared_profiles_migration.sql` le policy si basano su `is_profile_member()` invece di `user_id = auth.uid()`
+- Trigger `on_auth_user_created` crea automaticamente il profilo al signup (TODO: aggiornare per inserire anche in `profile_members`)
 - `current_balance` degli account non è una colonna DB — calcolato in DataContext
 - `transfers` ha colonne: `from_account_id`, `to_account_id`, `amount`, `description`, `date` — **non** usa la tabella `transactions`
 - `portfolios`: la colonna `category_id` è stata rimossa dal DB
@@ -313,6 +344,6 @@ Funzione di ricerca automatica degli ETF validi inseriti.
 
 Settare risk_free_source e market_benchmark in auto per i portafogli nuovi.
 
-Rendere Profili condivisibili.
+[x] Rendere Profili condivisibili. ✅
 
 Calendario si chiude quando cambio data, meglio se si riuscisse proprio a cambiare quel calendario android orribile.
