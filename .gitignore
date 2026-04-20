@@ -90,7 +90,6 @@ Desktop.ini
 .superpowers/
 
 # ========================
-# Local Supabase
+# Local
 # ========================
-supabase/
 database/
