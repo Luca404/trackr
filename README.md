@@ -2,9 +2,9 @@
 
 Personal finance PWA for tracking expenses, income, transfers, and investments. Data is stored in Supabase — sign in from any device.
 
-Part of the **Trackr ecosystem** — shares the same Supabase database with [pfTrackr](../portfolio-tracker) for investment portfolio analytics.
+Part of the **Trackrs ecosystem** — shares the same Supabase database with [pfTrackr](../portfolio-tracker) for investment portfolio analytics, and [CalTrackr](../fitness-tracker) for calorie and nutrition tracking.
 
-**Current version:** 1.0.30
+**Current version:** 1.0.32
 
 ## Features
 
@@ -14,7 +14,7 @@ Part of the **Trackr ecosystem** — shares the same Supabase database with [pfT
 - **Multi-profile** — separate data scopes (e.g. personal / freelance), switchable from Settings
 - **Categories** — with subcategories and per-period stats
 - **Accounts** — bank accounts and wallets with real-time balance calculation
-- **Portfolios** — live summaries fetched from the pfTrackr backend (Railway)
+- **Portfolios** — live summaries fetched from the pfTrackr backend (Render)
 - **Statistics** — charts and trends with a customizable date range
 - **Notification bell** — overdue recurring investment reminders with inline completion flow
 - **Kakebo import** — multi-step migration wizard with atomic server-side RPC and balance diagnostics
@@ -38,7 +38,7 @@ Create `.env.local`:
 ```env
 VITE_SUPABASE_URL=https://<project>.supabase.co
 VITE_SUPABASE_ANON_KEY=...
-VITE_PF_BACKEND_URL=https://portfolio-tracker-production-3bd4.up.railway.app
+VITE_PF_BACKEND_URL=https://portfolio-tracker-p6ha.onrender.com
 ```
 
 ```bash
