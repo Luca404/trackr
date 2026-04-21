@@ -2,7 +2,7 @@
 
 Personal finance PWA for tracking expenses, income, transfers, and investments. Data is stored in Supabase — sign in from any device.
 
-Part of the **Trackrs ecosystem** — shares the same Supabase database with [pfTrackr](../portfolio-tracker) for investment portfolio analytics, and [CalTrackr](../fitness-tracker) for calorie and nutrition tracking.
+Part of the **Trackrs ecosystem** — shares the same Supabase database with [pfTrackr](../portfolio-tracker) for investment portfolio analytics, and [fitTrackr](../fitness-tracker) for calorie and nutrition tracking.
 
 **Current version:** 1.0.32
 
