@@ -38,7 +38,7 @@ Create `.env.local`:
 ```env
 VITE_SUPABASE_URL=https://<project>.supabase.co
 VITE_SUPABASE_ANON_KEY=...
-VITE_PF_BACKEND_URL=https://portfolio-tracker-p6ha.onrender.com
+VITE_PF_BACKEND_URL=https://<your-render-backend>.onrender.com
 ```
 
 ```bash
