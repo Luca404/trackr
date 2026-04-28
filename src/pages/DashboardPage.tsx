@@ -97,7 +97,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Statistiche principali */}
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div className="card bg-gradient-to-br from-red-50 to-red-100 dark:from-red-900/20 dark:to-red-800/20 border-2 border-red-200 dark:border-red-800">
             <div className="text-sm text-red-600 dark:text-red-400 font-medium mb-1">
               {t('stats.expenses')}
