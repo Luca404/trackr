@@ -18,6 +18,9 @@ import type {
   User,
   RecurringTransaction,
   UserProfile,
+  ProfileRole,
+  ProfileMember,
+  ProfileInvitation,
 } from '../types';
 import {
   buildRecurringInsertPayload,
@@ -265,12 +268,14 @@ class ApiService {
   // ==================== PROFILES ====================
 
   async getProfiles(): Promise<UserProfile[]> {
-    const { data, error } = await supabase.from('profiles').select('*').order('created_at');
+    const { data, error } = await supabase.rpc('get_my_profiles');
     if (error) throw error;
-    return (data || []).map(row => ({
+    return (data ?? []).map((row: any) => ({
       id: row.id,
-      user_id: row.user_id,
+      user_id: row.uid,
       name: row.name,
+      role: row.role as ProfileRole,
+      member_count: Number(row.member_count ?? 1),
       created_at: row.created_at,
     }));
   }
@@ -283,7 +288,7 @@ class ApiService {
       .select()
       .single();
     if (error) throw error;
-    return { id: data.id, user_id: data.user_id, name: data.name, created_at: data.created_at };
+    return { id: data.id, user_id: data.user_id, name: data.name, role: 'owner' as ProfileRole, created_at: data.created_at };
   }
 
   async updateProfile(id: string, name: string): Promise<void> {
@@ -293,6 +298,98 @@ class ApiService {
 
   async deleteProfile(id: string): Promise<void> {
     const { error } = await supabase.from('profiles').delete().eq('id', id);
+    if (error) throw error;
+  }
+
+  async getProfileMembers(profileId: string): Promise<ProfileMember[]> {
+    const { data, error } = await supabase
+      .from('profile_members')
+      .select('*')
+      .eq('profile_id', profileId)
+      .order('joined_at');
+    if (error) throw error;
+    return data ?? [];
+  }
+
+  async inviteToProfile(profileId: string, email: string, role: 'editor' | 'viewer'): Promise<void> {
+    const { error } = await supabase.rpc('create_profile_invitation', {
+      p_profile_id: profileId,
+      p_email: email,
+      p_role: role,
+    });
+    if (error) {
+      if (error.message.includes('already_member')) throw new Error('already_member');
+      if (error.message.includes('invite_pending')) throw new Error('invite_pending');
+      if (error.message.includes('rate_limited')) throw new Error('rate_limited');
+      if (error.message.includes('not_owner')) throw new Error('not_owner');
+      throw error;
+    }
+  }
+
+  async removeProfileMember(profileId: string, userId: string): Promise<void> {
+    const { error } = await supabase
+      .from('profile_members')
+      .delete()
+      .eq('profile_id', profileId)
+      .eq('user_id', userId);
+    if (error) throw error;
+  }
+
+  async cancelInvitation(invitationId: string): Promise<void> {
+    const { error } = await supabase
+      .from('profile_share_invitations')
+      .update({ status: 'cancelled' })
+      .eq('id', invitationId)
+      .eq('status', 'pending');
+    if (error) throw error;
+  }
+
+  async leaveProfile(profileId: string): Promise<void> {
+    const userId = await getCurrentUserId();
+    const { error } = await supabase
+      .from('profile_members')
+      .delete()
+      .eq('profile_id', profileId)
+      .eq('user_id', userId)
+      .neq('role', 'owner');
+    if (error) throw error;
+  }
+
+  async getPendingInvitations(): Promise<ProfileInvitation[]> {
+    const { data, error } = await supabase
+      .from('profile_share_invitations')
+      .select('*, profiles(name)')
+      .eq('status', 'pending')
+      .gt('expires_at', new Date().toISOString())
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    return (data ?? []).map((row: any) => ({
+      id: row.id,
+      profile_id: row.profile_id,
+      profile_name: row.profiles?.name ?? '',
+      invited_by_email: row.invited_by,
+      role: row.role,
+      status: row.status,
+      expires_at: row.expires_at,
+    }));
+  }
+
+  async acceptInvitation(invitationId: string): Promise<void> {
+    const { error } = await supabase.rpc('accept_profile_invitation', {
+      p_invitation_id: invitationId,
+    });
+    if (error) {
+      if (error.message.includes('invalid_invitation')) throw new Error('invalid_invitation');
+      if (error.message.includes('not_recipient')) throw new Error('not_recipient');
+      throw error;
+    }
+  }
+
+  async rejectInvitation(invitationId: string): Promise<void> {
+    const { error } = await supabase
+      .from('profile_share_invitations')
+      .update({ status: 'rejected' })
+      .eq('id', invitationId);
     if (error) throw error;
   }
 

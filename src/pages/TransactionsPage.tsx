@@ -52,8 +52,10 @@ export default function TransactionsPage() {
     deleteFreeOrder,
     refreshTransactions,
     refreshPortfolios,
+    activeProfile,
   } = useData();
 
+  const isViewer = activeProfile?.role === 'viewer';
   const totalCount = allTransactions.length + allTransfers.length;
   const skeletonCount = useSkeletonCount('transactions', totalCount, dataLoading, 5);
 
@@ -578,13 +580,15 @@ export default function TransactionsPage() {
         </div>
 
         {/* Aggiungi nuova transazione */}
-        <div
-          className="bg-white dark:bg-gray-800 rounded-xl shadow-md px-4 py-6 md:py-3 flex items-center justify-center border-2 border-dashed border-gray-200 dark:border-gray-700 cursor-pointer outline-none select-none"
-          style={{ WebkitTapHighlightColor: 'transparent' }}
-          onClick={handleNewTransaction}
-        >
-          <div className="w-10 h-10 rounded-full border-2 border-gray-300 dark:border-gray-600 flex items-center justify-center text-gray-400 dark:text-gray-500 font-bold text-2xl">+</div>
-        </div>
+        {!isViewer && (
+          <div
+            className="bg-white dark:bg-gray-800 rounded-xl shadow-md px-4 py-6 md:py-3 flex items-center justify-center border-2 border-dashed border-gray-200 dark:border-gray-700 cursor-pointer outline-none select-none"
+            style={{ WebkitTapHighlightColor: 'transparent' }}
+            onClick={handleNewTransaction}
+          >
+            <div className="w-10 h-10 rounded-full border-2 border-gray-300 dark:border-gray-600 flex items-center justify-center text-gray-400 dark:text-gray-500 font-bold text-2xl">+</div>
+          </div>
+        )}
 
         {/* Lista transazioni raggruppate per giorno */}
         <div className="space-y-6">

@@ -209,6 +209,22 @@
     "profileNamePlaceholder": "Profile name",
     "errorProfileSave": "Error saving profile",
     "errorProfileDelete": "Error deleting profile",
+    "manageMembers": "Manage members",
+    "members": "Members",
+    "invite": "Invite",
+    "inviteEmailPlaceholder": "email@example.com",
+    "inviteSent": "If this address is registered on Trackr, they will receive an invitation shortly.",
+    "inviteErrorAlreadyMember": "This user is already a member of this profile.",
+    "inviteErrorPending": "There is already a pending invitation for this email.",
+    "inviteErrorRateLimit": "Too many invitations sent. Try again in an hour.",
+    "inviteError": "Error sending the invitation.",
+    "remove": "Remove",
+    "leaveProfile": "Leave profile",
+    "confirmRemoveMember": "Remove this member from the profile?",
+    "confirmLeaveProfile": "Leave this shared profile?",
+    "role_owner": "owner",
+    "role_editor": "editor",
+    "role_viewer": "viewer",
     "account": "Account",
     "activeAccount": "Active account",
     "changePassword": "Change password",
@@ -309,5 +325,14 @@
     "skipped": "{{count}} records skipped",
     "importAndReset": "⚠️ Import and reset",
     "import": "Import"
+  },
+  "layout": {
+    "viewerBanner": "You are viewing this profile in read-only mode"
+  },
+  "notifications": {
+    "profileInviteTitle": "Shared profile invitation",
+    "profileInviteBody": "You've been invited to collaborate on \"{{profileName}}\" as {{role}}",
+    "accept": "Accept",
+    "reject": "Reject"
   }
 }
