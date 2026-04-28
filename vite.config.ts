@@ -5,8 +5,8 @@ import { execSync } from 'child_process'
 
 const APP_MAJOR = 1
 const APP_MINOR = 0
-const APP_PATCH = 32  // Incrementare manualmente ad ogni release pubblicata
-const APP_RELEASE_NOTES = 'Migrated to Supabase publishable API keys, shared profiles feature'
+const APP_PATCH = 33  // Incrementare manualmente ad ogni release pubblicata
+const APP_RELEASE_NOTES = 'Responsive desktop layout: sidebar nav, compact cards, transaction filter chips'
 
 function getCommitMsg() {
   try {
