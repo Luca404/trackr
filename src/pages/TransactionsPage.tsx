@@ -74,7 +74,7 @@ export default function TransactionsPage() {
   const [filterAccountIds, setFilterAccountIds] = useState<Set<number>>(new Set());
   const [filterCategories, setFilterCategories] = useState<Set<string>>(new Set());
 
-  const activeFilterCount = filterTypes.size + filterAccountIds.size + filterCategories.size;
+
 
   // Lista unificata filtrata per periodo, ordinata per data
   const listItems = useMemo((): ListItem[] => {
@@ -475,7 +475,7 @@ export default function TransactionsPage() {
               onClick={() => setFilterTypes(new Set())}
               className={`flex-1 py-1.5 rounded-full text-xs font-medium transition-colors ${
                 filterTypes.size === 0
-                  ? 'bg-gray-800 dark:bg-gray-100 text-white dark:text-gray-900'
+                  ? 'bg-primary-500 text-white'
                   : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300'
               }`}
             >
@@ -490,7 +490,7 @@ export default function TransactionsPage() {
                 )}
                 className={`flex-1 px-2 py-1.5 rounded-full text-xs font-medium transition-colors ${
                   filterTypes.has(value)
-                    ? 'bg-gray-800 dark:bg-gray-100 text-white dark:text-gray-900'
+                    ? 'bg-primary-500 text-white'
                     : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300'
                 }`}
               >
@@ -579,7 +579,7 @@ export default function TransactionsPage() {
 
         {/* Aggiungi nuova transazione */}
         <div
-          className="bg-white dark:bg-gray-800 rounded-xl shadow-md px-4 py-6 flex items-center justify-center border-2 border-dashed border-gray-200 dark:border-gray-700 cursor-pointer outline-none select-none"
+          className="bg-white dark:bg-gray-800 rounded-xl shadow-md px-4 py-6 md:py-3 flex items-center justify-center border-2 border-dashed border-gray-200 dark:border-gray-700 cursor-pointer outline-none select-none"
           style={{ WebkitTapHighlightColor: 'transparent' }}
           onClick={handleNewTransaction}
         >

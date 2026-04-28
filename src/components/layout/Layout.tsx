@@ -230,17 +230,68 @@ export default function Layout({ children }: LayoutProps) {
 
   return (
     <div
-      className="flex flex-col bg-gray-50 dark:bg-gray-900 overflow-hidden"
+      className="flex flex-col md:flex-row bg-gray-50 dark:bg-gray-900 overflow-hidden"
       style={{
         height: '100dvh'
       }}
     >
-      {/* Header */}
-      <header ref={headerRef} className="bg-white dark:bg-gray-800 shadow-sm flex-shrink-0 z-10">
-        <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
+      {/* Desktop Sidebar */}
+      <aside className="hidden md:flex flex-col w-56 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex-shrink-0">
+        <div className="px-4 h-14 flex items-center border-b border-gray-200 dark:border-gray-700">
           <button
             onClick={() => navigate('/transactions')}
             className="flex items-baseline gap-2 text-xl font-bold text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 transition-colors"
+          >
+            Trackr
+            <span className="text-xs font-normal text-gray-400 dark:text-gray-500">v{__APP_VERSION__}</span>
+          </button>
+        </div>
+        <nav className="flex-1 px-2 py-3 space-y-0.5">
+          {navItems.map((item) => (
+            <button
+              key={item.path}
+              onClick={() => navigate(item.path)}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                location.pathname === item.path
+                  ? 'bg-primary-50 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400'
+                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-gray-200'
+              }`}
+            >
+              <span className="text-xl">{item.icon}</span>
+              <span>{item.label}</span>
+            </button>
+          ))}
+        </nav>
+        <div className="px-2 py-3 border-t border-gray-200 dark:border-gray-700 space-y-0.5">
+          {user?.name && (
+            <div className="px-3 py-2 text-xs text-gray-500 dark:text-gray-400 truncate">{user.name}</div>
+          )}
+          <button
+            onClick={() => navigate('/settings')}
+            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+              location.pathname === '/settings'
+                ? 'bg-primary-50 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400'
+                : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-gray-200'
+            }`}
+          >
+            <svg className="w-5 h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+            <span>{t('settings.title')}</span>
+          </button>
+        </div>
+      </aside>
+
+      {/* Main column */}
+      <div className="flex flex-col flex-1 overflow-hidden">
+
+      {/* Header */}
+      <header ref={headerRef} className="bg-white dark:bg-gray-800 shadow-sm md:shadow-none md:border-b md:border-gray-200 md:dark:border-gray-700 flex-shrink-0 z-10 md:h-14">
+        <div className="max-w-7xl mx-auto px-4 py-4 md:py-0 md:h-full flex items-center justify-between md:justify-end">
+          <button
+            onClick={() => navigate('/transactions')}
+            className="flex items-baseline gap-2 text-xl font-bold text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 transition-colors md:hidden"
           >
             Trackr
             <span className="text-xs font-normal text-gray-400 dark:text-gray-500">
@@ -248,7 +299,7 @@ export default function Layout({ children }: LayoutProps) {
             </span>
           </button>
           <div className="flex items-center gap-4">
-            <span className="text-sm text-gray-600 dark:text-gray-400 hidden sm:inline">
+            <span className="text-sm text-gray-600 dark:text-gray-400 hidden sm:inline md:hidden">
               {user?.name}
             </span>
             <div className="relative flex h-6 items-center" ref={notificationsRef}>
@@ -272,7 +323,7 @@ export default function Layout({ children }: LayoutProps) {
               </button>
               {isNotificationsOpen && (
                 <div
-                  className="fixed left-0 right-0 z-50 border-t border-gray-200 dark:border-gray-700 bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm shadow-lg"
+                  className="fixed left-0 md:left-56 right-0 z-50 border-t border-gray-200 dark:border-gray-700 bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm shadow-lg"
                   style={{ top: `${headerBottom}px` }}
                 >
                   <div className="max-w-7xl mx-auto px-4">
@@ -333,7 +384,7 @@ export default function Layout({ children }: LayoutProps) {
             </button>
             <button
               onClick={() => navigate('/settings')}
-              className="inline-flex h-6 w-6 items-center justify-center text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 transition-colors"
+              className="inline-flex h-6 w-6 items-center justify-center text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 transition-colors md:hidden"
               title={t('settings.title')}
             >
               <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -350,8 +401,8 @@ export default function Layout({ children }: LayoutProps) {
         className="flex-1 max-w-7xl w-full mx-auto px-4 py-3 overflow-y-auto overscroll-y-none"
       >
         <div
+          className="pb-24 md:pb-6 md:max-w-4xl md:mx-auto"
           style={{
-            paddingBottom: '6rem',
             transition: isSwipingHorizontally ? 'none' : 'transform 0.3s ease-out, opacity 0.3s ease-out',
             transform: `translateX(${Math.max(-30, Math.min(30, swipeOffset * 0.2))}px)`,
             opacity: isSwipingHorizontally ? Math.max(0.7, 1 - Math.abs(swipeOffset) / 800) : 1
@@ -360,10 +411,11 @@ export default function Layout({ children }: LayoutProps) {
           {children}
         </div>
       </main>
+      </div>{/* end main column */}
 
       {/* Update banner */}
       {needRefresh && (
-        <div className="fixed left-0 right-0 z-50 px-4" style={{ bottom: 'calc(4.5rem + env(safe-area-inset-bottom))' }}>
+        <div className="fixed left-0 md:left-56 right-0 z-50 px-4" style={{ bottom: 'calc(4.5rem + env(safe-area-inset-bottom))' }}>
           <div className="bg-gray-900 dark:bg-gray-700 text-white rounded-xl shadow-lg px-4 py-3 flex items-center gap-3">
             <span className="text-lg flex-shrink-0">🔄</span>
             <div className="flex-1 min-w-0">
@@ -383,7 +435,7 @@ export default function Layout({ children }: LayoutProps) {
       )}
 
       {/* Bottom Navigation */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 safe-area-pb z-[60]">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 safe-area-pb z-[60]">
         <div className="flex justify-around items-center h-16">
           {navItems.map((item) => (
             <button
