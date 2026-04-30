@@ -257,8 +257,8 @@ export default function SettingsPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-10">
-      {/* Header con back button */}
-      <div className="sticky top-0 z-10 bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 px-4 py-3 flex items-center gap-3">
+      {/* Header con back button — mobile only */}
+      <div className="md:hidden sticky top-0 z-10 bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 px-4 py-3 flex items-center gap-3">
         <button
           onClick={() => navigate(-1)}
           className="w-9 h-9 flex items-center justify-center rounded-full text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
@@ -270,7 +270,19 @@ export default function SettingsPage() {
         <h1 className="text-lg font-semibold text-gray-900 dark:text-white">{t('settings.title')}</h1>
       </div>
 
-      <div className="max-w-lg mx-auto px-4 pt-6 space-y-5">
+      <div className="hidden md:flex items-center gap-3 px-4 pt-8 pb-2 max-w-2xl mx-auto">
+        <button
+          onClick={() => navigate(-1)}
+          className="w-9 h-9 flex items-center justify-center rounded-full text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+        >
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+          </svg>
+        </button>
+        <h1 className="text-xl font-bold text-gray-900 dark:text-white">{t('settings.title')}</h1>
+      </div>
+
+      <div className="max-w-lg md:max-w-2xl mx-auto px-4 pt-6 md:pt-2 space-y-5">
 
         {/* Profili */}
         <section className="card">
@@ -669,24 +681,6 @@ export default function SettingsPage() {
           )}
         </section>
 
-        {/* Installazione */}
-        <section className="card">
-          <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3">{t('settings.install')}</h2>
-          <div className="space-y-2 text-sm text-gray-600 dark:text-gray-400">
-            <div className="flex items-start gap-2">
-              <span className="shrink-0">🤖</span>
-              <span><strong>{t('settings.installAndroid')}:</strong> {t('settings.installAndroidDesc')}</span>
-            </div>
-            <div className="flex items-start gap-2">
-              <span className="shrink-0">🍎</span>
-              <span><strong>{t('settings.installIos')}:</strong> {t('settings.installIosDesc')}</span>
-            </div>
-            <div className="flex items-start gap-2">
-              <span className="shrink-0">💻</span>
-              <span><strong>{t('settings.installDesktop')}:</strong> {t('settings.installDesktopDesc')}</span>
-            </div>
-          </div>
-        </section>
 
       </div>
 

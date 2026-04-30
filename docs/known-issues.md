@@ -22,3 +22,7 @@
 - **Auto risk_free_source and market_benchmark**: set these to sensible defaults for new portfolios automatically.
 - **Calendar UX**: the date picker closes when changing date. Investigate replacing the native Android calendar with a custom one.
 - **Balance graph edge cases**: decide how to show the balance trend graph when there's only one transaction. Mark investment transactions on the balance graph.
+
+- Poi vorrei togliere la card "Installa l'app" nelle impostazioni (inutile lì in fondo), sempre per quanto riguarda le impostazioni le vorrei rendere più carine da pc, sempre da pc voglio la barra laterale di scorrimento in fondo alla pagina, non che fluttua a metà
+
+- Ora invece nella pagina Recap voglio che il grafico Andamento saldo abbia una legenda dell'asse y più sensata, con step fissi in base ai valori min e max

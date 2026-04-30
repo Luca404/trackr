@@ -26,6 +26,7 @@ export default function StatsPage() {
   const [filter, setFilter] = useState<StatsFilter>('expense');
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
+  const [activeDotIndex, setActiveDotIndex] = useState<number | null>(null);
 
   const { startDate, endDate, type: periodType, setPeriod } = usePeriod();
 
@@ -83,7 +84,8 @@ export default function StatsPage() {
       const monthStart = new Date(current.getFullYear(), current.getMonth(), 1);
       while (monthStart <= endDate) {
         const rawM = monthStart.toLocaleDateString(undefined, { month: 'short', year: '2-digit' });
-        periods.push({ label: rawM[0].toUpperCase() + rawM.slice(1), date: new Date(monthStart) });
+        const labelM = (rawM[0].toUpperCase() + rawM.slice(1)).replace(/\s+/g, '');
+        periods.push({ label: labelM, date: new Date(monthStart) });
         monthStart.setMonth(monthStart.getMonth() + 1);
       }
     } else {
@@ -175,23 +177,46 @@ export default function StatsPage() {
   const dataMaxBalance = Math.max(...balanceTrendData.map(d => d.balance), 0);
   const dataMinBalance = Math.min(...balanceTrendData.map(d => d.balance), 0);
   const balanceRange = Math.max(dataMaxBalance - dataMinBalance, 1);
+  const chartPad = balanceRange * 0.07;
+  const chartMin = dataMinBalance - chartPad;
+  const chartRange = balanceRange + chartPad * 2;
+
+  const yAxisTicks = useMemo(() => {
+    const roughStep = balanceRange / 4;
+    const mag = Math.pow(10, Math.floor(Math.log10(roughStep > 0 ? roughStep : 1)));
+    const norm = roughStep / mag;
+    let step: number;
+    if (norm < 1.5) step = mag;
+    else if (norm < 3) step = 2 * mag;
+    else if (norm < 7) step = 5 * mag;
+    else step = 10 * mag;
+    const ticks: number[] = [];
+    const start = Math.ceil((dataMinBalance - step * 0.001) / step) * step;
+    for (let v = start; v <= dataMaxBalance + step * 0.001; v += step) {
+      ticks.push(Math.round(v / step) * step);
+    }
+    return ticks.map(value => ({
+      value,
+      pct: ((value - chartMin) / chartRange) * 100,
+    }));
+  }, [dataMinBalance, dataMaxBalance, balanceRange, chartMin, chartRange]);
 
   // Label asse X per grafico saldo
   const showBalanceLabel = (index: number, total: number) => {
     if (total <= 7) return true;
-    if (total <= 14) return index % 2 === 0 || index === total - 1;
-    if (total <= 21) return index % 3 === 0 || index === total - 1;
-    if (total <= 31) return index % 5 === 0 || index === total - 1;
-    return index % 7 === 0 || index === total - 1;
+    if (total <= 14) return index % 2 === 0;
+    if (total <= 21) return index % 3 === 0;
+    if (total <= 31) return index % 5 === 0;
+    return index % 7 === 0;
   };
 
   // Label asse X per grafico a barre
   const showBarLabel = (index: number, total: number) => {
     if (total <= 12) return true;
-    if (total <= 14) return index % 2 === 0 || index === total - 1;
-    if (total <= 21) return index % 3 === 0 || index === total - 1;
-    if (total <= 31) return index % 3 === 0 || index === total - 1;
-    return index % 7 === 0 || index === total - 1;
+    if (total <= 14) return index % 2 === 0;
+    if (total <= 21) return index % 3 === 0;
+    if (total <= 31) return index % 3 === 0;
+    return index % 7 === 0;
   };
 
   return (
@@ -243,22 +268,29 @@ export default function StatsPage() {
             </h3>
             <div className="relative h-52">
               {/* Asse Y */}
-              <div className="absolute left-0 top-0 bottom-6 flex flex-col justify-between text-xs text-gray-400 dark:text-gray-500 pr-1 w-14 text-right">
-                <span>{formatCurrency(dataMaxBalance)}</span>
-                {dataMinBalance < 0 && dataMaxBalance > 0 && <span>€ 0</span>}
-                <span>{formatCurrency(dataMinBalance)}</span>
+              <div className="absolute left-0 top-0 bottom-6 w-14 pr-1 text-xs text-gray-400 dark:text-gray-500">
+                {yAxisTicks.map(({ value, pct }) => (
+                  <span
+                    key={value}
+                    className="absolute right-1 -translate-y-1/2 text-right leading-none"
+                    style={{ top: `${100 - pct}%` }}
+                  >
+                    {formatCurrency(value).replace(/[,.]00$/, '')}
+                  </span>
+                ))}
               </div>
 
               {/* Area grafico */}
               <div className="absolute left-16 right-0 top-0 bottom-0 flex flex-col">
                 <div className="flex-1 relative">
-                  {/* Linea dello zero */}
-                  {dataMinBalance < 0 && dataMaxBalance >= 0 && (
+                  {/* Linee griglia Y */}
+                  {yAxisTicks.map(({ value, pct }) => (
                     <div
-                      className="absolute left-0 right-0 border-t border-dashed border-gray-300 dark:border-gray-600 z-0"
-                      style={{ bottom: `${((0 - dataMinBalance) / balanceRange) * 100}%` }}
+                      key={value}
+                      className={`absolute left-0 right-0 z-0 ${value === 0 ? 'border-t border-dashed border-gray-300 dark:border-gray-600' : 'border-t border-gray-100 dark:border-gray-700/50'}`}
+                      style={{ bottom: `${pct}%` }}
                     />
-                  )}
+                  ))}
 
                   {/* SVG linea */}
                   <svg className="absolute inset-0 w-full h-full z-10 overflow-visible" viewBox="0 0 100 100" preserveAspectRatio="none">
@@ -277,7 +309,7 @@ export default function StatsPage() {
                         .map((point) => {
                           const i = balanceTrendData.indexOf(point);
                           const x = totalLen > 1 ? (i / (totalLen - 1)) * 100 : 50;
-                          const y = 100 - ((point.balance - dataMinBalance) / balanceRange) * 100;
+                          const y = 100 - ((point.balance - chartMin) / chartRange) * 100;
                           return { x, y };
                         });
                       if (svgPoints.length === 0) return null;
@@ -323,31 +355,62 @@ export default function StatsPage() {
                     if (!point.hasTransactions) return null;
                     const index = balanceTrendData.indexOf(point);
                     const x = balanceTrendData.length > 1 ? (index / (balanceTrendData.length - 1)) * 100 : 50;
-                    const y = 100 - ((point.balance - dataMinBalance) / balanceRange) * 100;
+                    const y = 100 - ((point.balance - chartMin) / chartRange) * 100;
                     return (
                       <div
                         key={index}
-                        className={`absolute w-2.5 h-2.5 rounded-full border-2 shadow-sm z-20 ${point.dayNet >= 0 ? 'bg-green-400 border-green-600' : 'bg-red-400 border-red-600'}`}
-                        style={{
-                          left: `calc(${x}% - 5px)`,
-                          top: `calc(${y}% - 5px)`,
-                        }}
-                        title={`${point.label}: ${formatCurrency(point.balance)}`}
+                        className={`absolute w-3 h-3 rounded-full border-2 shadow-sm z-20 cursor-pointer ${point.dayNet >= 0 ? 'bg-green-400 border-green-600' : 'bg-red-400 border-red-600'}`}
+                        style={{ left: `calc(${x}% - 6px)`, top: `calc(${y}% - 6px)` }}
+                        onMouseEnter={() => setActiveDotIndex(index)}
+                        onMouseLeave={() => setActiveDotIndex(null)}
+                        onClick={() => setActiveDotIndex(prev => prev === index ? null : index)}
                       />
                     );
                   })}
+
+                  {/* Tooltip pallino attivo */}
+                  {activeDotIndex !== null && (() => {
+                    const pt = visibleTrendData.find(p => balanceTrendData.indexOf(p) === activeDotIndex);
+                    if (!pt) return null;
+                    const tx = balanceTrendData.length > 1 ? (activeDotIndex / (balanceTrendData.length - 1)) * 100 : 50;
+                    const ty = 100 - ((pt.balance - chartMin) / chartRange) * 100;
+                    const xShift = tx > 70 ? '-100%' : tx < 30 ? '0%' : '-50%';
+                    const showBelow = ty < 28;
+                    return (
+                      <div
+                        className="absolute z-30 bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-100 dark:border-gray-700 px-3 py-2 text-xs pointer-events-none"
+                        style={{
+                          left: `${tx}%`,
+                          ...(showBelow ? { top: `calc(${ty}% + 10px)` } : { bottom: `calc(${100 - ty}% + 10px)` }),
+                          transform: `translateX(${xShift})`,
+                        }}
+                      >
+                        <div className="font-semibold text-gray-800 dark:text-gray-100 whitespace-nowrap">{pt.label}</div>
+                        <div className="text-gray-500 dark:text-gray-400 whitespace-nowrap mt-0.5">{formatCurrency(pt.balance).replace(/[,.]00$/, '')}</div>
+                        {pt.dayNet !== 0 && (
+                          <div className={`font-medium whitespace-nowrap mt-0.5 ${pt.dayNet >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400'}`}>
+                            {pt.dayNet > 0 ? '+' : ''}{formatCurrency(pt.dayNet).replace(/[,.]00$/, '')}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 {/* Asse X */}
                 <div className="relative h-5 mt-1">
                   {balanceTrendData.map((point, index) => {
                     if (!showBalanceLabel(index, balanceTrendData.length)) return null;
-                    const x = balanceTrendData.length > 1 ? (index / (balanceTrendData.length - 1)) * 100 : 50;
+                    const total = balanceTrendData.length;
+                    const x = total > 1 ? (index / (total - 1)) * 100 : 50;
+                    const isFirst = index === 0;
+                    const isLast = index === total - 1;
+                    const translate = isFirst ? 'translateX(0%)' : isLast ? 'translateX(-100%)' : 'translateX(-50%)';
                     return (
                       <div
                         key={index}
-                        className="absolute text-xs text-gray-400 dark:text-gray-500 -translate-x-1/2"
-                        style={{ left: `${x}%` }}
+                        className="absolute text-xs text-gray-400 dark:text-gray-500 whitespace-nowrap"
+                        style={{ left: `${x}%`, transform: translate }}
                       >
                         {point.label}
                       </div>

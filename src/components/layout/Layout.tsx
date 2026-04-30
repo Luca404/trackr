@@ -435,23 +435,25 @@ export default function Layout({ children }: LayoutProps) {
 
       {/* Main Content */}
       <main
-        className="flex-1 max-w-7xl w-full mx-auto px-4 py-3 overflow-y-auto overscroll-y-none"
+        className="flex-1 w-full overflow-y-auto overscroll-y-none"
       >
-        {activeProfile?.role === 'viewer' && (
-          <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg px-4 py-2 mb-3 text-xs text-amber-700 dark:text-amber-400 flex items-center gap-2">
-            <span>👁️</span>
-            <span>{t('layout.viewerBanner')}</span>
+        <div className="max-w-7xl mx-auto px-4 py-3">
+          {activeProfile?.role === 'viewer' && (
+            <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg px-4 py-2 mb-3 text-xs text-amber-700 dark:text-amber-400 flex items-center gap-2">
+              <span>👁️</span>
+              <span>{t('layout.viewerBanner')}</span>
+            </div>
+          )}
+          <div
+            className="pb-24 md:pb-6 md:max-w-4xl md:mx-auto"
+            style={{
+              transition: isSwipingHorizontally ? 'none' : 'transform 0.3s ease-out, opacity 0.3s ease-out',
+              transform: `translateX(${Math.max(-30, Math.min(30, swipeOffset * 0.2))}px)`,
+              opacity: isSwipingHorizontally ? Math.max(0.7, 1 - Math.abs(swipeOffset) / 800) : 1
+            }}
+          >
+            {children}
           </div>
-        )}
-        <div
-          className="pb-24 md:pb-6 md:max-w-4xl md:mx-auto"
-          style={{
-            transition: isSwipingHorizontally ? 'none' : 'transform 0.3s ease-out, opacity 0.3s ease-out',
-            transform: `translateX(${Math.max(-30, Math.min(30, swipeOffset * 0.2))}px)`,
-            opacity: isSwipingHorizontally ? Math.max(0.7, 1 - Math.abs(swipeOffset) / 800) : 1
-          }}
-        >
-          {children}
         </div>
       </main>
       </div>{/* end main column */}

@@ -53,6 +53,7 @@ interface InvDetail {
   name: string;
   exchange: string;
   ter: string;
+  excluded: boolean;
 }
 
 // Mode B: one entry per position (multiple per portfolio allowed)
@@ -78,7 +79,8 @@ function msToDate(ms: number): string { return new Date(ms).toISOString().slice(
 function mapCalendarFieldToFrequency(calendarField?: number | null): RecurringFrequency {
   if (calendarField === 1) return 'yearly';
   if (calendarField === 2) return 'monthly';
-  return 'weekly';
+  if (calendarField === 3) return 'weekly';
+  return 'monthly';
 }
 function normalizeLooseText(value?: string | null): string {
   return (value || '').trim().toLocaleLowerCase();
@@ -93,6 +95,87 @@ function queryAll<T>(db: any, sql: string): T[] {
 function isInvestmentName(name: string): boolean { return /investiment/i.test(name); }
 function formatCurrency(amount: number, currency: string = 'EUR'): string {
   return amount.toLocaleString('it-IT', { style: 'currency', currency });
+}
+
+// ── icon pickers ───────────────────────────────────────────────────────────────
+
+const KAKEBO_CAT_ICON_MAP: [string[], string][] = [
+  [['spesa', 'alimentari', 'supermercato', 'cibo', 'food'], '🛍️'],
+  [['ristorante', 'pranzo', 'cena', 'mangiare', 'trattoria', 'pizzeria', 'pizza'], '🍕'],
+  [['bar', 'caffè', 'caffe', 'colazione', 'cappuccino'], '☕'],
+  [['benzina', 'carburante', 'gasolio', 'rifornimento', 'distributore'], '⛽'],
+  [['auto', 'macchina', 'veicolo', 'automobile', 'moto', 'scooter', 'bici'], '🚗'],
+  [['treno', 'metro', 'metropolitana', 'bus', 'autobus', 'taxi', 'trasport'], '🚌'],
+  [['aereo', 'volo', 'airport'], '✈️'],
+  [['vacanza', 'viaggio', 'hotel', 'alloggio', 'airbnb', 'turismo'], '🏖️'],
+  [['affitto', 'mutuo', 'condominio', 'casa', 'immobiliare', 'locazione'], '🏠'],
+  [['luce', 'elettricità', 'gas', 'acqua', 'bollette', 'bolletta', 'utenze'], '💡'],
+  [['pulizia', 'pulizie', 'lavanderia', 'detersivi'], '🧹'],
+  [['farmacia', 'farmaco', 'medicina', 'medicinale', 'pillole'], '💊'],
+  [['medico', 'dottore', 'visita', 'ospedale', 'clinica', 'salute'], '🩺'],
+  [['dentista', 'ortodonzia'], '🦷'],
+  [['palestra', 'gym', 'fitness', 'sport', 'calcio', 'basket', 'tennis', 'piscina', 'nuoto'], '🏋️'],
+  [['abbigliamento', 'vestiti', 'scarpe', 'moda', 'fashion'], '👕'],
+  [['shopping', 'acquisti', 'negozio'], '🛒'],
+  [['telefono', 'smartphone', 'cellulare', 'ricarica'], '📱'],
+  [['internet', 'wifi', 'fibra', 'adsl', 'connessione'], '🌐'],
+  [['streaming', 'netflix', 'prime', 'disney', 'spotify', 'musica'], '🎬'],
+  [['abbonamento', 'subscription'], '💳'],
+  [['giochi', 'videogiochi', 'gaming'], '🎮'],
+  [['cinema', 'teatro', 'concerto', 'spettacolo', 'intrattenimento', 'svago'], '🎭'],
+  [['libri', 'libro', 'lettura'], '📚'],
+  [['scuola', 'università', 'istruzione', 'corso', 'formazione'], '🎓'],
+  [['animali', 'cane', 'gatto', 'pet', 'veterinario'], '🐾'],
+  [['parrucchiere', 'barbiere', 'capelli', 'estetica', 'bellezza', 'benessere', 'spa'], '💇'],
+  [['sigarette', 'tabacchi', 'fumo', 'svapo'], '🚬'],
+  [['regali', 'regalo', 'compleanno', 'natale'], '🎁'],
+  [['tasse', 'imposte', 'tributi', 'irpef', 'imu', 'bollo', 'f24', 'fisco'], '🏛️'],
+  [['assicurazione', 'polizza'], '🛡️'],
+  [['manutenzione', 'riparazione', 'meccanico', 'idraulico', 'elettricista'], '🔧'],
+  [['commissioni', 'spese bancarie', 'canone bancario'], '🏦'],
+  [['investiment', 'portafoglio', 'finanza', 'borsa', 'trading', 'dividendi', 'dividendo', 'cedola'], '📈'],
+  [['stipendio', 'salario', 'retribuzione', 'paga', 'lavoro', 'freelance', 'consulenza', 'compenso'], '💼'],
+  [['bonus', 'premi', 'premio', 'rimborso', 'cashback', 'saveback'], '🎉'],
+  [['rendita', 'affitto percepito', 'canone percepito'], '🏠'],
+  [['interessi', 'interesse'], '📈'],
+  [['pensione', 'inps', 'previdenza'], '🏛️'],
+  [['donazione', 'beneficenza', 'volontariato'], '🤝'],
+  [['altro', 'varie', 'miscellanea', 'generico'], '📌'],
+];
+
+function pickCategoryIcon(name: string, type: 'expense' | 'income'): string {
+  const lower = name.toLowerCase().trim();
+  const words = lower.split(/[\s/,;]+/).filter(w => w.length >= 2);
+  for (const [keywords, icon] of KAKEBO_CAT_ICON_MAP) {
+    for (const kw of keywords) {
+      if (kw.includes(' ')) {
+        if (lower.includes(kw)) return icon;
+      } else if (words.some(w => w === kw || w.startsWith(kw) || kw.startsWith(w) || (kw.length >= 4 && w.includes(kw)))) {
+        return icon;
+      }
+    }
+  }
+  return type === 'income' ? '💰' : '💸';
+}
+
+const ACCOUNT_ICON_POOL = ['💳', '💰', '💵', '💶', '💴', '🪙', '🏧', '📱', '💎', '📊', '💹', '🔑'];
+const ACCOUNT_KEYWORD_ICONS: [string[], string][] = [
+  [['contanti', 'cash', 'wallet'], '💵'],
+  [['carta', 'credit', 'debit', 'visa', 'mastercard'], '💳'],
+  [['paypal', 'revolut', 'n26', 'satispay', 'wise', 'monese', 'bunq', 'hype', 'illimity'], '📱'],
+  [['crypto', 'bitcoin', 'ethereum', 'criptovalute'], '💎'],
+  [['risparmio', 'savings', 'deposito', 'salvadanaio'], '🏧'],
+  [['banca', 'bank', 'conto corrente', 'corrente', 'unicredit', 'intesa', 'fineco', 'bnl', 'credem', 'mps'], '🏦'],
+];
+
+function pickAccountIcon(name: string, index: number, usedIcons: Set<string>): string {
+  const lower = name.toLowerCase().trim();
+  for (const [keywords, icon] of ACCOUNT_KEYWORD_ICONS) {
+    if (keywords.some(kw => lower.includes(kw))) return icon;
+  }
+  const available = ACCOUNT_ICON_POOL.filter(i => !usedIcons.has(i));
+  const pool = available.length > 0 ? available : ACCOUNT_ICON_POOL;
+  return pool[index % pool.length];
 }
 
 // ── TickerCard sub-component ──────────────────────────────────────────────────
@@ -755,6 +838,7 @@ export default function KakeboImport({ onClose, onDirtyChange }: Props) {
         name: '',
         exchange: '',
         ter: '',
+        excluded: false,
       }));
     setInvDetails(details);
 
@@ -792,6 +876,10 @@ export default function KakeboImport({ onClose, onDirtyChange }: Props) {
   const updateDetail = (movimentoId: number, updates: Partial<Pick<InvDetail, 'instrumentType' | 'ticker' | 'quantity' | 'price' | 'commission' | 'isin' | 'name' | 'exchange' | 'ter'>>) => {
     markDirty();
     setInvDetails(prev => prev.map(d => d.movimentoId === movimentoId ? { ...d, ...updates } : d));
+  };
+  const toggleDetailExcluded = (movimentoId: number) => {
+    markDirty();
+    setInvDetails(prev => prev.map(d => d.movimentoId === movimentoId ? { ...d, excluded: !d.excluded } : d));
   };
 
   const updatePositionDraft = (contoId: number, updates: Partial<Pick<InvPosition, 'instrumentType' | 'ticker' | 'totalQty' | 'avgPrice' | 'isin' | 'name' | 'exchange' | 'ter'>>) => {
@@ -855,9 +943,9 @@ export default function KakeboImport({ onClose, onDirtyChange }: Props) {
   const handleImport = async () => {
     if (!parsed) return;
 
-    // Mode A validation: all fields required
+    // Mode A validation: all fields required (excluded cards exempt)
     if (invMode === 'orders' && invDetails.length > 0) {
-      const firstIncomplete = invDetails.find(d => !d.ticker.trim() || !d.quantity.trim() || !d.price.trim());
+      const firstIncomplete = invDetails.find(d => !d.excluded && (!d.ticker.trim() || !d.quantity.trim() || !d.price.trim()));
       if (firstIncomplete) {
         setValidated(true);
         setError('Compila tutti i campi per ogni operazione');
@@ -956,7 +1044,8 @@ export default function KakeboImport({ onClose, onDirtyChange }: Props) {
       const getCatType = (catId: number): 'expense' | 'income' => {
         const cat = kCatById[catId];
         if (!cat) return 'expense';
-        return cat.tipoMovimento === 1 ? 'income' : 'expense';
+        const root = cat.padreId != null ? (kCatById[cat.padreId] ?? cat) : cat;
+        return root.tipoMovimento === 1 ? 'income' : 'expense';
       };
 
       const categoryDefs = new Map<string, { name: string; type: 'expense' | 'income'; icon: string; subNames: Set<string> }>();
@@ -974,7 +1063,7 @@ export default function KakeboImport({ onClose, onDirtyChange }: Props) {
           categoryDefs.set(key, {
             name: catName,
             type,
-            icon: type === 'income' ? '💰' : '💸',
+            icon: pickCategoryIcon(catName, type),
             subNames: new Set(subName ? [subName] : []),
           });
         }
@@ -1006,7 +1095,22 @@ export default function KakeboImport({ onClose, onDirtyChange }: Props) {
       const movToDetail = new Map<number, InvDetail>();
       if (invMode === 'orders') for (const d of invDetails) movToDetail.set(d.movimentoId, d);
 
+      // Map contoId → InvPosition[] (mode B) — used to resolve instrument metadata for recurring investment rules
+      const positionsByContoId = new Map<number, InvPosition[]>();
+      if (invMode === 'positions') {
+        for (const pos of invPositions) {
+          if (!positionsByContoId.has(pos.contoId)) positionsByContoId.set(pos.contoId, []);
+          positionsByContoId.get(pos.contoId)!.push(pos);
+        }
+      }
+
+      const todayEndMs = new Date().setHours(23, 59, 59, 999);
+
       for (const m of parsed.movimenti) {
+        if (m.dataOperazione > todayEndMs) {
+          recordSkipped(m, 'Future movement excluded from import');
+          continue;
+        }
         const date = msToDate(m.dataOperazione);
         const amount = Math.abs(m.importo1);
         const description = m.note || null;
@@ -1014,6 +1118,10 @@ export default function KakeboImport({ onClose, onDirtyChange }: Props) {
         if (m.tipo === -1) {
           if (invContoIds.has(m.contoId)) {
             // Regular → Investment: deduct from source regular account
+            if (invMode === 'orders' && movToDetail.get(m.id)?.excluded) {
+              recordSkipped(m, 'Excluded by user');
+              continue;
+            }
             if (m.contoPrelievoId == null || invContoIds.has(m.contoPrelievoId)) {
               recordSkipped(m, 'Investment transfer without a valid source account');
               continue;
@@ -1170,6 +1278,7 @@ export default function KakeboImport({ onClose, onDirtyChange }: Props) {
         for (const m of parsed.movimenti) {
           const detail = movToDetail.get(m.id);
           if (!detail) continue;
+          if (detail.excluded) { recordSkipped(m, 'Excluded by user'); continue; }
           if (detail.sourceKind === 'transfer' && (m.tipo !== -1 || !invContoIds.has(m.contoId))) continue;
           if (detail.sourceKind === 'bonus' && !isBonusInvestmentMovement(m, parsed.categorie)) continue;
           if (!detail?.ticker.trim() || !detail.quantity.trim() || !detail.price.trim()) {
@@ -1221,6 +1330,12 @@ export default function KakeboImport({ onClose, onDirtyChange }: Props) {
         .filter(rule => rule.enabled && rule.amount.trim() && rule.startDate)
         .map((rule) => {
           const detail = movToDetail.get(rule.movimentoId);
+          // In positions mode, if the target portfolio has exactly one position, use its instrument metadata
+          const posForPortfolio = invMode === 'positions' && rule.portfolioContoId != null
+            ? positionsByContoId.get(rule.portfolioContoId)
+            : undefined;
+          const singlePos = posForPortfolio?.length === 1 ? posForPortfolio[0] : undefined;
+          const invMeta = detail ?? singlePos;
           return {
             recurring_key: `mov:${rule.movimentoId}`,
             source_conto_id: rule.sourceContoId,
@@ -1233,11 +1348,11 @@ export default function KakeboImport({ onClose, onDirtyChange }: Props) {
             frequency: rule.frequency,
             start_date: rule.startDate,
             next_due_date: getNextDueDate(rule.startDate, rule.frequency),
-            ticker: rule.type === 'investment' ? detail?.ticker?.trim().toUpperCase() || null : null,
-            isin: rule.type === 'investment' ? detail?.isin?.trim() || null : null,
-            instrument_name: rule.type === 'investment' ? detail?.name?.trim() || null : null,
-            exchange: rule.type === 'investment' ? detail?.exchange?.trim() || null : null,
-            instrument_type: rule.type === 'investment' ? detail?.instrumentType || null : null,
+            ticker: rule.type === 'investment' ? invMeta?.ticker?.trim().toUpperCase() || null : null,
+            isin: rule.type === 'investment' ? invMeta?.isin?.trim() || null : null,
+            instrument_name: rule.type === 'investment' ? invMeta?.name?.trim() || null : null,
+            exchange: rule.type === 'investment' ? invMeta?.exchange?.trim() || null : null,
+            instrument_type: rule.type === 'investment' ? invMeta?.instrumentType || null : null,
             order_type: rule.type === 'investment' ? 'buy' : null,
             currency: rule.type === 'investment' ? 'EUR' : null,
             quantity: rule.type === 'investment' && detail?.quantity ? Number(detail.quantity) : null,
@@ -1255,12 +1370,19 @@ export default function KakeboImport({ onClose, onDirtyChange }: Props) {
           risk_free_source: 'auto',
           market_benchmark: 'auto',
         })),
-        accounts: regularConti.map((conto) => ({
-          source_conto_id: conto.id,
-          name: conto.nome.trim(),
-          icon: '🏦',
-          initial_balance: conto.variazioneSaldo1,
-        })),
+        accounts: (() => {
+          const usedIcons = new Set<string>();
+          return regularConti.map((conto, index) => {
+            const icon = pickAccountIcon(conto.nome, index, usedIcons);
+            usedIcons.add(icon);
+            return {
+              source_conto_id: conto.id,
+              name: conto.nome.trim(),
+              icon,
+              initial_balance: conto.variazioneSaldo1,
+            };
+          });
+        })(),
         categories: [...categoryDefs.values()].map((def) => ({
           key: `${def.name.toLocaleLowerCase()}|${def.type}`,
           name: def.name,
@@ -1313,8 +1435,13 @@ export default function KakeboImport({ onClose, onDirtyChange }: Props) {
 
   // ── render ─────────────────────────────────────────────────────────────────
 
+  const renderTodayEndMs = new Date().setHours(23, 59, 59, 999);
   const dateRange = parsed?.movimenti.length
-    ? (() => { const dates = parsed.movimenti.map(m => m.dataOperazione); return { from: msToDate(Math.min(...dates)), to: msToDate(Math.max(...dates)) }; })()
+    ? (() => {
+        const dates = parsed.movimenti.filter(m => m.dataOperazione <= renderTodayEndMs).map(m => m.dataOperazione);
+        if (!dates.length) return null;
+        return { from: msToDate(Math.min(...dates)), to: msToDate(Math.max(...dates)) };
+      })()
     : null;
 
   const detectedCategories = parsed ? (() => {
@@ -1341,7 +1468,8 @@ export default function KakeboImport({ onClose, onDirtyChange }: Props) {
   const detectedTransactionCount = parsed
     ? parsed.movimenti.filter(m => {
         if (m.tipo === -1) return false;
-        if (invContoIds.has(m.contoId) && !isBonusInvestmentMovement(m, parsed.categorie)) return false;
+        if (invContoIds.has(m.contoId)) return false;
+        if (m.dataOperazione > renderTodayEndMs) return false;
         return true;
       }).length
     : 0;
@@ -1718,23 +1846,46 @@ export default function KakeboImport({ onClose, onDirtyChange }: Props) {
             {invMode === 'orders' && invDetails.map(detail => {
               const conto = parsed?.conti.find(c => c.id === detail.destContoId);
               return (
-                <div key={detail.movimentoId} id={`card-${detail.movimentoId}`}>
-                  <TickerCard
-                    id={String(detail.movimentoId)}
-                    contoName={conto?.nome.trim() ?? '—'}
-                    date={detail.date}
-                    amount={detail.amount}
-                    instrumentType={detail.instrumentType}
-                    ticker={detail.ticker}
-                    quantity={detail.quantity}
-                    price={detail.price}
-                    commission={detail.commission}
-                    qtyLabel={t('kakebo.qty')}
-                    priceLabel={t('kakebo.pricePerUnit')}
-                    commissionLabel="Commissioni"
-                    showValidation={validated}
-                    onChange={(_, updates) => updateDetail(detail.movimentoId, updates)}
-                  />
+                <div key={detail.movimentoId} id={`card-${detail.movimentoId}`} className={detail.excluded ? 'opacity-40' : ''}>
+                  <div className="flex items-center justify-between mb-1 px-0.5">
+                    <span className="text-xs text-gray-400 dark:text-gray-500">
+                      {detail.sourceKind === 'bonus' ? '🎁 Bonus/saveback' : '📅 ' + detail.date}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => toggleDetailExcluded(detail.movimentoId)}
+                      className={`text-xs px-2 py-0.5 rounded-full border transition-colors ${
+                        detail.excluded
+                          ? 'border-gray-300 dark:border-gray-600 text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800'
+                          : 'border-red-300 dark:border-red-700 text-red-500 dark:text-red-400 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/40'
+                      }`}
+                    >
+                      {detail.excluded ? 'Riattiva' : 'Escludi'}
+                    </button>
+                  </div>
+                  {!detail.excluded && (
+                    <TickerCard
+                      id={String(detail.movimentoId)}
+                      contoName={conto?.nome.trim() ?? '—'}
+                      date={detail.date}
+                      amount={detail.amount}
+                      instrumentType={detail.instrumentType}
+                      ticker={detail.ticker}
+                      quantity={detail.quantity}
+                      price={detail.price}
+                      commission={detail.commission}
+                      qtyLabel={t('kakebo.qty')}
+                      priceLabel={t('kakebo.pricePerUnit')}
+                      commissionLabel="Commissioni"
+                      showValidation={validated}
+                      onChange={(_, updates) => updateDetail(detail.movimentoId, updates)}
+                    />
+                  )}
+                  {detail.excluded && (
+                    <div className="text-xs text-gray-400 dark:text-gray-500 px-1 pb-1">
+                      {formatCurrency(detail.amount)} · {conto?.nome.trim()} · escluso dall'import
+                    </div>
+                  )}
                 </div>
               );
             })}
