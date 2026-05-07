@@ -326,7 +326,7 @@ export default function InvestmentOrderForm({
           return matchesQuery && matchesHolding;
         }).slice(0, 25);
         setSymbolOptions(filtered);
-        setSymbolSearchOpen(isSymbolFocused && (filtered.length > 0 || (orderType === 'sell' && !hasAvailableInstrumentToSell)));
+        setSymbolSearchOpen(isSymbolFocused && (filtered.length > 0 || isIsinStr(q) || (orderType === 'sell' && !hasAvailableInstrumentToSell)));
         setSymbolLoading(false);
         setSymbolSearchCompleted(true);
         return;

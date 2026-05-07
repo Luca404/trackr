@@ -258,6 +258,7 @@ export interface Order {
   date: string;
   ter?: number;
   transaction_id?: number;
+  description?: string;
   created_at?: string;
 }
 
@@ -276,4 +277,5 @@ export interface OrderFormData {
   date: string;
   ter?: number;
   transaction_id?: number;
+  description?: string;
 }

@@ -67,6 +67,7 @@ export default function TransactionsPage() {
 
   const [selectedFreeOrder, setSelectedFreeOrder] = useState<Order | null>(null);
   const [isFreeOrderModalOpen, setIsFreeOrderModalOpen] = useState(false);
+  const [freeOrderDescription, setFreeOrderDescription] = useState('');
   const [isFreeOrderDeleteOpen, setIsFreeOrderDeleteOpen] = useState(false);
 
   const { startDate, endDate, setPeriod } = usePeriod();
@@ -205,6 +206,7 @@ export default function TransactionsPage() {
         commission: 0,
         order_type: 'buy',
         date: data.date,
+        description: data.description || undefined,
       });
       addFreeOrder(newOrder);
       localStorage.removeItem('pf_summaries_cache');
@@ -356,6 +358,7 @@ export default function TransactionsPage() {
   const handleItemClick = (item: ListItem) => {
     if (item.kind === 'free_order') {
       setSelectedFreeOrder(item.data);
+      setFreeOrderDescription(item.data.description ?? '');
       setIsFreeOrderModalOpen(true);
       return;
     }
@@ -384,6 +387,7 @@ export default function TransactionsPage() {
       commission: draft.commission,
       order_type: draft.orderType,
       date: draft.date,
+      description: freeOrderDescription || undefined,
     });
     updateFreeOrder(updated);
     localStorage.removeItem('pf_summaries_cache');
@@ -652,6 +656,9 @@ export default function TransactionsPage() {
                                 <div className="text-xs text-blue-600 dark:text-blue-400 mt-1">
                                   {order.symbol} • {order.quantity} x {formatCurrency(order.price)}
                                 </div>
+                                {order.description && (
+                                  <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">{order.description}</div>
+                                )}
                               </div>
                             </div>
                             <div className="text-right ml-4">
@@ -767,6 +774,14 @@ export default function TransactionsPage() {
                 }}
                 onSubmit={handleFreeOrderUpdate}
                 onCancel={() => setIsFreeOrderModalOpen(false)}
+              />
+              <input
+                type="text"
+                value={freeOrderDescription}
+                onChange={(e) => setFreeOrderDescription(e.target.value)}
+                placeholder={t('transactions.description')}
+                className="w-full px-3 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-base"
+                autoComplete="off"
               />
               <button
                 type="button"

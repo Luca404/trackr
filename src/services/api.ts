@@ -947,6 +947,7 @@ class ApiService {
       date: data.date,
       ter: data.ter,
       transaction_id: data.transaction_id,
+      description: data.description,
       created_at: data.created_at,
     };
   }
@@ -981,6 +982,7 @@ class ApiService {
       date: data.date,
       ter: data.ter,
       transaction_id: data.transaction_id,
+      description: data.description,
       created_at: data.created_at,
     };
   }
@@ -1017,6 +1019,7 @@ class ApiService {
       date: row.date,
       ter: row.ter,
       transaction_id: row.transaction_id,
+      description: row.description,
       created_at: row.created_at,
     }));
   }
