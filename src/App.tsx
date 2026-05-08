@@ -8,6 +8,7 @@ import CategoriesPage from './pages/CategoriesPage';
 import TransactionsPage from './pages/TransactionsPage';
 import StatsPage from './pages/StatsPage';
 import PortfoliosPage from './pages/PortfoliosPage';
+import PortfolioDetailPage from './pages/PortfolioDetailPage';
 import SettingsPage from './pages/SettingsPage';
 
 function App() {
@@ -54,6 +55,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <PortfoliosPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/portfolios/:id"
+            element={
+              <ProtectedRoute>
+                <PortfolioDetailPage />
               </ProtectedRoute>
             }
           />

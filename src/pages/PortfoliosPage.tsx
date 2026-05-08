@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { apiService } from '../services/api';
 import { supabase } from '../services/supabase';
 import { useData } from '../contexts/DataContext';
@@ -26,22 +27,9 @@ interface PortfolioSummary {
   reference_currency: string;
 }
 
-interface PortfolioPosition {
-  symbol: string;
-  quantity: number;
-  avg_price: number;
-  current_price: number;
-  market_value: number;
-  cost_basis: number;
-  gain_loss: number;
-  gain_loss_pct: number;
-  instrument_type: string;
-  currency: string;
-  xirr: number;
-  fetch_error: string | null;
-}
 
 export default function PortfoliosPage() {
+  const navigate = useNavigate();
   const { t } = useTranslation();
   const { formatCurrency } = useSettings();
   const { portfolios, isLoading, isInitialized, addPortfolio, updatePortfolio, deletePortfolio, updateTransaction: updateTransactionCache, deleteTransaction: deleteTransactionCache, refreshTransactions, activeProfile } = useData();
@@ -64,10 +52,7 @@ export default function PortfoliosPage() {
   const [isLoadingOrders, setIsLoadingOrders] = useState(false);
   const [summaries, setSummaries] = useState<Record<number, PortfolioSummary>>({});
   const [loadingSummaries, setLoadingSummaries] = useState(false);
-  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
-  const [detailPortfolio, setDetailPortfolio] = useState<Portfolio | null>(null);
-  const [detailPositions, setDetailPositions] = useState<PortfolioPosition[]>([]);
-  const [isLoadingDetail, setIsLoadingDetail] = useState(false);
+
 
   const [hideBalances, setHideBalances] = useState(() => localStorage.getItem('hideBalances') === 'true');
   const toggleHideBalances = () => {
@@ -170,26 +155,6 @@ export default function PortfoliosPage() {
       console.error(e);
     } finally {
       setIsLoadingOrders(false);
-    }
-  };
-
-  const handleViewDetail = async (portfolio: Portfolio) => {
-    setDetailPortfolio(portfolio);
-    setDetailPositions([]);
-    setIsDetailModalOpen(true);
-    setIsLoadingDetail(true);
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) return;
-      const res = await fetch(`${PF_BACKEND_URL}/portfolios/${portfolio.id}`, {
-        headers: { Authorization: `Bearer ${session.access_token}` },
-      });
-      const json = res.ok ? await res.json() : null;
-      if (json?.positions) setDetailPositions(json.positions);
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setIsLoadingDetail(false);
     }
   };
 
@@ -396,7 +361,7 @@ export default function PortfoliosPage() {
                 <div
                   key={portfolio.id}
                   className="card cursor-pointer hover:shadow-lg transition-shadow"
-                  onClick={() => handleViewDetail(portfolio)}
+                  onClick={() => navigate(`/portfolios/${portfolio.id}`)}
                 >
                   <div className="flex items-start justify-between mb-1">
                     <div className="flex-1 min-w-0 flex items-center gap-2">
@@ -411,10 +376,13 @@ export default function PortfoliosPage() {
                       <button
                         type="button"
                         onClick={(e) => { e.stopPropagation(); handleEditPortfolio(portfolio); }}
-                        className="text-xs text-gray-400 dark:text-gray-500 hover:text-primary-600 dark:hover:text-primary-400 px-1.5 py-0.5 rounded border border-gray-200 dark:border-gray-700 hover:border-primary-300 dark:hover:border-primary-700 transition-colors"
+                        className="text-gray-400 dark:text-gray-500 hover:text-primary-600 dark:hover:text-primary-400 p-1 rounded border border-gray-200 dark:border-gray-700 hover:border-primary-300 dark:hover:border-primary-700 transition-colors"
                         style={{ WebkitTapHighlightColor: 'transparent' }}
+                        title={t('common.edit', 'Modifica')}
                       >
-                        {t('common.edit', 'Modifica')}
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" />
+                        </svg>
                       </button>
                     </div>
                   </div>
@@ -522,50 +490,6 @@ export default function PortfoliosPage() {
             onOrderUpdate={handleUpdateOrder}
             onOrderDelete={handleDeleteOrder}
           />
-        </Modal>
-        <Modal
-          isOpen={isDetailModalOpen}
-          onClose={() => setIsDetailModalOpen(false)}
-          title={detailPortfolio?.name || ''}
-        >
-          {isLoadingDetail ? (
-            <div className="flex items-center justify-center py-12">
-              <div className="w-8 h-8 border-2 border-primary-500 border-t-transparent rounded-full animate-spin" />
-            </div>
-          ) : detailPositions.length === 0 ? (
-            <div className="text-center text-gray-400 dark:text-gray-500 py-10 text-sm">
-              {t('portfolios.noPositionsInPortfolio')}
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {detailPositions.map((pos) => (
-                <div key={pos.symbol} className="rounded-xl bg-gray-50 dark:bg-gray-800/50 px-4 py-3">
-                  <div className="flex items-start justify-between">
-                    <div className="min-w-0">
-                      <div className="font-mono font-semibold text-gray-900 dark:text-gray-100">{pos.symbol}</div>
-                      <div className="text-xs text-gray-400 dark:text-gray-500 mt-0.5 capitalize">
-                        {pos.instrument_type} · {pos.quantity} pz
-                      </div>
-                    </div>
-                    <div className="text-right ml-3 shrink-0">
-                      <div className="font-semibold text-gray-900 dark:text-gray-100">
-                        {formatCurrency(pos.market_value, pos.currency)}
-                      </div>
-                      <div className={`text-sm font-medium ${pos.gain_loss >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
-                        {(pos.gain_loss >= 0 ? '+' : '') + formatCurrency(pos.gain_loss, pos.currency)}
-                        <span className="ml-1 text-xs opacity-80">
-                          ({(pos.gain_loss_pct >= 0 ? '+' : '') + pos.gain_loss_pct.toFixed(1)}%)
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                  {pos.fetch_error && (
-                    <div className="text-xs text-amber-500 dark:text-amber-400 mt-1.5">{pos.fetch_error}</div>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
         </Modal>
         {confirmDialogEl}
       </div>
