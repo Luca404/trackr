@@ -26,6 +26,21 @@ interface PortfolioSummary {
   reference_currency: string;
 }
 
+interface PortfolioPosition {
+  symbol: string;
+  quantity: number;
+  avg_price: number;
+  current_price: number;
+  market_value: number;
+  cost_basis: number;
+  gain_loss: number;
+  gain_loss_pct: number;
+  instrument_type: string;
+  currency: string;
+  xirr: number;
+  fetch_error: string | null;
+}
+
 export default function PortfoliosPage() {
   const { t } = useTranslation();
   const { formatCurrency } = useSettings();
@@ -49,6 +64,10 @@ export default function PortfoliosPage() {
   const [isLoadingOrders, setIsLoadingOrders] = useState(false);
   const [summaries, setSummaries] = useState<Record<number, PortfolioSummary>>({});
   const [loadingSummaries, setLoadingSummaries] = useState(false);
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  const [detailPortfolio, setDetailPortfolio] = useState<Portfolio | null>(null);
+  const [detailPositions, setDetailPositions] = useState<PortfolioPosition[]>([]);
+  const [isLoadingDetail, setIsLoadingDetail] = useState(false);
 
   const [hideBalances, setHideBalances] = useState(() => localStorage.getItem('hideBalances') === 'true');
   const toggleHideBalances = () => {
@@ -151,6 +170,26 @@ export default function PortfoliosPage() {
       console.error(e);
     } finally {
       setIsLoadingOrders(false);
+    }
+  };
+
+  const handleViewDetail = async (portfolio: Portfolio) => {
+    setDetailPortfolio(portfolio);
+    setDetailPositions([]);
+    setIsDetailModalOpen(true);
+    setIsLoadingDetail(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) return;
+      const res = await fetch(`${PF_BACKEND_URL}/portfolios/${portfolio.id}`, {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      const json = res.ok ? await res.json() : null;
+      if (json?.positions) setDetailPositions(json.positions);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsLoadingDetail(false);
     }
   };
 
@@ -286,6 +325,8 @@ export default function PortfoliosPage() {
   // Calcola totale investimenti sommando i summaries disponibili (per ora stesso reference_currency)
   const totalInvestments = Object.values(summaries).reduce((acc, s) => acc + s.total_value, 0);
   const totalPL = Object.values(summaries).reduce((acc, s) => acc + s.total_gain_loss, 0);
+  const totalCost = Object.values(summaries).reduce((acc, s) => acc + s.total_cost, 0);
+  const totalPLpct = totalCost > 0 ? (totalPL / totalCost) * 100 : 0;
   const hasSummaries = Object.keys(summaries).length > 0;
 
   return (
@@ -326,6 +367,9 @@ export default function PortfoliosPage() {
                           ? mask((totalPL >= 0 ? '+' : '') + formatCurrency(totalPL))
                           : (totalPL >= 0 ? '+' : '') + formatCurrency(totalPL)
                         }
+                        {!hideBalances && totalPLpct !== 0 && (
+                          <span className="ml-1 opacity-75">({(totalPLpct >= 0 ? '+' : '') + totalPLpct.toFixed(1)}%)</span>
+                        )}
                       </div>
                     )}
                   </div>
@@ -352,7 +396,7 @@ export default function PortfoliosPage() {
                 <div
                   key={portfolio.id}
                   className="card cursor-pointer hover:shadow-lg transition-shadow"
-                  onClick={() => handleEditPortfolio(portfolio)}
+                  onClick={() => handleViewDetail(portfolio)}
                 >
                   <div className="flex items-start justify-between mb-1">
                     <div className="flex-1 min-w-0 flex items-center gap-2">
@@ -362,7 +406,17 @@ export default function PortfoliosPage() {
                       >{portfolio.icon ?? '📈'}</span>
                       <div className="font-medium text-gray-900 dark:text-gray-100">{portfolio.name}</div>
                     </div>
-                    <div className="text-sm text-gray-400 dark:text-gray-500 ml-2 shrink-0">{portfolio.reference_currency}</div>
+                    <div className="flex items-center gap-2 ml-2 shrink-0">
+                      <div className="text-sm text-gray-400 dark:text-gray-500">{portfolio.reference_currency}</div>
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); handleEditPortfolio(portfolio); }}
+                        className="text-xs text-gray-400 dark:text-gray-500 hover:text-primary-600 dark:hover:text-primary-400 px-1.5 py-0.5 rounded border border-gray-200 dark:border-gray-700 hover:border-primary-300 dark:hover:border-primary-700 transition-colors"
+                        style={{ WebkitTapHighlightColor: 'transparent' }}
+                      >
+                        {t('common.edit', 'Modifica')}
+                      </button>
+                    </div>
                   </div>
 
                   {(() => {
@@ -401,6 +455,9 @@ export default function PortfoliosPage() {
                                 ? mask(formatCurrency(sm.total_gain_loss, sm.reference_currency))
                                 : formatCurrency(sm.total_gain_loss, sm.reference_currency)
                               }
+                            </div>
+                            <div className={`text-xs font-medium mt-0.5 ${sm.total_gain_loss >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                              {hideBalances ? '•••' : (sm.total_gain_loss_pct >= 0 ? '+' : '') + sm.total_gain_loss_pct.toFixed(1) + '%'}
                             </div>
                           </div>
                         </div>
@@ -465,6 +522,50 @@ export default function PortfoliosPage() {
             onOrderUpdate={handleUpdateOrder}
             onOrderDelete={handleDeleteOrder}
           />
+        </Modal>
+        <Modal
+          isOpen={isDetailModalOpen}
+          onClose={() => setIsDetailModalOpen(false)}
+          title={detailPortfolio?.name || ''}
+        >
+          {isLoadingDetail ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="w-8 h-8 border-2 border-primary-500 border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : detailPositions.length === 0 ? (
+            <div className="text-center text-gray-400 dark:text-gray-500 py-10 text-sm">
+              {t('portfolios.noPositionsInPortfolio')}
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {detailPositions.map((pos) => (
+                <div key={pos.symbol} className="rounded-xl bg-gray-50 dark:bg-gray-800/50 px-4 py-3">
+                  <div className="flex items-start justify-between">
+                    <div className="min-w-0">
+                      <div className="font-mono font-semibold text-gray-900 dark:text-gray-100">{pos.symbol}</div>
+                      <div className="text-xs text-gray-400 dark:text-gray-500 mt-0.5 capitalize">
+                        {pos.instrument_type} · {pos.quantity} pz
+                      </div>
+                    </div>
+                    <div className="text-right ml-3 shrink-0">
+                      <div className="font-semibold text-gray-900 dark:text-gray-100">
+                        {formatCurrency(pos.market_value, pos.currency)}
+                      </div>
+                      <div className={`text-sm font-medium ${pos.gain_loss >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                        {(pos.gain_loss >= 0 ? '+' : '') + formatCurrency(pos.gain_loss, pos.currency)}
+                        <span className="ml-1 text-xs opacity-80">
+                          ({(pos.gain_loss_pct >= 0 ? '+' : '') + pos.gain_loss_pct.toFixed(1)}%)
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  {pos.fetch_error && (
+                    <div className="text-xs text-amber-500 dark:text-amber-400 mt-1.5">{pos.fetch_error}</div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </Modal>
         {confirmDialogEl}
       </div>

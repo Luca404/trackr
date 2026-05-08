@@ -71,6 +71,11 @@ interface DataContextType {
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
+const PF_BACKEND_URL = import.meta.env.VITE_PF_BACKEND_URL || 'https://portfolio-tracker-production-3bd4.up.railway.app';
+const SUMMARIES_CACHE_KEY = 'pf_summaries_cache';
+const SUMMARIES_CACHE_TTL = 24 * 60 * 60 * 1000;
+const SUMMARIES_CACHE_TTL_EMPTY = 5 * 60 * 1000;
+
 interface DataProviderProps {
   children: ReactNode;
 }
@@ -139,6 +144,55 @@ export function DataProvider({ children }: DataProviderProps) {
       });
     });
   }, [transactions, transfers, isInitialized]);
+
+  // Prefetch portfolio summaries in background after init so PortfoliosPage finds warm cache
+  useEffect(() => {
+    if (!isInitialized || portfolios.length === 0 || !activeProfile) return;
+    try {
+      const raw = localStorage.getItem(SUMMARIES_CACHE_KEY);
+      if (raw) {
+        const { time, ttl } = JSON.parse(raw);
+        if (Date.now() - time < (ttl ?? SUMMARIES_CACHE_TTL)) return;
+      }
+    } catch (_) {}
+    (async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.access_token) return;
+        const res = await fetch(
+          `${PF_BACKEND_URL}/portfolios?profile_id=${activeProfile.id}`,
+          { headers: { Authorization: `Bearer ${session.access_token}` } },
+        );
+        const json = res.ok ? await res.json() : null;
+        if (!json?.portfolios) return;
+        const map: Record<number, object> = {};
+        for (const p of json.portfolios) {
+          map[p.id] = {
+            total_value: p.total_value ?? 0,
+            total_cost: p.total_cost ?? 0,
+            total_gain_loss: p.total_gain_loss ?? 0,
+            total_gain_loss_pct: p.total_gain_loss_pct ?? 0,
+            positions_count: p.positions_count ?? 0,
+            xirr: p.xirr ?? null,
+            reference_currency: p.reference_currency ?? 'EUR',
+          };
+        }
+        const priceFetchFailed = Object.values(map).some(
+          (s) => (s as { total_value: number; total_cost: number }).total_value === 0 &&
+                  (s as { total_value: number; total_cost: number }).total_cost > 0
+        );
+        if (!priceFetchFailed) {
+          const allTrulyEmpty = Object.values(map).length > 0 &&
+            Object.values(map).every((s) => (s as { total_value: number }).total_value === 0);
+          localStorage.setItem(SUMMARIES_CACHE_KEY, JSON.stringify({
+            time: Date.now(),
+            ttl: allTrulyEmpty ? SUMMARIES_CACHE_TTL_EMPTY : SUMMARIES_CACHE_TTL,
+            data: map,
+          }));
+        }
+      } catch (_) {}
+    })();
+  }, [isInitialized, portfolios.length, activeProfile?.id]);
 
   const fetchAllData = async () => {
     if (isFetchingRef.current) return; // previeni chiamate concorrenti

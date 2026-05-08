@@ -5,8 +5,8 @@ import { execSync } from 'child_process'
 
 const APP_MAJOR = 1
 const APP_MINOR = 0
-const APP_PATCH = 35  // Incrementare manualmente ad ogni release pubblicata
-const APP_RELEASE_NOTES = 'Kakebo import refinements, desktop settings polish, and improved balance chart'
+const APP_PATCH = 36  // Incrementare manualmente ad ogni release pubblicata
+const APP_RELEASE_NOTES = 'Portfolio detail view with holdings breakdown, P/L % on cards and total banner, Modifica button split from card tap'
 
 function getCommitMsg() {
   try {

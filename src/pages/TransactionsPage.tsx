@@ -772,6 +772,7 @@ export default function TransactionsPage() {
                   orderType: 'buy',
                   instrumentType: (selectedFreeOrder.instrument_type as 'etf' | 'stock' | 'bond') ?? 'etf',
                 }}
+                submitLabel={t('common.save')}
                 onSubmit={handleFreeOrderUpdate}
                 onCancel={() => setIsFreeOrderModalOpen(false)}
               />

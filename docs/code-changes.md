@@ -276,3 +276,16 @@ Reason
 - Recurring investments cannot be auto-executed safely with stale price/quantity assumptions
 - The app needed a concrete review-before-execution path instead of silently writing incorrect portfolio orders
 - The notification and delete flows had to be made consistent immediately in UI, otherwise the feature felt unreliable even when DB state was correct
+
+2026-05-08 — v1.0.36
+
+23. Portfolio investments page UI enhancements
+- Clicking a portfolio card now opens a detail modal showing all holdings with per-position market value, absolute P/L, and P/L %
+- Each portfolio card now has a "Modifica" button (top-right, stopPropagation) that opens the existing edit modal — card click and edit are now separate interactions
+- Added P/L % display below the P/L value on each portfolio card
+- Added P/L % to the total investments banner (e.g. +€1,234 (+5.3%))
+- Detail modal shows spinner while fetching, then lists positions with symbol, instrument type, quantity, market value, and P/L
+
+Reason
+- Card click previously opened the edit modal, making it impossible to view portfolio performance without accidentally entering edit mode
+- P/L percentage was already fetched (total_gain_loss_pct in PortfolioSummary) but never displayed
