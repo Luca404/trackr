@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react';
+
+const localDateStr = (d: Date) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 import { apiService } from '../services/api';
 import Layout from '../components/layout/Layout';
 import Modal from '../components/common/Modal';
@@ -39,8 +41,8 @@ export default function DashboardPage() {
       const [transactionsData, statsData] = await Promise.all([
         apiService.getTransactions({}),
         apiService.getTransactionStats({
-          startDate: startDate.toISOString().split('T')[0],
-          endDate: endDate.toISOString().split('T')[0],
+          startDate: localDateStr(startDate),
+          endDate: localDateStr(endDate),
         }),
       ]);
       setTransactions(transactionsData.slice(0, 5));

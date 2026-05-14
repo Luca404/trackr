@@ -10,6 +10,8 @@ import Modal, { registerBackHandler } from '../common/Modal';
 import TransactionDateModal from '../common/TransactionDateModal';
 import InvestmentOrderForm, { type InvestmentOrderInput } from '../investments/InvestmentOrderForm';
 
+const localToday = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
+
 interface TransactionFormProps {
   onSubmit: (data: TransactionFormData) => Promise<void>;
   onCancel: () => void;
@@ -46,7 +48,7 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
   const [selectedToAccount, setSelectedToAccount] = useState<Account | null>(null);
   const [showToAccountPicker, setShowToAccountPicker] = useState(false);
   const [amount, setAmount] = useState<string>(initialData?.amount.toString() || '');
-  const [date, setDate] = useState<string>(initialData?.date || new Date().toISOString().split('T')[0]);
+  const [date, setDate] = useState<string>(initialData?.date || localToday());
   const [description, setDescription] = useState<string>(initialData?.description || '');
   const [showDateSelector, setShowDateSelector] = useState(false);
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
@@ -63,7 +65,7 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
     quantity: initialData?.quantity || 0,
     price: initialData?.price || 0,
     commission: initialData?.quantity && initialData?.price ? Math.max(0, initialData.amount - (initialData.quantity * initialData.price)) : 0,
-    date: initialData?.date || new Date().toISOString().split('T')[0],
+    date: initialData?.date || localToday(),
     orderType: initialData?.order_type || 'buy',
     instrumentType: initialData?.instrument_type || 'etf',
   });
@@ -201,7 +203,7 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
       quantity: initialData?.quantity || 0,
       price: initialData?.price || 0,
       commission: initialData?.quantity && initialData?.price ? Math.max(0, initialData.amount - (initialData.quantity * initialData.price)) : 0,
-      date: initialData?.date || new Date().toISOString().split('T')[0],
+      date: initialData?.date || localToday(),
       orderType: initialData?.order_type || 'buy',
       instrumentType: initialData?.instrument_type || 'etf',
     });
@@ -638,7 +640,7 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
       quantity: initialData?.quantity || 0,
       price: initialData?.price || 0,
       commission: linkedOrder?.commission ?? (initialData?.quantity && initialData?.price ? Math.max(0, Math.abs(initialData.amount) - (initialData.quantity * initialData.price)) : 0),
-      date: initialData?.date || new Date().toISOString().split('T')[0],
+      date: initialData?.date || localToday(),
       orderType: (linkedOrder?.order_type as 'buy' | 'sell' | undefined) || initialData?.order_type || 'buy',
       instrumentType: (linkedOrder?.instrument_type as 'etf' | 'stock' | 'bond' | undefined) || initialData?.instrument_type || 'etf',
     };

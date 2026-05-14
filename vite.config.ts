@@ -5,8 +5,8 @@ import { execSync } from 'child_process'
 
 const APP_MAJOR = 1
 const APP_MINOR = 0
-const APP_PATCH = 37  // Incrementare manualmente ad ogni release pubblicata
-const APP_RELEASE_NOTES = 'Portfolio detail page with metric cards and holdings table; gear icon on cards'
+const APP_PATCH = 38  // Incrementare manualmente ad ogni release pubblicata
+const APP_RELEASE_NOTES = 'Fix timezone bug: transaction date default now uses local time instead of UTC'
 
 function getCommitMsg() {
   try {
