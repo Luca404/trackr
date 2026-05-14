@@ -10,6 +10,7 @@ import { getDueDatesUntil } from '../../services/recurring';
 import Modal from '../common/Modal';
 import TransactionForm from '../transactions/TransactionForm';
 import type { RecurringTransaction, TransactionFormData } from '../../types';
+import { localDateStr } from '../../utils/date';
 
 interface LayoutProps {
   children: ReactNode;
@@ -61,7 +62,7 @@ export default function Layout({ children }: LayoutProps) {
   const loadInvestmentNotifications = async () => {
     try {
       const due = await apiService.getDueInvestmentRecurringTransactions();
-      const today = new Date().toISOString().split('T')[0];
+      const today = localDateStr();
       const items = due.map((rule) => ({
         key: `${rule.id}:${rule.next_due_date}`,
         rule,

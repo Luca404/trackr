@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Modal from './Modal';
+import { localDateStr } from '../../utils/date';
 
 interface DateRangePickerProps {
   isOpen: boolean;
@@ -19,10 +20,10 @@ export default function DateRangePicker({
 }: DateRangePickerProps) {
   const { t } = useTranslation();
   const [startDate, setStartDate] = useState(
-    initialStart ? initialStart.toISOString().split('T')[0] : new Date().toISOString().split('T')[0]
+    initialStart ? localDateStr(initialStart) : localDateStr()
   );
   const [endDate, setEndDate] = useState(
-    initialEnd ? initialEnd.toISOString().split('T')[0] : new Date().toISOString().split('T')[0]
+    initialEnd ? localDateStr(initialEnd) : localDateStr()
   );
 
   const handleConfirm = () => {

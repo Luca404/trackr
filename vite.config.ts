@@ -5,8 +5,8 @@ import { execSync } from 'child_process'
 
 const APP_MAJOR = 1
 const APP_MINOR = 0
-const APP_PATCH = 38  // Incrementare manualmente ad ogni release pubblicata
-const APP_RELEASE_NOTES = 'Fix timezone bug: transaction date default now uses local time instead of UTC'
+const APP_PATCH = 39  // Incrementare manualmente ad ogni release pubblicata
+const APP_RELEASE_NOTES = 'Fix timezone bug in all date defaults: date pickers, investment orders, recurring checks now use local time'
 
 function getCommitMsg() {
   try {

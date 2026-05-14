@@ -2,6 +2,7 @@ import { useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { RecurringFrequency } from '../../types';
 import Modal from './Modal';
+import { localDateStr } from '../../utils/date';
 
 interface TransactionDateModalProps {
   isOpen: boolean;
@@ -28,11 +29,11 @@ export default function TransactionDateModal({
   const handleQuickSelect = (option: 'today' | 'yesterday') => {
     const today = new Date();
     if (option === 'today') {
-      onDateChange(today.toISOString().split('T')[0]);
+      onDateChange(localDateStr(today));
     } else {
       const yesterday = new Date(today);
       yesterday.setDate(yesterday.getDate() - 1);
-      onDateChange(yesterday.toISOString().split('T')[0]);
+      onDateChange(localDateStr(yesterday));
     }
     onClose();
   };

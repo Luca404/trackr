@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import TransactionDateModal from '../common/TransactionDateModal';
 import type { RecurringFrequency } from '../../types';
+import { localDateStr } from '../../utils/date';
 const PF_BACKEND_URL = import.meta.env.VITE_PF_BACKEND_URL || 'https://portfolio-tracker-production-3bd4.up.railway.app';
 
 export interface InvestmentOrderInput {
@@ -64,7 +65,7 @@ export default function InvestmentOrderForm({
   onRecurrenceChange,
 }: InvestmentOrderFormProps) {
   const { t } = useTranslation();
-  const today = new Date().toISOString().split('T')[0];
+  const today = localDateStr();
   const initialNumberText = (value?: number) => (value != null && value !== 0 ? String(value) : '');
   const [symbol, setSymbol] = useState(initialData?.symbol || '');
   const [quantity, setQuantity] = useState(initialNumberText(initialData?.quantity));

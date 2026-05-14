@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
-
-const localDateStr = (d: Date) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+import { localDateStr } from '../utils/date';
 import { apiService } from '../services/api';
 import Layout from '../components/layout/Layout';
 import Modal from '../components/common/Modal';

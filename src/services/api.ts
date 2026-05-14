@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { localDateStr } from '../utils/date';
 import type {
   Transaction,
   TransactionFormData,
@@ -744,7 +745,7 @@ class ApiService {
 
   async getDueInvestmentRecurringTransactions(): Promise<RecurringTransaction[]> {
     const profileId = this.getActiveProfileId();
-    const today = new Date().toISOString().split('T')[0];
+    const today = localDateStr();
     const { data, error } = await supabase
       .from('recurring_transactions')
       .select('*')
@@ -812,7 +813,7 @@ class ApiService {
   // Controlla tutte le regole con next_due_date <= oggi e crea le transazioni mancanti.
   // Chiamato all'avvio dell'app in DataContext.
   async processRecurringTransactions(): Promise<Transaction[]> {
-    const today = new Date().toISOString().split('T')[0];
+    const today = localDateStr();
     const userId = await getCurrentUserId();
 
     const { data: due, error } = await supabase
@@ -1165,7 +1166,7 @@ class ApiService {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `trackr-backup-${new Date().toISOString().split('T')[0]}.json`;
+    a.download = `trackr-backup-${localDateStr()}.json`;
     a.click();
     URL.revokeObjectURL(url);
   }
