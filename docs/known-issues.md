@@ -3,8 +3,6 @@
 ## Bugs
 
 - **Black screen on SW update**: clicking "Ricarica" in the update banner occasionally turns the screen black. Root cause unknown.
-- **Investment transaction edit opens ticker dropdown**: when editing an existing investment transaction, the symbol search dropdown opens automatically. Should only open on explicit user tap.
-- **P/L overflow in portfolio list**: if P/L % is very large, the "PL (%)" label wraps leaving only the `€` symbol on the line above.
 - **Strange scroll glitch**: scrolling in a specific way while switching pages can hide the fixed header bar. Difficult to reproduce reliably.
 - **`touchmove` warning**: `[Intervention] Ignored attempt to cancel a touchmove event with cancelable=false` logged during page swipes. Low priority.
 - **Chrome autofill bar**: Android Chrome shows a password/card autofill bar when the keyboard opens. Not fixable via HTML/CSS — it's native browser UI (`KeyboardAccessoryView`). Chrome ignores `autoComplete="off"` for this. User-side fix: disable autofill in Chrome settings.
@@ -20,3 +18,4 @@
 - **Calendar UX**: the date picker closes when changing month/year. Investigate replacing the native Android calendar with a custom one.
 - **Balance graph — single transaction**: chart renders but a lone dot with no line is visually unclear. Decide how to handle this edge case.
 - **Balance graph — mark investments**: investment transactions are not visually distinguished on the trend line (same dot color logic as income/expense).
+- **KakeboImport `msToDate` timezone**: `dataOperazione` converted with `toISOString()` (UTC). If Kakebo stores local-midnight timestamps, imported dates shift by -1 day at UTC+2. Verify by importing a transaction with a known date. Fix if needed: replace `toISOString().slice(0,10)` with `localDateStr(new Date(ms))` from `src/utils/date.ts`.

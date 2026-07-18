@@ -289,3 +289,14 @@ Reason
 Reason
 - Card click previously opened the edit modal, making it impossible to view portfolio performance without accidentally entering edit mode
 - P/L percentage was already fetched (total_gain_loss_pct in PortfolioSummary) but never displayed
+
+2026-07-17 — unreleased
+
+24. Fixed investment edit ticker dropdown auto-open and P/L currency wrap
+- InvestmentOrderForm: the symbol search dropdown no longer opens automatically when the field has a selected instrument (`selectedInfo` set, e.g. editing an existing transaction/order). It opens again as soon as the user types, since editing the text clears the selection.
+- SettingsContext.formatCurrency: the space between currency symbol and amount is now a non-breaking space (U+00A0), so formatted values like "€ 12,345,668.90" can no longer wrap leaving the "€" orphaned on its own line (portfolio card P/L column was the visible case).
+
+Reason
+- Editing an investment transaction opened the ticker dropdown without user input, covering the form
+- Large P/L values in the portfolio list wrapped between "€" and the number, breaking the card layout
+- Verified end-to-end in the running app (headless Chromium against local dev + local Supabase): edit modal focus no longer opens the dropdown, typing does; mocked huge summary values render on one line with no horizontal overflow

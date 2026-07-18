@@ -300,7 +300,7 @@ export default function InvestmentOrderForm({
         return matchesQuery && matchesHolding;
       }).slice(0, 20);
       setSymbolOptions(filtered);
-      setSymbolSearchOpen(isSymbolFocused && (filtered.length > 0 || (orderType === 'sell' && !hasAvailableInstrumentToSell)));
+      setSymbolSearchOpen(isSymbolFocused && !selectedInfo && (filtered.length > 0 || (orderType === 'sell' && !hasAvailableInstrumentToSell)));
       setSymbolLoading(false);
       setSymbolSearchCompleted(true);
       return;
@@ -327,7 +327,7 @@ export default function InvestmentOrderForm({
           return matchesQuery && matchesHolding;
         }).slice(0, 25);
         setSymbolOptions(filtered);
-        setSymbolSearchOpen(isSymbolFocused && (filtered.length > 0 || isIsinStr(q) || (orderType === 'sell' && !hasAvailableInstrumentToSell)));
+        setSymbolSearchOpen(isSymbolFocused && !selectedInfo && (filtered.length > 0 || isIsinStr(q) || (orderType === 'sell' && !hasAvailableInstrumentToSell)));
         setSymbolLoading(false);
         setSymbolSearchCompleted(true);
         return;
@@ -348,7 +348,7 @@ export default function InvestmentOrderForm({
             }))
           ));
           setSymbolOptions(results);
-          setSymbolSearchOpen(isSymbolFocused && (results.length > 0 || (orderType === 'sell' && !hasAvailableInstrumentToSell)));
+          setSymbolSearchOpen(isSymbolFocused && !selectedInfo && (results.length > 0 || (orderType === 'sell' && !hasAvailableInstrumentToSell)));
         }
       } catch (err: any) {
         if (err.name !== 'AbortError') console.error('Symbol search error:', err);
@@ -358,7 +358,7 @@ export default function InvestmentOrderForm({
     };
     const timer = setTimeout(run, 250);
     return () => { clearTimeout(timer); controller.abort(); };
-  }, [symbol, instrumentType, ucitsCache, bondCache, isIsinStr, isSymbolFocused, orderType, availableKeysForCurrentInstrument, hasAvailableInstrumentToSell, sellOptionsForCurrentInstrument, getLookupKey]);
+  }, [symbol, instrumentType, ucitsCache, bondCache, isIsinStr, isSymbolFocused, selectedInfo, orderType, availableKeysForCurrentInstrument, hasAvailableInstrumentToSell, sellOptionsForCurrentInstrument, getLookupKey]);
 
   const handleIsinLookup = async () => {
     setIsinLookupLoading(true);
@@ -544,6 +544,7 @@ export default function InvestmentOrderForm({
               className={'w-full px-3 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-base uppercase tracking-wider font-mono' + (symbolLoading ? ' pr-8' : '')}
               onFocus={() => {
                 setIsSymbolFocused(true);
+                if (selectedInfo) return;
                 if (orderType === 'sell') {
                   setSymbolSearchOpen(true);
                 } else if (symbolOptions.length > 0) {

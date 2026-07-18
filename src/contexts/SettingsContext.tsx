@@ -29,7 +29,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     const sign = amount < 0 ? '-' : '';
     const [intPart, decPart] = Math.abs(amount).toFixed(2).split('.');
     const intFormatted = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, thousandsSep);
-    return `${sign}${symbol} ${intFormatted}${decimalSep}${decPart}`;
+    return `${sign}${symbol} ${intFormatted}${decimalSep}${decPart}`;
   };
 
   return (
