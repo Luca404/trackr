@@ -127,7 +127,7 @@ export function DataProvider({ children }: DataProviderProps) {
     if (!isInitialized || accounts.length === 0) return;
     setAccounts(prev => prev.map(account => {
       const balances = computeBalances(
-        { id: account.id, currencies: account.currencies ?? [{ id: -1, account_id: account.id, currency: 'EUR', initial_balance: account.initial_balance }] },
+        { id: account.id, currencies: account.currencies?.length ? account.currencies : [{ id: -1, account_id: account.id, currency: 'EUR', initial_balance: account.initial_balance }] },
         transactions, transfers,
       );
       const total = totalBase(balances, fxRates);
