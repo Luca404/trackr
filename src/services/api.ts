@@ -7,6 +7,8 @@ import type {
   Transfer,
   Account,
   AccountFormData,
+  AccountCurrency,
+  CurrencyCode,
   Category,
   CategoryFormData,
   CategoryWithStats,
@@ -29,6 +31,7 @@ import {
   getDueDatesUntil,
   getNextDueDate,
 } from './recurring';
+import { computeBaseAmount } from './fx';
 
 async function getCurrentUserId(): Promise<string> {
   const { data: { user } } = await supabase.auth.getUser();
@@ -49,6 +52,9 @@ function mapAccount(row: any): Account {
     is_favorite: row.is_favorite ?? false,
     created_at: row.created_at,
     updated_at: row.updated_at,
+    currencies: (row.account_currencies ?? []).map((c: any) => ({
+      id: c.id, account_id: c.account_id, currency: c.currency, initial_balance: Number(c.initial_balance),
+    })),
   };
 }
 
@@ -95,6 +101,8 @@ function mapTransaction(row: any): Transaction {
     quantity: row.quantity,
     price: row.price,
     recurring_id: row.recurring_id ?? undefined,
+    currency: row.currency ?? 'EUR',
+    base_amount: row.base_amount != null ? Number(row.base_amount) : null,
   };
 }
 
@@ -109,6 +117,9 @@ function mapTransfer(row: any): Transfer {
     date: row.date,
     created_at: row.created_at,
     updated_at: row.updated_at,
+    from_currency: row.from_currency ?? 'EUR',
+    to_currency: row.to_currency ?? 'EUR',
+    to_amount: row.to_amount != null ? Number(row.to_amount) : null,
   };
 }
 
@@ -132,7 +143,7 @@ function mapRecurringTransaction(row: any): RecurringTransaction {
     exchange: row.exchange,
     instrument_type: row.instrument_type,
     order_type: row.order_type,
-    currency: row.currency,
+    currency: row.currency ?? 'EUR',
     quantity: row.quantity,
     price: row.price,
     created_at: row.created_at,
@@ -412,7 +423,7 @@ class ApiService {
 
   async getAccounts(): Promise<Account[]> {
     const profileId = this.getActiveProfileId();
-    const { data, error } = await supabase.from('accounts').select('*').eq('profile_id', profileId).order('id');
+    const { data, error } = await supabase.from('accounts').select('*, account_currencies(*)').eq('profile_id', profileId).order('id');
     if (error) throw error;
     return (data || []).map(mapAccount);
   }
@@ -423,7 +434,18 @@ class ApiService {
     const defaults = DEFAULT_ACCOUNTS[lang].map(a => ({ ...a, user_id: userId, profile_id: profileId }));
     const { data, error } = await supabase.from('accounts').insert(defaults).select();
     if (error) throw error;
-    return (data || []).map(mapAccount);
+    const accounts = data || [];
+    const currencyRows = accounts.map((account: any) => ({
+      account_id: account.id,
+      profile_id: profileId,
+      currency: 'EUR',
+      initial_balance: account.initial_balance ?? 0,
+    }));
+    if (currencyRows.length > 0) {
+      const { error: currencyError } = await supabase.from('account_currencies').insert(currencyRows);
+      if (currencyError) throw currencyError;
+    }
+    return accounts.map(mapAccount);
   }
 
   async createAccount(formData: AccountFormData): Promise<Account> {
@@ -437,6 +459,12 @@ class ApiService {
       .select()
       .single();
     if (error) throw error;
+    await supabase.from('account_currencies').insert({
+      account_id: data.id,
+      profile_id: this.getActiveProfileId(),
+      currency: 'EUR',
+      initial_balance: formData.initial_balance ?? 0,
+    });
     return mapAccount(data);
   }
 
@@ -457,6 +485,37 @@ class ApiService {
 
   async deleteAccount(id: number): Promise<void> {
     const { error } = await supabase.from('accounts').delete().eq('id', id);
+    if (error) throw error;
+  }
+
+  // ==================== ACCOUNT CURRENCIES ====================
+
+  async addAccountCurrency(accountId: number, currency: CurrencyCode, initialBalance: number): Promise<AccountCurrency> {
+    const { data, error } = await supabase.from('account_currencies')
+      .insert({ account_id: accountId, profile_id: this.getActiveProfileId(), currency, initial_balance: initialBalance })
+      .select().single();
+    if (error) throw error;
+    return { id: data.id, account_id: data.account_id, currency: data.currency, initial_balance: Number(data.initial_balance) };
+  }
+
+  async updateAccountCurrency(id: number, initialBalance: number): Promise<AccountCurrency> {
+    const { data, error } = await supabase.from('account_currencies')
+      .update({ initial_balance: initialBalance }).eq('id', id).select().single();
+    if (error) throw error;
+    return { id: data.id, account_id: data.account_id, currency: data.currency, initial_balance: Number(data.initial_balance) };
+  }
+
+  async removeAccountCurrency(id: number): Promise<void> {
+    const { data: row, error: e0 } = await supabase.from('account_currencies').select('*').eq('id', id).single();
+    if (e0) throw e0;
+    if (row.currency === 'EUR') throw new Error('cannot_remove_eur');
+    const [tx, trFrom, trTo] = await Promise.all([
+      supabase.from('transactions').select('id', { count: 'exact', head: true }).eq('account_id', row.account_id).eq('currency', row.currency),
+      supabase.from('transfers').select('id', { count: 'exact', head: true }).eq('from_account_id', row.account_id).eq('from_currency', row.currency),
+      supabase.from('transfers').select('id', { count: 'exact', head: true }).eq('to_account_id', row.account_id).eq('to_currency', row.currency),
+    ]);
+    if ((tx.count ?? 0) + (trFrom.count ?? 0) + (trTo.count ?? 0) > 0) throw new Error('currency_in_use');
+    const { error } = await supabase.from('account_currencies').delete().eq('id', id);
     if (error) throw error;
   }
 
@@ -585,9 +644,11 @@ class ApiService {
     const userId = await getCurrentUserId();
     const profileId = this.getActiveProfileId();
     const { recurrence: _, portfolio_id: _pid, isin: _isin, instrument_name: _iname, exchange: _exch, instrument_type: _itype, order_type: _otype, ter: _ter, ...dbData } = formData;
+    const currency = (formData.currency ?? 'EUR') as CurrencyCode;
+    const base_amount = await computeBaseAmount(formData.amount, currency, formData.date);
     const { data, error } = await supabase
       .from('transactions')
-      .insert({ ...dbData, user_id: userId, profile_id: profileId })
+      .insert({ ...dbData, user_id: userId, profile_id: profileId, currency, base_amount })
       .select()
       .single();
     if (error) throw error;
@@ -624,6 +685,9 @@ class ApiService {
         amount: formData.amount,
         description: formData.description || null,
         date: formData.date,
+        from_currency: formData.currency ?? 'EUR',
+        to_currency: formData.to_currency ?? formData.currency ?? 'EUR',
+        to_amount: formData.to_currency && formData.to_currency !== (formData.currency ?? 'EUR') ? formData.to_amount : null,
       })
       .select()
       .single();
@@ -640,6 +704,9 @@ class ApiService {
         amount: formData.amount,
         description: formData.description || null,
         date: formData.date,
+        from_currency: formData.currency ?? 'EUR',
+        to_currency: formData.to_currency ?? formData.currency ?? 'EUR',
+        to_amount: formData.to_currency && formData.to_currency !== (formData.currency ?? 'EUR') ? formData.to_amount : null,
       })
       .eq('id', id)
       .select()
@@ -655,6 +722,20 @@ class ApiService {
 
   async updateTransaction(id: number, formData: Partial<TransactionFormData>): Promise<Transaction> {
     const { recurrence: _, portfolio_id: _pid, isin: _isin, instrument_name: _iname, exchange: _exch, instrument_type: _itype, order_type: _otype, ter: _ter, ...dbData } = formData as TransactionFormData;
+
+    if (formData.amount !== undefined || formData.currency !== undefined || formData.date !== undefined) {
+      const { data: current, error: currentError } = await supabase
+        .from('transactions')
+        .select('amount, currency, date')
+        .eq('id', id)
+        .single();
+      if (currentError) throw currentError;
+      const amount = formData.amount ?? current.amount;
+      const currency = (formData.currency ?? current.currency ?? 'EUR') as CurrencyCode;
+      const date = formData.date ?? current.date;
+      (dbData as any).base_amount = await computeBaseAmount(amount, currency, date);
+    }
+
     const { data, error } = await supabase
       .from('transactions')
       .update(dbData)
@@ -848,6 +929,8 @@ class ApiService {
             ticker: rule.ticker,
             quantity: rule.quantity,
             price: rule.price,
+            currency: rule.currency ?? 'EUR',
+            base_amount: await computeBaseAmount(rule.amount, rule.currency ?? 'EUR', nextDate),
           })
           .select()
           .single();
