@@ -124,7 +124,12 @@
     "deleteTitle": "Delete Account",
     "deleteMessage": "Are you sure you want to delete \"{{name}}\"? This action cannot be undone.",
     "cannotDeleteTitle": "Cannot Delete",
-    "cannotDeleteMessage": "You cannot delete \"{{name}}\": {{count}} transactions are linked to this account."
+    "cannotDeleteMessage": "You cannot delete \"{{name}}\": {{count}} transactions are linked to this account.",
+    "currencies": "Currencies",
+    "addCurrency": "Add currency",
+    "currencyInUse": "Currency has transactions: cannot remove it",
+    "ratesUnavailable": "Rates unavailable",
+    "initialBalanceFor": "{{currency}} balance"
   },
   "categories": {
     "newCategory": "New Category",

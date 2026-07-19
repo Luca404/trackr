@@ -124,7 +124,12 @@
     "deleteTitle": "Eliminar cuenta",
     "deleteMessage": "¿Estás seguro de que deseas eliminar \"{{name}}\"? Esta acción no se puede deshacer.",
     "cannotDeleteTitle": "No se puede eliminar",
-    "cannotDeleteMessage": "No puedes eliminar \"{{name}}\": {{count}} transacciones están vinculadas a esta cuenta."
+    "cannotDeleteMessage": "No puedes eliminar \"{{name}}\": {{count}} transacciones están vinculadas a esta cuenta.",
+    "currencies": "Divisas",
+    "addCurrency": "Añadir divisa",
+    "currencyInUse": "Divisa con movimientos: no se puede eliminar",
+    "ratesUnavailable": "Tasas no disponibles",
+    "initialBalanceFor": "Saldo {{currency}}"
   },
   "categories": {
     "newCategory": "Nueva categoría",

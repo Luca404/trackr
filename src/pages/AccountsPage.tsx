@@ -6,9 +6,16 @@ import Modal from '../components/common/Modal';
 import ConfirmDialog from '../components/common/ConfirmDialog';
 import { SkeletonAccountCard, SkeletonValue } from '../components/common/SkeletonLoader';
 import { useSkeletonCount } from '../hooks/useSkeletonCount';
-import type { Account, AccountFormData } from '../types';
+import type { Account, AccountFormData, CurrencyCode } from '../types';
+import { SUPPORTED_CURRENCIES } from '../services/fx';
 import { useTranslation } from 'react-i18next';
 import { useSettings } from '../contexts/SettingsContext';
+
+interface CurrencyRow {
+  id?: number;
+  currency: CurrencyCode;
+  balance: number;
+}
 
 const ACCOUNT_ICONS = ['💳', '🏦', '💰', '💵', '💶', '💷', '💴', '🪙', '💸', '🏧', '📱', '💎'];
 
@@ -42,6 +49,7 @@ export default function AccountsPage() {
     is_favorite: false,
   });
   const [balanceInput, setBalanceInput] = useState<string>('0');
+  const [currencyRows, setCurrencyRows] = useState<CurrencyRow[]>([{ currency: 'EUR', balance: 0 }]);
   const [showNameError, setShowNameError] = useState(false);
   const [isBalanceFresh, setIsBalanceFresh] = useState(true);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -61,6 +69,17 @@ export default function AccountsPage() {
       // In modalità modifica, mostra il saldo corrente
       const currentBalance = account.current_balance ?? account.initial_balance;
       setBalanceInput(parseFloat(currentBalance.toFixed(2)).toString());
+      // Righe valute: saldo corrente per valuta (EUR gestito dal tastierino)
+      setCurrencyRows(
+        (account.currencies?.length
+          ? account.currencies
+          : [{ id: undefined, currency: 'EUR' as CurrencyCode, initial_balance: account.initial_balance }]
+        ).map(c => ({
+          id: c.id,
+          currency: c.currency,
+          balance: parseFloat((account.balances?.[c.currency] ?? c.initial_balance).toFixed(2)),
+        }))
+      );
     } else {
       setIsEditMode(false);
       setSelectedAccount(null);
@@ -71,6 +90,7 @@ export default function AccountsPage() {
         is_favorite: false,
       });
       setBalanceInput('0');
+      setCurrencyRows([{ currency: 'EUR', balance: 0 }]);
     }
     setShowNameError(false);
     setIsBalanceFresh(true);
@@ -112,15 +132,69 @@ export default function AccountsPage() {
       if (isEditMode && selectedAccount) {
         const updatedAccount = await apiService.updateAccount(selectedAccount.id, finalFormData);
         updateAccountCache(updatedAccount);
+
+        let didCurrencyOps = false;
+        // Riga EUR: aggiorna anche account_currencies (accounts.initial_balance già aggiornato sopra, compat)
+        const eurRow = selectedAccount.currencies?.find(c => c.currency === 'EUR');
+        if (eurRow && finalFormData.initial_balance !== eurRow.initial_balance) {
+          await apiService.updateAccountCurrency(eurRow.id, finalFormData.initial_balance);
+          didCurrencyOps = true;
+        }
+        // Righe non-EUR: saldo desiderato → initial ricalcolato (stessa logica della riga EUR)
+        const prevRows = selectedAccount.currencies?.filter(c => c.currency !== 'EUR') ?? [];
+        const uiRows = currencyRows.filter(r => r.currency !== 'EUR');
+        for (const row of uiRows) {
+          const existing = prevRows.find(c => c.currency === row.currency);
+          if (!existing) {
+            await apiService.addAccountCurrency(selectedAccount.id, row.currency, row.balance);
+            didCurrencyOps = true;
+          } else {
+            const newInitial = row.balance - ((selectedAccount.balances?.[row.currency] ?? 0) - existing.initial_balance);
+            if (newInitial !== existing.initial_balance) {
+              await apiService.updateAccountCurrency(existing.id, newInitial);
+              didCurrencyOps = true;
+            }
+          }
+        }
+        // Righe rimosse in UI
+        for (const prev of prevRows) {
+          if (uiRows.some(r => r.currency === prev.currency)) continue;
+          try {
+            await apiService.removeAccountCurrency(prev.id);
+            didCurrencyOps = true;
+          } catch (err) {
+            if (err instanceof Error && err.message === 'currency_in_use') {
+              alert(t('accounts.currencyInUse'));
+              setCurrencyRows(rows => [...rows, {
+                id: prev.id,
+                currency: prev.currency,
+                balance: selectedAccount.balances?.[prev.currency] ?? prev.initial_balance,
+              }]);
+            } else {
+              throw err;
+            }
+          }
+        }
+        if (didCurrencyOps) await refreshAccounts();
       } else {
         const newAccount = await apiService.createAccount(finalFormData);
+        for (const row of currencyRows.filter(r => r.currency !== 'EUR')) {
+          await apiService.addAccountCurrency(newAccount.id, row.currency, row.balance);
+        }
         addAccount(newAccount);
+        if (currencyRows.length > 1) await refreshAccounts();
       }
       handleCloseModal();
     } catch (error) {
       console.error('Errore salvataggio conto:', error);
       alert('Errore durante il salvataggio del conto');
     }
+  };
+
+  const availableCurrencies = SUPPORTED_CURRENCIES.filter(c => !currencyRows.some(r => r.currency === c));
+
+  const handleRemoveCurrency = (currency: CurrencyCode) => {
+    setCurrencyRows(rows => rows.filter(r => r.currency !== currency));
   };
 
   const handleNumberClick = (num: string) => {
@@ -214,7 +288,13 @@ export default function AccountsPage() {
     return negative ? `-${result}` : result;
   };
 
-  const totalLiquidity = accounts.reduce((sum, acc) => sum + (acc.current_balance ?? acc.initial_balance), 0);
+  const accountTotals = accounts.map(a => a.total_base);
+  const totalLiquidity = accountTotals.some(v => v == null)
+    ? null
+    : accountTotals.reduce((s: number, v) => s + (v as number), 0);
+  // Fallback quando i tassi non sono disponibili: somma dei soli saldi EUR
+  const eurLiquidity = accounts.reduce((sum, acc) => sum + (acc.balances?.['EUR'] ?? acc.current_balance ?? acc.initial_balance), 0);
+  const displayLiquidity = totalLiquidity ?? eurLiquidity;
   const normalizedAccountName = formData.name.trim().toLocaleLowerCase();
   const isDuplicateAccountName = normalizedAccountName !== '' && accounts.some(
     (account) => account.id !== selectedAccount?.id && account.name.trim().toLocaleLowerCase() === normalizedAccountName
@@ -251,8 +331,8 @@ export default function AccountsPage() {
                 {isLoading
                   ? <SkeletonValue className="h-10 w-40 animate-pulse inline-block" />
                   : hideBalances
-                    ? maskAmount(formatCurrency(totalLiquidity), totalLiquidity >= 0)
-                    : <span className={totalLiquidity >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>{formatCurrency(totalLiquidity)}</span>}
+                    ? maskAmount(formatCurrency(displayLiquidity), displayLiquidity >= 0)
+                    : <span className={displayLiquidity >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>{formatCurrency(displayLiquidity)}</span>}
               </div>
               <div className="flex-1 flex justify-end pr-2">
                 <button
@@ -264,6 +344,9 @@ export default function AccountsPage() {
                 </button>
               </div>
             </div>
+            {totalLiquidity === null && !isLoading && (
+              <div className="text-xs text-amber-500 text-center mt-1">⚠ {t('accounts.ratesUnavailable')}</div>
+            )}
           </div>
           {/* Gradient fade */}
           <div className="absolute left-0 right-0 h-8 bg-gradient-to-b from-gray-50 dark:from-gray-900 to-transparent pointer-events-none" style={{ top: '100%' }} />
@@ -290,17 +373,31 @@ export default function AccountsPage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-4">
-                    <div className="text-right">
-                      <div className={`text-lg font-bold ${
-                        (account.current_balance ?? account.initial_balance) >= 0
-                          ? 'text-green-600 dark:text-green-400'
-                          : 'text-red-600 dark:text-red-400'
-                      }`}>
-                        {hideBalances
-                          ? maskAmount(formatCurrency(account.current_balance ?? account.initial_balance), (account.current_balance ?? account.initial_balance) >= 0)
-                          : formatCurrency(account.current_balance ?? account.initial_balance)}
-                      </div>
-                    </div>
+                    {(() => {
+                      const multi = (account.currencies?.length ?? 0) > 1;
+                      const bal = multi
+                        ? (account.total_base ?? account.balances?.['EUR'] ?? 0)
+                        : (account.current_balance ?? account.initial_balance);
+                      return (
+                        <div className="text-right">
+                          <div className={`text-lg font-bold ${bal >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                            {hideBalances ? maskAmount(formatCurrency(bal), bal >= 0) : formatCurrency(bal)}
+                            {multi && account.total_base == null && (
+                              <span className="ml-1 text-xs align-middle" title={t('accounts.ratesUnavailable')}>⚠</span>
+                            )}
+                          </div>
+                          {multi && !hideBalances && (
+                            <div className="flex flex-wrap gap-1 mt-1 justify-end">
+                              {Object.entries(account.balances ?? {}).map(([cur, v]) => (
+                                <span key={cur} className="text-xs px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
+                                  {formatCurrency(v, cur)}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
                     <button
                       onClick={(e) => handleToggleFavorite(account, e)}
                       className="text-2xl transition-colors"
@@ -458,6 +555,38 @@ export default function AccountsPage() {
                   </button>
                 </div>
               </div>
+            </div>
+
+            {/* Valute aggiuntive (il tastierino sopra è la riga EUR) */}
+            <div>
+              <label className="block text-sm text-gray-600 dark:text-gray-400 mb-2">{t('accounts.currencies')}</label>
+              <div className="space-y-2">
+                {currencyRows.filter(r => r.currency !== 'EUR').map((row) => (
+                  <div key={row.currency} className="flex items-center gap-2">
+                    <span className="w-12 text-sm font-mono text-gray-500 dark:text-gray-400">{row.currency}</span>
+                    <input
+                      type="number" step="0.01" value={row.balance}
+                      onChange={e => setCurrencyRows(rows => rows.map(r => r.currency === row.currency ? { ...r, balance: Number(e.target.value) } : r))}
+                      className="input-field flex-1"
+                      aria-label={t('accounts.initialBalanceFor', { currency: row.currency })}
+                    />
+                    <button type="button" onClick={() => handleRemoveCurrency(row.currency)}
+                      className="text-red-500 px-2 text-lg" aria-label="remove">×</button>
+                  </div>
+                ))}
+              </div>
+              {availableCurrencies.length > 0 && (
+                <div className="flex gap-2 mt-2">
+                  {availableCurrencies.map(c => (
+                    <button key={c} type="button"
+                      title={t('accounts.addCurrency')}
+                      onClick={() => setCurrencyRows(rows => [...rows, { currency: c, balance: 0 }])}
+                      className="px-3 py-1.5 rounded-lg border border-dashed border-gray-300 dark:border-gray-600 text-sm text-gray-500 dark:text-gray-400">
+                      + {c}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
             {isEditMode && (

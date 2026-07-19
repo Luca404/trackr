@@ -124,7 +124,12 @@
     "deleteTitle": "Elimina Conto",
     "deleteMessage": "Sei sicuro di voler eliminare \"{{name}}\"? Questa azione non può essere annullata.",
     "cannotDeleteTitle": "Impossibile Eliminare",
-    "cannotDeleteMessage": "Non puoi eliminare \"{{name}}\": {{count}} transazioni sono collegate a questo conto."
+    "cannotDeleteMessage": "Non puoi eliminare \"{{name}}\": {{count}} transazioni sono collegate a questo conto.",
+    "currencies": "Valute",
+    "addCurrency": "Aggiungi valuta",
+    "currencyInUse": "Valuta con movimenti: impossibile rimuoverla",
+    "ratesUnavailable": "Tassi non disponibili",
+    "initialBalanceFor": "Saldo {{currency}}"
   },
   "categories": {
     "newCategory": "Nuova Categoria",
