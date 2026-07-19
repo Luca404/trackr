@@ -459,12 +459,13 @@ class ApiService {
       .select()
       .single();
     if (error) throw error;
-    await supabase.from('account_currencies').insert({
+    const { error: ccError } = await supabase.from('account_currencies').insert({
       account_id: data.id,
       profile_id: this.getActiveProfileId(),
       currency: 'EUR',
       initial_balance: formData.initial_balance ?? 0,
     });
+    if (ccError) throw ccError;
     return mapAccount(data);
   }
 
