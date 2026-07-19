@@ -2,6 +2,8 @@ import { createContext, useContext, useState, useEffect, useRef, type ReactNode 
 import i18n from '../i18n';
 import { apiService } from '../services/api';
 import { supabase } from '../services/supabase';
+import { computeBalances, totalBase } from '../utils/balances';
+import { computeBaseAmount, getRates, type Rates } from '../services/fx';
 import type { Account, Category, Transaction, Transfer, Portfolio, UserProfile, Order, ProfileInvitation } from '../types';
 
 interface DataContextType {
@@ -15,6 +17,7 @@ interface DataContextType {
   userProfiles: UserProfile[];
   activeProfile: UserProfile | null;
   pendingInvitations: ProfileInvitation[];
+  fxRates: Rates | null;
 
   // Loading states
   isLoading: boolean;
@@ -60,7 +63,7 @@ interface DataContextType {
   // Refresh functions
   refreshAccounts: () => Promise<void>;
   refreshCategories: () => Promise<void>;
-  refreshTransactions: (startDate?: string, endDate?: string) => Promise<void>;
+  refreshTransactions: (startDate?: string, endDate?: string) => Promise<Transaction[]>;
   refreshTransfers: () => Promise<void>;
   refreshPortfolios: () => Promise<void>;
   refreshAll: () => Promise<void>;
@@ -90,6 +93,7 @@ export function DataProvider({ children }: DataProviderProps) {
   const [userProfiles, setUserProfiles] = useState<UserProfile[]>([]);
   const [activeProfile, setActiveProfile] = useState<UserProfile | null>(null);
   const [pendingInvitations, setPendingInvitations] = useState<ProfileInvitation[]>([]);
+  const [fxRates, setFxRates] = useState<Rates | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isInitialized, setIsInitialized] = useState(false);
   const isFetchingRef = useRef(false);
@@ -118,32 +122,23 @@ export function DataProvider({ children }: DataProviderProps) {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Ricalcola i current_balance degli account quando cambiano transazioni o trasferimenti
+  // Ricalcola i saldi per valuta degli account quando cambiano transazioni, trasferimenti o tassi
   useEffect(() => {
     if (!isInitialized || accounts.length === 0) return;
-
-    setAccounts(prevAccounts => {
-      return prevAccounts.map(account => {
-        let currentBalance = account.initial_balance;
-
-        transactions.forEach(t => {
-          if (t.account_id !== account.id) return;
-          if (t.type === 'income') currentBalance += t.amount;
-          else if (t.type === 'expense' || t.type === 'investment') currentBalance -= t.amount;
-        });
-
-        transfers.forEach(t => {
-          if (t.from_account_id === account.id) currentBalance -= t.amount;
-          if (t.to_account_id === account.id) currentBalance += t.amount;
-        });
-
-        if (currentBalance !== account.current_balance) {
-          return { ...account, current_balance: currentBalance };
-        }
-        return account;
-      });
-    });
-  }, [transactions, transfers, isInitialized]);
+    setAccounts(prev => prev.map(account => {
+      const balances = computeBalances(
+        { id: account.id, currencies: account.currencies ?? [{ id: -1, account_id: account.id, currency: 'EUR', initial_balance: account.initial_balance }] },
+        transactions, transfers,
+      );
+      const total = totalBase(balances, fxRates);
+      const eur = balances['EUR'] ?? 0;
+      if (eur !== account.current_balance || total !== account.total_base
+          || JSON.stringify(balances) !== JSON.stringify(account.balances)) {
+        return { ...account, balances, current_balance: eur, total_base: total };
+      }
+      return account;
+    }));
+  }, [transactions, transfers, isInitialized, fxRates]);
 
   // Prefetch portfolio summaries in background after init so PortfoliosPage finds warm cache
   useEffect(() => {
@@ -199,6 +194,8 @@ export function DataProvider({ children }: DataProviderProps) {
     isFetchingRef.current = true;
     setIsLoading(true);
     try {
+      // Tassi FX in background — mai bloccante sul load
+      getRates().then(setFxRates);
       // Valida la sessione server-side
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
@@ -242,7 +239,16 @@ export function DataProvider({ children }: DataProviderProps) {
       setCategories(finalCategories);
       // Crea transazioni ricorrenti scadute, poi carica tutto fresco
       await apiService.processRecurringTransactions().catch(console.error);
-      await Promise.all([refreshTransactions(), refreshTransfers(), refreshPortfolios(), refreshFreeOrders()]);
+      const [transactionsData] = await Promise.all([refreshTransactions(), refreshTransfers(), refreshPortfolios(), refreshFreeOrders()]);
+      // Backfill lazy degli snapshot base_amount mancanti (fire-and-forget)
+      (async () => {
+        const missing = transactionsData.filter(t => t.currency !== 'EUR' && t.base_amount == null);
+        for (const t of missing) {
+          const ba = await computeBaseAmount(t.amount, t.currency, t.date);
+          if (ba != null) await apiService.updateTransactionBaseAmount(t.id, ba);
+        }
+        if (missing.length) await refreshTransactions();
+      })().catch(() => {});
     } catch (error) {
       console.error('Error fetching all data:', error);
     } finally {
@@ -278,6 +284,7 @@ export function DataProvider({ children }: DataProviderProps) {
         startDate && endDate ? { startDate, endDate } : undefined
       );
       setTransactions(data);
+      return data;
     } catch (error) {
       console.error('Error refreshing transactions:', error);
       throw error;
@@ -492,6 +499,7 @@ export function DataProvider({ children }: DataProviderProps) {
     userProfiles,
     activeProfile,
     pendingInvitations,
+    fxRates,
     isLoading,
     isInitialized,
     switchProfile,

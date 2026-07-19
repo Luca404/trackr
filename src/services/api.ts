@@ -747,6 +747,11 @@ class ApiService {
     return mapTransaction(data);
   }
 
+  async updateTransactionBaseAmount(id: number, baseAmount: number): Promise<void> {
+    const { error } = await supabase.from('transactions').update({ base_amount: baseAmount }).eq('id', id);
+    if (error) throw error;
+  }
+
   async deleteTransaction(id: number): Promise<void> {
     const { error } = await supabase.from('transactions').delete().eq('id', id);
     if (error) throw error;
