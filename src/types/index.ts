@@ -1,3 +1,5 @@
+export type CurrencyCode = 'EUR' | 'USD' | 'GBP' | 'CHF' | 'JPY';
+
 export interface User {
   id: string;
   name: string;
