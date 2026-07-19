@@ -92,6 +92,9 @@ export interface Transaction {
   price?: number;
 
   recurring_id?: number;
+
+  currency: CurrencyCode;
+  base_amount: number | null;
 }
 
 export interface Transfer {
@@ -104,6 +107,10 @@ export interface Transfer {
   date: string;
   created_at?: string;
   updated_at?: string;
+
+  from_currency: CurrencyCode;
+  to_currency: CurrencyCode;
+  to_amount: number | null;
 }
 
 export interface TransactionFormData {
@@ -131,6 +138,10 @@ export interface TransactionFormData {
   recurrence?: RecurringFrequency; // solo per nuove transazioni
   recurring_id?: number;           // impostato internamente al salvataggio
   free_quote?: boolean;            // quota gratuita: crea solo l'ordine, nessun addebito su conto
+
+  currency?: CurrencyCode;
+  to_currency?: CurrencyCode;      // valuta di destinazione (cambio interno)
+  to_amount?: number;              // importo accreditato sul conto di destinazione
 }
 
 export interface TransactionStats {
@@ -194,6 +205,13 @@ export interface SubcategoryFormData {
   name: string;
 }
 
+export interface AccountCurrency {
+  id: number;
+  account_id: number;
+  currency: CurrencyCode;
+  initial_balance: number;
+}
+
 export interface Account {
   id: number;
   user_id: number;
@@ -204,6 +222,10 @@ export interface Account {
   is_favorite?: boolean;
   created_at: string;
   updated_at?: string;
+
+  currencies?: AccountCurrency[];
+  balances?: Record<string, number>;
+  total_base?: number | null;
 }
 
 export interface AccountFormData {
