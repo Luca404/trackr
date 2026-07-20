@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useSettings } from '../../contexts/SettingsContext';
-import type { TransactionFormData, TransactionType, Category, Subcategory, Account, Portfolio, RecurringFrequency, Order } from '../../types';
+import type { TransactionFormData, TransactionType, Category, Subcategory, Account, Portfolio, RecurringFrequency, Order, CurrencyCode } from '../../types';
 import { useData } from '../../contexts/DataContext';
 import { apiService } from '../../services/api';
 import ConfirmDialog from '../common/ConfirmDialog';
@@ -44,6 +44,11 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
   const [selectedSubcategory, setSelectedSubcategory] = useState<Subcategory | null>(null);
   const [selectedAccount, setSelectedAccount] = useState<Account | null>(null);
+  // Valute attive sul conto selezionato (fallback EUR se il conto non ha righe currencies)
+  const activeCurrencies = useMemo<CurrencyCode[]>(
+    () => selectedAccount?.currencies?.map(c => c.currency) ?? ['EUR'],
+    [selectedAccount]
+  );
   const [selectedToAccount, setSelectedToAccount] = useState<Account | null>(null);
   const [showToAccountPicker, setShowToAccountPicker] = useState(false);
   const [amount, setAmount] = useState<string>(initialData?.amount.toString() || '');
@@ -54,7 +59,8 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
   const [showAccountPicker, setShowAccountPicker] = useState(false);
   const [showPortfolioPicker, setShowPortfolioPicker] = useState(false);
   const [showCurrencyPicker, setShowCurrencyPicker] = useState(false);
-  const [currency, setCurrency] = useState<string>('EUR');
+  const [currency, setCurrency] = useState<CurrencyCode>(initialData?.currency ?? 'EUR');
+  const [showCurrencyResetNotice, setShowCurrencyResetNotice] = useState(false);
   const [investmentDraft, setInvestmentDraft] = useState<InvestmentOrderInput>({
     symbol: initialData?.ticker || '',
     isin: initialData?.isin,
@@ -100,6 +106,22 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
       setSelectedAccount(favoriteAccount || allAccounts[0]);
     }
   }, [allAccounts, selectedAccount]);
+
+  // Reset valuta a EUR se non più attiva sul conto selezionato (cambio conto)
+  useEffect(() => {
+    if (!selectedAccount) return;
+    if (!activeCurrencies.includes(currency)) {
+      setCurrency('EUR');
+      setShowCurrencyResetNotice(true);
+    }
+  }, [selectedAccount]);
+
+  // Auto-nasconde l'avviso di reset valuta dopo qualche secondo
+  useEffect(() => {
+    if (!showCurrencyResetNotice) return;
+    const timer = setTimeout(() => setShowCurrencyResetNotice(false), 4000);
+    return () => clearTimeout(timer);
+  }, [showCurrencyResetNotice]);
 
   // Reset categoria/portafoglio quando cambia tipo
   useEffect(() => {
@@ -370,6 +392,7 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
         date,
         account_id: selectedAccount.id,
         recurrence: recurrence ?? undefined,
+        currency,
       };
     }
 
@@ -948,6 +971,9 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
         <div className="text-5xl font-bold text-gray-900 dark:text-gray-100">
           {getCurrencySymbol(currency)} {formatAmountDisplay(amount || '0')}
         </div>
+        {showCurrencyResetNotice && (
+          <div className="text-xs text-amber-600 mt-1">{t('transactions.currencyReset')}</div>
+        )}
       </div>
 
       {/* Tastierino */}
@@ -957,8 +983,12 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
             <button key={n} type="button" onClick={() => handleNumberClick(n)}
               className="h-14 text-2xl font-semibold rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-900 dark:text-gray-100 transition-colors">{n}</button>
           ))}
-          <button type="button" onClick={() => setShowCurrencyPicker(true)}
-            className="h-14 text-lg font-semibold rounded-lg bg-primary-100 dark:bg-primary-900/30 hover:bg-primary-200 dark:hover:bg-primary-900/50 text-primary-600 dark:text-primary-400 transition-colors">{getCurrencySymbol(currency)}</button>
+          {activeCurrencies.length > 1 ? (
+            <button type="button" onClick={() => setShowCurrencyPicker(true)}
+              className="h-14 text-lg font-semibold rounded-lg bg-primary-100 dark:bg-primary-900/30 hover:bg-primary-200 dark:hover:bg-primary-900/50 text-primary-600 dark:text-primary-400 transition-colors">{getCurrencySymbol(currency)}</button>
+          ) : (
+            <span className="h-14 flex items-center justify-center text-lg font-semibold rounded-lg bg-primary-100 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400">{getCurrencySymbol(currency)}</span>
+          )}
           <button type="button" onClick={() => handleNumberClick('0')}
             className="h-14 text-2xl font-semibold rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-900 dark:text-gray-100 transition-colors">0</button>
           <button type="button" onClick={() => handleNumberClick('.')}
@@ -1015,12 +1045,12 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
       <Modal isOpen={showCurrencyPicker} onClose={() => setShowCurrencyPicker(false)} title={t('transactions.selectCurrency')}>
         <div className="space-y-2">
           {[
-            { code: 'EUR', symbol: '€' },
-            { code: 'USD', symbol: '$' },
-            { code: 'GBP', symbol: '£' },
-            { code: 'JPY', symbol: '¥' },
-            { code: 'CHF', symbol: 'Fr' },
-          ].map((curr) => (
+            { code: 'EUR' as CurrencyCode, symbol: '€' },
+            { code: 'USD' as CurrencyCode, symbol: '$' },
+            { code: 'GBP' as CurrencyCode, symbol: '£' },
+            { code: 'JPY' as CurrencyCode, symbol: '¥' },
+            { code: 'CHF' as CurrencyCode, symbol: 'Fr' },
+          ].filter((curr) => activeCurrencies.includes(curr.code)).map((curr) => (
             <button key={curr.code} type="button"
               onClick={() => { setCurrency(curr.code); setShowCurrencyPicker(false); }}
               className={`w-full flex items-center gap-3 p-3 rounded-lg border-2 transition-colors ${currency === curr.code ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20' : 'border-gray-200 dark:border-gray-700 hover:border-primary-500'}`}>

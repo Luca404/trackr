@@ -715,7 +715,7 @@ export default function TransactionsPage() {
                                 ? 'text-red-600 dark:text-red-400'
                                 : 'text-blue-600 dark:text-blue-400'
                             }`}>
-                              {transaction.type === 'income' ? '+' : transaction.amount < 0 ? '+' : '-'}{formatCurrency(Math.abs(transaction.amount))}
+                              {transaction.type === 'income' ? '+' : transaction.amount < 0 ? '+' : '-'}{formatCurrency(Math.abs(transaction.amount), transaction.currency)}
                             </div>
                           </div>
                         </div>

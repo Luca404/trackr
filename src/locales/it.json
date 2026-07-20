@@ -78,6 +78,7 @@
     "deleteTransaction": "Elimina Transazione",
     "deleteTransactionMsg": "Sei sicuro di voler eliminare questa transazione?",
     "selectCurrency": "Seleziona Valuta",
+    "currencyReset": "Valuta non attiva su questo conto, reimpostata su EUR",
     "tickerOrIsin": "Ticker o ISIN",
     "tickerOrName": "Ticker o Nome",
     "isinNotCached": "ISIN non in cache locale",
