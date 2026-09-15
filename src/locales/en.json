@@ -79,6 +79,8 @@
     "deleteTransactionMsg": "Are you sure you want to delete this transaction?",
     "selectCurrency": "Select Currency",
     "currencyReset": "Currency not active on this account, reset to EUR",
+    "youSend": "You send",
+    "youReceive": "You receive",
     "tickerOrIsin": "Ticker or ISIN",
     "tickerOrName": "Ticker or Name",
     "isinNotCached": "ISIN not in local cache",

@@ -10,6 +10,7 @@ import Modal, { registerBackHandler } from '../common/Modal';
 import TransactionDateModal from '../common/TransactionDateModal';
 import InvestmentOrderForm, { type InvestmentOrderInput } from '../investments/InvestmentOrderForm';
 import { localDateStr } from '../../utils/date';
+import { getRates } from '../../services/fx';
 
 interface TransactionFormProps {
   onSubmit: (data: TransactionFormData) => Promise<void>;
@@ -50,6 +51,11 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
     [selectedAccount]
   );
   const [selectedToAccount, setSelectedToAccount] = useState<Account | null>(null);
+  // Valute attive sul conto di destinazione selezionato (trasferimento)
+  const toActiveCurrencies = useMemo<CurrencyCode[]>(
+    () => selectedToAccount?.currencies?.map(c => c.currency) ?? ['EUR'],
+    [selectedToAccount]
+  );
   const [showToAccountPicker, setShowToAccountPicker] = useState(false);
   const [amount, setAmount] = useState<string>(initialData?.amount.toString() || '');
   const [date, setDate] = useState<string>(initialData?.date || localDateStr());
@@ -61,6 +67,13 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
   const [showCurrencyPicker, setShowCurrencyPicker] = useState(false);
   const [currency, setCurrency] = useState<CurrencyCode>(initialData?.currency ?? 'EUR');
   const [showCurrencyResetNotice, setShowCurrencyResetNotice] = useState(false);
+  // Valute trasferimento (from/to) — state dedicato, NON condiviso con `currency` (expense/income)
+  const [fromCurrency, setFromCurrency] = useState<CurrencyCode>(initialData?.currency ?? 'EUR');
+  const [toCurrency, setToCurrency] = useState<CurrencyCode>(initialData?.to_currency ?? initialData?.currency ?? 'EUR');
+  const [toAmountText, setToAmountText] = useState<string>(initialData?.to_amount?.toString() ?? '');
+  const [toAmountTouched, setToAmountTouched] = useState(false);
+  const [showFromCurrencyPicker, setShowFromCurrencyPicker] = useState(false);
+  const [showToCurrencyPicker, setShowToCurrencyPicker] = useState(false);
   const [investmentDraft, setInvestmentDraft] = useState<InvestmentOrderInput>({
     symbol: initialData?.ticker || '',
     isin: initialData?.isin,
@@ -122,6 +135,41 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
     const timer = setTimeout(() => setShowCurrencyResetNotice(false), 4000);
     return () => clearTimeout(timer);
   }, [showCurrencyResetNotice]);
+
+  // Reset fromCurrency/toCurrency a EUR se non più attiva sul conto selezionato (trasferimento)
+  useEffect(() => {
+    if (!selectedAccount) return;
+    if (!activeCurrencies.includes(fromCurrency)) setFromCurrency('EUR');
+  }, [selectedAccount]);
+
+  useEffect(() => {
+    if (!selectedToAccount) return;
+    if (!toActiveCurrencies.includes(toCurrency)) setToCurrency('EUR');
+  }, [selectedToAccount]);
+
+  // Ri-aggancia l'auto-calcolo dell'importo destinazione quando cambia la coppia valute
+  useEffect(() => {
+    setToAmountTouched(false);
+  }, [fromCurrency, toCurrency]);
+
+  // Precompila l'importo destinazione (cambio interno / trasferimento cross-currency) dal tasso corrente
+  useEffect(() => {
+    if (currentType !== 'transfer') return;
+    if (fromCurrency === toCurrency) return;
+    if (toAmountTouched) return;
+    const amountNum = parseFloat(amount) || 0;
+    if (amountNum <= 0) return;
+    let cancelled = false;
+    (async () => {
+      const rates = await getRates();
+      if (cancelled) return;
+      const fromRate = fromCurrency === 'EUR' ? 1 : (rates?.[fromCurrency] ?? 1);
+      const toRate = toCurrency === 'EUR' ? 1 : (rates?.[toCurrency] ?? 1);
+      const converted = Math.round((amountNum * toRate / fromRate) * 100) / 100;
+      setToAmountText(String(converted));
+    })();
+    return () => { cancelled = true; };
+  }, [amount, fromCurrency, toCurrency, currentType, toAmountTouched]);
 
   // Reset categoria/portafoglio quando cambia tipo
   useEffect(() => {
@@ -328,9 +376,11 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
 
     if (currentType === 'transfer') {
       if (!selectedAccount || !selectedToAccount) return;
-      if (selectedToAccount.id === selectedAccount.id) return;
+      if (selectedToAccount.id === selectedAccount.id && fromCurrency === toCurrency) return;
       const amountNum = parseFloat(amount) || 0;
       if (amountNum <= 0) return;
+      const toAmountNum = parseFloat(toAmountText) || 0;
+      if (fromCurrency !== toCurrency && toAmountNum <= 0) return;
       submitData = {
         type: 'transfer',
         category: 'Trasferimento',
@@ -339,6 +389,9 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
         date,
         account_id: selectedAccount.id,
         to_account_id: selectedToAccount.id,
+        currency: fromCurrency,
+        to_currency: toCurrency,
+        to_amount: fromCurrency !== toCurrency ? toAmountNum : undefined,
       };
       setError('');
       setIsLoading(true);
@@ -520,7 +573,7 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
       {/* Modal conto destinazione (trasferimento) */}
       <Modal isOpen={showToAccountPicker} onClose={() => setShowToAccountPicker(false)} title={t('transactions.toAccount')}>
         <div className="space-y-2">
-          {allAccounts.filter(a => a.id !== selectedAccount?.id).map((account) => (
+          {allAccounts.filter(a => a.id !== selectedAccount?.id || (selectedAccount?.currencies?.length ?? 1) >= 2).map((account) => (
             <button
               key={account.id}
               type="button"
@@ -782,11 +835,15 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
   // ── Form trasferimento ────────────────────────────────────────────────────
   if (currentType === 'transfer') {
     const amountNum = parseFloat(amount);
+    const isCrossCurrency = fromCurrency !== toCurrency;
+    const toAmountNum = parseFloat(toAmountText) || 0;
+    const impliedRate = toAmountNum > 0 && amountNum > 0 ? (toAmountNum / amountNum).toFixed(4) : null;
     const isTransferFormValid = Boolean(
       selectedAccount &&
       selectedToAccount &&
-      selectedToAccount.id !== selectedAccount.id &&
-      amountNum > 0
+      (selectedToAccount.id !== selectedAccount.id || isCrossCurrency) &&
+      amountNum > 0 &&
+      (!isCrossCurrency || toAmountNum > 0)
     );
     return (
       <form onSubmit={handleSubmit} noValidate autoComplete="off" className="space-y-4">
@@ -807,6 +864,16 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
                 <div className="text-xs text-gray-400 dark:text-gray-500">{formatCurrency(selectedAccount.current_balance)}</div>
               )}
             </div>
+            {activeCurrencies.length > 1 && (
+              <span
+                role="button"
+                tabIndex={0}
+                onClick={(e) => { e.stopPropagation(); setShowFromCurrencyPicker(true); }}
+                className="px-2 py-1 text-xs font-semibold rounded-md bg-primary-100 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400"
+              >
+                {fromCurrency}
+              </span>
+            )}
             <span className="text-gray-400">›</span>
           </button>
 
@@ -827,15 +894,50 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
                 <div className="text-xs text-gray-400 dark:text-gray-500">{formatCurrency(selectedToAccount.current_balance)}</div>
               )}
             </div>
+            {toActiveCurrencies.length > 1 && (
+              <span
+                role="button"
+                tabIndex={0}
+                onClick={(e) => { e.stopPropagation(); setShowToCurrencyPicker(true); }}
+                className="px-2 py-1 text-xs font-semibold rounded-md bg-primary-100 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400"
+              >
+                {toCurrency}
+              </span>
+            )}
             <span className="text-gray-400">›</span>
           </button>
         </div>
 
         {/* Display importo */}
         <div className="text-center py-4">
-          <div className="text-5xl font-bold text-gray-900 dark:text-gray-100">
-            {getCurrencySymbol(currency)} {formatAmountDisplay(amount || '0')}
-          </div>
+          {isCrossCurrency && (
+            <div className="flex gap-2 mb-3 text-left">
+              <div className="flex-1">
+                <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">{t('transactions.youSend')} ({fromCurrency})</label>
+                <div className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+                  {getCurrencySymbol(fromCurrency)} {formatAmountDisplay(amount || '0')}
+                </div>
+              </div>
+              <div className="flex-1">
+                <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">{t('transactions.youReceive')} ({toCurrency})</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={toAmountText}
+                  onChange={(e) => { setToAmountText(e.target.value); setToAmountTouched(e.target.value !== ''); }}
+                  className="input-field"
+                />
+              </div>
+            </div>
+          )}
+          {impliedRate && isCrossCurrency && (
+            <div className="text-xs text-gray-400 dark:text-gray-500 text-center mb-2">1 {fromCurrency} = {impliedRate} {toCurrency}</div>
+          )}
+          {!isCrossCurrency && (
+            <div className="text-5xl font-bold text-gray-900 dark:text-gray-100">
+              {getCurrencySymbol(fromCurrency)} {formatAmountDisplay(amount || '0')}
+            </div>
+          )}
         </div>
 
         {/* Tastierino */}
@@ -845,8 +947,12 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
               <button key={n} type="button" onClick={() => handleNumberClick(n)}
                 className="h-14 text-2xl font-semibold rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-900 dark:text-gray-100 transition-colors">{n}</button>
             ))}
-            <button type="button" onClick={() => setShowCurrencyPicker(true)}
-              className="h-14 text-lg font-semibold rounded-lg bg-primary-100 dark:bg-primary-900/30 hover:bg-primary-200 dark:hover:bg-primary-900/50 text-primary-600 dark:text-primary-400 transition-colors">{getCurrencySymbol(currency)}</button>
+            {activeCurrencies.length > 1 ? (
+              <button type="button" onClick={() => setShowFromCurrencyPicker(true)}
+                className="h-14 text-lg font-semibold rounded-lg bg-primary-100 dark:bg-primary-900/30 hover:bg-primary-200 dark:hover:bg-primary-900/50 text-primary-600 dark:text-primary-400 transition-colors">{getCurrencySymbol(fromCurrency)}</button>
+            ) : (
+              <span className="h-14 flex items-center justify-center text-lg font-semibold rounded-lg bg-primary-100 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400">{getCurrencySymbol(fromCurrency)}</span>
+            )}
             <button type="button" onClick={() => handleNumberClick('0')}
               className="h-14 text-2xl font-semibold rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-900 dark:text-gray-100 transition-colors">0</button>
             <button type="button" onClick={() => handleNumberClick('.')}
@@ -895,6 +1001,52 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
             <span>{t('common.delete')}</span>
           </button>
         )}
+
+        {/* Modal valuta conto origine */}
+        <Modal isOpen={showFromCurrencyPicker} onClose={() => setShowFromCurrencyPicker(false)} title={t('transactions.selectCurrency')}>
+          <div className="space-y-2">
+            {[
+              { code: 'EUR' as CurrencyCode, symbol: '€' },
+              { code: 'USD' as CurrencyCode, symbol: '$' },
+              { code: 'GBP' as CurrencyCode, symbol: '£' },
+              { code: 'JPY' as CurrencyCode, symbol: '¥' },
+              { code: 'CHF' as CurrencyCode, symbol: 'Fr' },
+            ].filter((curr) => activeCurrencies.includes(curr.code)).map((curr) => (
+              <button key={curr.code} type="button"
+                onClick={() => { setFromCurrency(curr.code); setShowFromCurrencyPicker(false); }}
+                className={`w-full flex items-center gap-3 p-3 rounded-lg border-2 transition-colors ${fromCurrency === curr.code ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20' : 'border-gray-200 dark:border-gray-700 hover:border-primary-500'}`}>
+                <span className="text-2xl font-bold w-12">{curr.symbol}</span>
+                <div className="flex-1 text-left">
+                  <div className="font-medium text-gray-900 dark:text-gray-100">{t(`transactions.currencies.${curr.code}`)}</div>
+                  <div className="text-sm text-gray-500 dark:text-gray-400">{curr.code}</div>
+                </div>
+              </button>
+            ))}
+          </div>
+        </Modal>
+
+        {/* Modal valuta conto destinazione */}
+        <Modal isOpen={showToCurrencyPicker} onClose={() => setShowToCurrencyPicker(false)} title={t('transactions.selectCurrency')}>
+          <div className="space-y-2">
+            {[
+              { code: 'EUR' as CurrencyCode, symbol: '€' },
+              { code: 'USD' as CurrencyCode, symbol: '$' },
+              { code: 'GBP' as CurrencyCode, symbol: '£' },
+              { code: 'JPY' as CurrencyCode, symbol: '¥' },
+              { code: 'CHF' as CurrencyCode, symbol: 'Fr' },
+            ].filter((curr) => toActiveCurrencies.includes(curr.code)).map((curr) => (
+              <button key={curr.code} type="button"
+                onClick={() => { setToCurrency(curr.code); setShowToCurrencyPicker(false); }}
+                className={`w-full flex items-center gap-3 p-3 rounded-lg border-2 transition-colors ${toCurrency === curr.code ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20' : 'border-gray-200 dark:border-gray-700 hover:border-primary-500'}`}>
+                <span className="text-2xl font-bold w-12">{curr.symbol}</span>
+                <div className="flex-1 text-left">
+                  <div className="font-medium text-gray-900 dark:text-gray-100">{t(`transactions.currencies.${curr.code}`)}</div>
+                  <div className="text-sm text-gray-500 dark:text-gray-400">{curr.code}</div>
+                </div>
+              </button>
+            ))}
+          </div>
+        </Modal>
 
         {sharedModals}
       </form>
