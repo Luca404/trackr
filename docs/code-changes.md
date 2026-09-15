@@ -1,6 +1,19 @@
 Implemented code changes
 ========================
 
+2026-09-15
+
+1. Refreshed frontend dependencies to remove known npm vulnerabilities
+- Updated all dependencies allowed by the existing semver ranges
+- Upgraded `react-router-dom` from 6.x to 7.18.3 to close the two remaining runtime advisories
+- Updated the lockfile so clean installs resolve to the audited versions
+- Verified the resulting dependency tree with `npm audit` (zero known vulnerabilities)
+- Verified the React Router major upgrade with 23 passing tests and a successful production build
+
+Reason
+- The production dependency tree reported 22 advisories before the refresh, including four in runtime dependencies
+- Compatible updates removed 20 advisories; React Router required a targeted major upgrade to remove the final two
+
 2026-03-30
 
 1. Removed `description` from pfTrackr portfolio flow
