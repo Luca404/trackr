@@ -1,3 +1,5 @@
+import type { InstrumentLookup } from '../../types/instrumentLookup';
+import { errorInfo } from '../../utils/error';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import TransactionDateModal from '../common/TransactionDateModal';
@@ -76,9 +78,9 @@ export default function InvestmentOrderForm({
   const currSymbols: Record<string, string> = { EUR: '€', USD: '$', GBP: '£', CHF: 'Fr' };
 
   const [instrumentType, setInstrumentType] = useState<'etf' | 'stock' | 'bond'>(initialData?.instrumentType || 'etf');
-  const [ucitsCache, setUcitsCache] = useState<any[]>([]);
-  const [bondCache, setBondCache] = useState<any[]>([]);
-  const [symbolOptions, setSymbolOptions] = useState<any[]>([]);
+  const [ucitsCache, setUcitsCache] = useState<InstrumentLookup[]>([]);
+  const [bondCache, setBondCache] = useState<InstrumentLookup[]>([]);
+  const [symbolOptions, setSymbolOptions] = useState<InstrumentLookup[]>([]);
   const [symbolLoading, setSymbolLoading] = useState(false);
   const [symbolSearchOpen, setSymbolSearchOpen] = useState(false);
   const [symbolSearchCompleted, setSymbolSearchCompleted] = useState(false);
@@ -216,7 +218,7 @@ export default function InvestmentOrderForm({
     if (ucitsLoadedRef.current || ucitsCache.length > 0 || instrumentType !== 'etf') return;
     const cached = sessionStorage.getItem('ucits_etf_list');
     if (cached) {
-      try { setUcitsCache(JSON.parse(cached)); ucitsLoadedRef.current = true; return; } catch {}
+      try { setUcitsCache(JSON.parse(cached)); ucitsLoadedRef.current = true; return; } catch { /* Optional cache may be unavailable or corrupt. */ }
     }
     ucitsLoadedRef.current = true;
     fetch(`${PF_BACKEND_URL}/symbols/ucits`)
@@ -224,7 +226,7 @@ export default function InvestmentOrderForm({
       .then(data => {
         if (data?.results) {
           setUcitsCache(data.results);
-          try { sessionStorage.setItem('ucits_etf_list', JSON.stringify(data.results)); } catch {}
+          try { sessionStorage.setItem('ucits_etf_list', JSON.stringify(data.results)); } catch { /* Optional cache may be unavailable or corrupt. */ }
         }
       })
       .catch(() => { ucitsLoadedRef.current = false; });
@@ -234,7 +236,7 @@ export default function InvestmentOrderForm({
     if (instrumentType !== 'bond' || bondCacheLoadedRef.current || bondCache.length > 0) return;
     const cached = sessionStorage.getItem('bondCache');
     if (cached) {
-      try { setBondCache(JSON.parse(cached)); bondCacheLoadedRef.current = true; return; } catch {}
+      try { setBondCache(JSON.parse(cached)); bondCacheLoadedRef.current = true; return; } catch { /* Optional cache may be unavailable or corrupt. */ }
     }
     bondCacheLoadedRef.current = true;
     fetch(`${PF_BACKEND_URL}/symbols/bonds`)
@@ -242,7 +244,7 @@ export default function InvestmentOrderForm({
       .then(data => {
         if (data?.results) {
           setBondCache(data.results);
-          try { sessionStorage.setItem('bondCache', JSON.stringify(data.results)); } catch {}
+          try { sessionStorage.setItem('bondCache', JSON.stringify(data.results)); } catch { /* Optional cache may be unavailable or corrupt. */ }
         }
       })
       .catch(() => { bondCacheLoadedRef.current = false; });
@@ -339,7 +341,7 @@ export default function InvestmentOrderForm({
         );
         if (res.ok) {
           const data = await res.json();
-          const results = (data.results || []).filter((item: any) => (
+          const results = (data.results || []).filter((item: InstrumentLookup) => (
             orderType !== 'sell' || availableKeysForCurrentInstrument.includes(getLookupKey({
               instrumentType: 'stock',
               symbol: item.symbol,
@@ -350,7 +352,8 @@ export default function InvestmentOrderForm({
           setSymbolOptions(results);
           setSymbolSearchOpen(isSymbolFocused && (results.length > 0 || (orderType === 'sell' && !hasAvailableInstrumentToSell)));
         }
-      } catch (err: any) {
+      } catch (caught: unknown) {
+      const err = errorInfo(caught);
         if (err.name !== 'AbortError') console.error('Symbol search error:', err);
       } finally {
         if (!controller.signal.aborted) { setSymbolLoading(false); setSymbolSearchCompleted(true); }
@@ -367,7 +370,7 @@ export default function InvestmentOrderForm({
       const res = await fetch(`${PF_BACKEND_URL}/symbols/isin-lookup?isin=${symbol}`);
       if (!res.ok) throw new Error('not found');
       const data = await res.json();
-      const entries = data.listings.map((l: any) => ({
+      const entries = data.listings.map((l: InstrumentLookup) => ({
         symbol: l.ticker, isin: symbol, name: l.name, exchange: l.exchange, currency: l.currency, ter: l.ter,
       }));
       setUcitsCache(prev => [...prev, ...entries]);
@@ -405,7 +408,7 @@ export default function InvestmentOrderForm({
       };
       const updated = [...bondCache.filter(b => b.isin !== isin), entry];
       setBondCache(updated);
-      try { sessionStorage.setItem('bondCache', JSON.stringify(updated)); } catch {}
+      try { sessionStorage.setItem('bondCache', JSON.stringify(updated)); } catch { /* Optional cache may be unavailable or corrupt. */ }
       skipSymbolSearchRef.current = true;
       setSelectedInfo({
         isin,
@@ -579,7 +582,7 @@ export default function InvestmentOrderForm({
 
           {symbolSearchOpen && ((orderType === 'sell' && symbol.length === 0) || symbol.length >= 2) && !symbolLoading && symbolSearchCompleted && symbolOptions.length > 0 && (
             <div className="absolute z-20 mt-1 w-full border border-gray-200 dark:border-gray-700 rounded-lg max-h-52 overflow-auto bg-white dark:bg-gray-900 shadow-xl">
-              {symbolOptions.map((opt: any, i: number) => (
+              {symbolOptions.map((opt: InstrumentLookup, i: number) => (
                 <button
                   key={i}
                   type="button"
@@ -595,7 +598,7 @@ export default function InvestmentOrderForm({
                         ytmGross: opt.ytm_gross,
                       });
                     } else {
-                      setSymbol(opt.symbol);
+                      setSymbol(opt.symbol || '');
                       setSelectedInfo({
                         isin: opt.isin,
                         name: opt.name || '',

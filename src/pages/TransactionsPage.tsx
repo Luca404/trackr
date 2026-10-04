@@ -1,6 +1,6 @@
+import { clearPortfolioCache } from '../services/sessionCache';
 import { useState, useMemo } from 'react';
 import { apiService } from '../services/api';
-import { buildRecurringRuleDraftFromTransactionForm } from '../services/recurring';
 import { useData } from '../contexts/DataContext';
 import Layout from '../components/layout/Layout';
 import Modal from '../components/common/Modal';
@@ -209,64 +209,13 @@ export default function TransactionsPage() {
         description: data.description || undefined,
       });
       addFreeOrder(newOrder);
-      localStorage.removeItem('pf_summaries_cache');
+      clearPortfolioCache();
       return;
     }
 
-    if (data.recurrence) {
-      const rule = await apiService.createRecurringTransaction(buildRecurringRuleDraftFromTransactionForm(data));
-      const newTransaction = await apiService.createTransaction({ ...data, recurring_id: rule.id });
-      addTransaction(newTransaction);
-      if (data.type === 'investment' && data.portfolio_id && data.ticker) {
-        const qty = data.quantity ?? 0;
-        const price = data.price ?? 0;
-        const grossAmount = Math.abs(data.amount);
-        const commission = grossAmount - qty * price;
-        await apiService.createOrder({
-          portfolio_id: data.portfolio_id,
-          symbol: data.ticker,
-          isin: data.isin,
-          name: data.instrument_name,
-          exchange: data.exchange,
-          instrument_type: data.instrument_type,
-          currency: 'EUR',
-          quantity: qty,
-          price,
-          commission: commission > 0 ? commission : 0,
-          order_type: data.order_type || 'buy',
-          date: data.date,
-          transaction_id: newTransaction.id,
-        });
-        localStorage.removeItem('pf_summaries_cache');
-      }
-    } else {
-      const newTransaction = await apiService.createTransaction(data);
-      addTransaction(newTransaction);
-      // Se investimento con portafoglio e ticker, crea anche l'ordine
-      if (data.type === 'investment' && data.portfolio_id && data.ticker) {
-        const qty = data.quantity ?? 0;
-        const price = data.price ?? 0;
-        const grossAmount = Math.abs(data.amount);
-        const commission = grossAmount - qty * price;
-        apiService.createOrder({
-          portfolio_id: data.portfolio_id,
-          symbol: data.ticker,
-          isin: data.isin,
-          name: data.instrument_name,
-          exchange: data.exchange,
-          instrument_type: data.instrument_type,
-          ter: data.ter,
-          currency: 'EUR',
-          quantity: qty,
-          price: price,
-          commission: commission > 0 ? commission : 0,
-          order_type: data.order_type || 'buy',
-          date: data.date,
-          transaction_id: newTransaction.id,
-        }).catch(console.error);
-        localStorage.removeItem('pf_summaries_cache');
-      }
-    }
+    const newTransaction = await apiService.createTransaction(data);
+    addTransaction(newTransaction);
+    if (data.type === 'investment') clearPortfolioCache();
   };
 
   const handleDeleteRecurringRule = async () => {
@@ -289,42 +238,9 @@ export default function TransactionsPage() {
       return;
     }
     if (selectedTransaction) {
-      let recurringId = selectedTransaction.recurring_id;
-      if (data.recurrence) {
-        const recurringPayload = buildRecurringRuleDraftFromTransactionForm(data);
-        if (selectedTransaction.recurring_id) {
-          await apiService.updateRecurringTransaction(selectedTransaction.recurring_id, recurringPayload);
-        } else {
-          const rule = await apiService.createRecurringTransaction(recurringPayload);
-          recurringId = rule.id;
-        }
-      } else if (selectedTransaction.recurring_id) {
-        await apiService.deleteRecurringTransaction(selectedTransaction.recurring_id);
-        recurringId = undefined;
-      }
-
-      const updated = await apiService.updateTransaction(selectedTransaction.id, { ...data, recurring_id: recurringId });
+      const updated = await apiService.updateTransaction(selectedTransaction.id, { ...data, recurrence: data.recurrence ?? null } as TransactionFormData);
       updateTransactionCache(updated);
-      // Aggiorna anche l'ordine associato se è un investimento
-      if (data.type === 'investment' && data.ticker) {
-        const qty = data.quantity ?? 0;
-        const price = data.price ?? 0;
-        const grossAmount = Math.abs(data.amount);
-        const commission = grossAmount - qty * price;
-        apiService.updateOrderByTransactionId(selectedTransaction.id, {
-          symbol: data.ticker,
-          isin: data.isin,
-          name: data.instrument_name,
-          exchange: data.exchange,
-          instrument_type: data.instrument_type,
-          ter: data.ter,
-          quantity: qty,
-          price: price,
-          commission: commission > 0 ? commission : 0,
-          order_type: data.order_type || 'buy',
-          date: data.date,
-        }).then(() => localStorage.removeItem('pf_summaries_cache')).catch(console.error);
-      }
+      if (data.type === 'investment') clearPortfolioCache();
       closeModal();
     }
   };
@@ -337,13 +253,7 @@ export default function TransactionsPage() {
       return;
     }
     if (selectedTransaction) {
-      if (selectedTransaction.recurring_id) {
-        await apiService.rewindRecurringTransactionOccurrence(selectedTransaction.recurring_id, selectedTransaction.date).catch(console.error);
-      }
-      if (selectedTransaction.type === 'investment') {
-        await apiService.deleteOrderByTransactionId(selectedTransaction.id).catch(console.error);
-        localStorage.removeItem('pf_summaries_cache');
-      }
+      if (selectedTransaction.type === 'investment') clearPortfolioCache();
       await apiService.deleteTransaction(selectedTransaction.id);
       deleteTransactionCache(selectedTransaction.id);
       await refreshTransactions();
@@ -390,7 +300,7 @@ export default function TransactionsPage() {
       description: freeOrderDescription || undefined,
     });
     updateFreeOrder(updated);
-    localStorage.removeItem('pf_summaries_cache');
+    clearPortfolioCache();
     setIsFreeOrderModalOpen(false);
   };
 
@@ -398,7 +308,7 @@ export default function TransactionsPage() {
     if (!selectedFreeOrder) return;
     await apiService.deleteOrder(selectedFreeOrder.id);
     deleteFreeOrder(selectedFreeOrder.id);
-    localStorage.removeItem('pf_summaries_cache');
+    clearPortfolioCache();
     setIsFreeOrderDeleteOpen(false);
     setIsFreeOrderModalOpen(false);
   };
@@ -506,7 +416,7 @@ export default function TransactionsPage() {
             <button
               type="button"
               onClick={() => setIsFilterOpen(v => !v)}
-              className={`flex-shrink-0 flex items-center justify-center gap-1 w-9 h-7 rounded-full text-xs font-medium transition-colors ${
+              className={`shrink-0 flex items-center justify-center gap-1 w-9 h-7 rounded-full text-xs font-medium transition-colors ${
                 filterAccountIds.size > 0 || filterCategories.size > 0
                   ? 'bg-primary-500 text-white'
                   : 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400'
@@ -586,7 +496,7 @@ export default function TransactionsPage() {
         {/* Aggiungi nuova transazione */}
         {!isViewer && (
           <div
-            className="bg-white dark:bg-gray-800 rounded-xl shadow-md px-4 py-6 md:py-3 flex items-center justify-center border-2 border-dashed border-gray-200 dark:border-gray-700 cursor-pointer outline-none select-none"
+            className="bg-white dark:bg-gray-800 rounded-xl shadow-md px-4 py-6 md:py-3 flex items-center justify-center border-2 border-dashed border-gray-200 dark:border-gray-700 cursor-pointer outline-hidden select-none"
             style={{ WebkitTapHighlightColor: 'transparent' }}
             onClick={handleNewTransaction}
           >

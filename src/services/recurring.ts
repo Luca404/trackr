@@ -2,12 +2,18 @@ import type { RecurringFrequency, RecurringTransaction, TransactionFormData } fr
 
 export type RecurringRuleDraft = Omit<RecurringTransaction, 'id' | 'user_id' | 'created_at' | 'next_due_date'>;
 
-export function getNextDueDate(dateStr: string, frequency: RecurringFrequency): string {
+export function getNextDueDate(dateStr: string, frequency: RecurringFrequency, anchorDate = dateStr): string {
   const [year, month, day] = dateStr.split('-').map(Number);
   const d = new Date(Date.UTC(year, month - 1, day));
   if (frequency === 'weekly') d.setUTCDate(d.getUTCDate() + 7);
-  if (frequency === 'monthly') d.setUTCMonth(d.getUTCMonth() + 1);
-  if (frequency === 'yearly') d.setUTCFullYear(d.getUTCFullYear() + 1);
+  if (frequency !== 'weekly') {
+    const anchorDay = Number(anchorDate.slice(8, 10));
+    d.setUTCDate(1);
+    if (frequency === 'monthly') d.setUTCMonth(d.getUTCMonth() + 1);
+    else d.setUTCFullYear(d.getUTCFullYear() + 1);
+    const lastDay = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).getUTCDate();
+    d.setUTCDate(Math.min(anchorDay, lastDay));
+  }
   return d.toISOString().split('T')[0];
 }
 
@@ -18,8 +24,9 @@ export function getDueDatesUntil(nextDueDate: string, frequency: RecurringFreque
   const dueDates: string[] = [];
   let cursor = nextDueDate;
   while (cursor <= untilDate) {
+    if (dueDates.length >= 1000) throw new Error("too_many_occurrences");
     dueDates.push(cursor);
-    cursor = getNextDueDate(cursor, frequency);
+    cursor = getNextDueDate(cursor, frequency, nextDueDate);
   }
   return { dueDates, nextDueDate: cursor };
 }

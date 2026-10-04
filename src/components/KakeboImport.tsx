@@ -1,3 +1,6 @@
+import type { InstrumentLookup } from '../types/instrumentLookup';
+import { errorInfo } from '../utils/error';
+import type { Database } from 'sql.js';
 import { useState, useRef, useEffect } from 'react';
 import { useConfirm } from '../hooks/useConfirm';
 import { useTranslation } from 'react-i18next';
@@ -85,11 +88,15 @@ function mapCalendarFieldToFrequency(calendarField?: number | null): RecurringFr
 function normalizeLooseText(value?: string | null): string {
   return (value || '').trim().toLocaleLowerCase();
 }
-function queryAll<T>(db: any, sql: string): T[] {
+function queryAll<T>(db: Database, sql: string): T[] {
   const stmt = db.prepare(sql);
   const rows: T[] = [];
-  while (stmt.step()) rows.push(stmt.getAsObject() as T);
-  stmt.free();
+  try {
+    while (stmt.step()) {
+      if (rows.length >= 100000) throw new Error('Il file contiene troppi record (massimo 100000 per tabella)');
+      rows.push(stmt.getAsObject() as T);
+    }
+  } finally { stmt.free(); }
   return rows;
 }
 function isInvestmentName(name: string): boolean { return /investiment/i.test(name); }
@@ -209,15 +216,15 @@ function TickerCard({
   onChange,
 }: TickerCardProps) {
   const { t } = useTranslation();
-  const [ucitsCache, setUcitsCache] = useState<any[]>([]);
-  const [symbolOptions, setSymbolOptions] = useState<any[]>([]);
+  const [ucitsCache, setUcitsCache] = useState<InstrumentLookup[]>([]);
+  const [symbolOptions, setSymbolOptions] = useState<InstrumentLookup[]>([]);
   const [symbolLoading, setSymbolLoading] = useState(false);
   const [symbolSearchOpen, setSymbolSearchOpen] = useState(false);
   const [symbolSearchCompleted, setSymbolSearchCompleted] = useState(false);
   const ucitsLoadedRef = useRef(false);
   const bondCacheLoadedRef = useRef(false);
   const skipNextSearch = useRef(false);
-  const [bondCache, setBondCache] = useState<any[]>([]);
+  const [bondCache, setBondCache] = useState<InstrumentLookup[]>([]);
   const [selectedInfo, setSelectedInfo] = useState<{ name: string; exchange?: string; currency?: string } | null>(null);
   const [bondLookupLoading, setBondLookupLoading] = useState(false);
   const [bondLookupError, setBondLookupError] = useState(false);
@@ -227,7 +234,7 @@ function TickerCard({
     if (instrumentType !== 'etf' || ucitsLoadedRef.current || ucitsCache.length > 0) return;
     const cached = sessionStorage.getItem('ucits_etf_list');
     if (cached) {
-      try { setUcitsCache(JSON.parse(cached)); ucitsLoadedRef.current = true; return; } catch {}
+      try { setUcitsCache(JSON.parse(cached)); ucitsLoadedRef.current = true; return; } catch { /* Optional cache may be unavailable or corrupt. */ }
     }
     ucitsLoadedRef.current = true;
     fetch(`${PF_BACKEND_URL}/symbols/ucits`)
@@ -235,7 +242,7 @@ function TickerCard({
       .then(data => {
         if (data?.results) {
           setUcitsCache(data.results);
-          try { sessionStorage.setItem('ucits_etf_list', JSON.stringify(data.results)); } catch {}
+          try { sessionStorage.setItem('ucits_etf_list', JSON.stringify(data.results)); } catch { /* Optional cache may be unavailable or corrupt. */ }
         }
       })
       .catch(() => { ucitsLoadedRef.current = false; });
@@ -246,7 +253,7 @@ function TickerCard({
     if (instrumentType !== 'bond' || bondCacheLoadedRef.current || bondCache.length > 0) return;
     const cached = sessionStorage.getItem('bondCache');
     if (cached) {
-      try { setBondCache(JSON.parse(cached)); bondCacheLoadedRef.current = true; return; } catch {}
+      try { setBondCache(JSON.parse(cached)); bondCacheLoadedRef.current = true; return; } catch { /* Optional cache may be unavailable or corrupt. */ }
     }
     bondCacheLoadedRef.current = true;
     fetch(`${PF_BACKEND_URL}/symbols/bonds`)
@@ -254,7 +261,7 @@ function TickerCard({
       .then(data => {
         if (data?.results) {
           setBondCache(data.results);
-          try { sessionStorage.setItem('bondCache', JSON.stringify(data.results)); } catch {}
+          try { sessionStorage.setItem('bondCache', JSON.stringify(data.results)); } catch { /* Optional cache may be unavailable or corrupt. */ }
         }
       })
       .catch(() => { bondCacheLoadedRef.current = false; });
@@ -314,7 +321,8 @@ function TickerCard({
             { signal: controller.signal }
           );
           if (res.ok) { const data = await res.json(); setSymbolOptions(data.results || []); setSymbolSearchOpen(true); }
-        } catch (err: any) {
+        } catch (caught: unknown) {
+      const err = errorInfo(caught);
           if (err.name !== 'AbortError') console.error(err);
         } finally {
           if (!controller.signal.aborted) { setSymbolLoading(false); setSymbolSearchCompleted(true); }
@@ -325,7 +333,7 @@ function TickerCard({
     return () => { clearTimeout(timer); controller.abort(); };
   }, [ticker, instrumentType, ucitsCache, bondCache]);
 
-  const selectSymbol = (item: any) => {
+  const selectSymbol = (item: InstrumentLookup) => {
     skipNextSearch.current = true;
     if (instrumentType === 'bond') {
       const symName = item.name || item.issuer || '';
@@ -366,7 +374,7 @@ function TickerCard({
       };
       const updated = [...bondCache.filter(b => b.isin !== isin), entry];
       setBondCache(updated);
-      try { sessionStorage.setItem('bondCache', JSON.stringify(updated)); } catch {}
+      try { sessionStorage.setItem('bondCache', JSON.stringify(updated)); } catch { /* Optional cache may be unavailable or corrupt. */ }
       skipNextSearch.current = true;
       onChange(id, { ticker: isin, isin, name: metadata?.name || metadata?.issuer || isin, exchange: 'MOT/EuroMOT', ter: '' });
       setSelectedInfo({ name: metadata?.name || metadata?.issuer || isin, exchange: 'MOT/EuroMOT', currency: metadata?.currency || 'EUR' });
@@ -488,7 +496,7 @@ function TickerCard({
         </label>
         <div className="relative">
           <input
-            className="w-full px-2 py-1.5 text-xs rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent uppercase font-mono"
+            className="w-full px-2 py-1.5 text-xs rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent uppercase font-mono"
             placeholder={instrumentType === 'etf' ? 'VWCE, SWDA, IE00...' : instrumentType === 'bond' ? 'BTP, XS12...' : 'AAPL, MSFT...'}
             value={ticker}
             onChange={e => { onChange(id, { ticker: e.target.value.toUpperCase() }); setSelectedInfo(null); setBondLookupError(false); }}
@@ -504,7 +512,7 @@ function TickerCard({
         </div>
         {symbolSearchOpen && ticker.length >= 2 && !symbolLoading && symbolSearchCompleted && symbolOptions.length > 0 && (
           <div className="absolute z-20 left-0 right-0 top-full mt-1 bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden max-h-44 overflow-y-auto">
-            {symbolOptions.map((item: any, i: number) => (
+            {symbolOptions.map((item: InstrumentLookup, i: number) => (
               <button
                 key={i}
                 type="button"
@@ -563,7 +571,7 @@ function TickerCard({
         <div>
           <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">{qtyLabel}</label>
           <input
-            className="w-full px-2 py-1.5 text-xs rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+            className="w-full px-2 py-1.5 text-xs rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent"
             placeholder="10"
             type="number" min="0" step="any"
             value={quantity}
@@ -578,7 +586,7 @@ function TickerCard({
         <div>
           <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">{priceLabel}</label>
           <input
-            className="w-full px-2 py-1.5 text-xs rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+            className="w-full px-2 py-1.5 text-xs rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent"
             placeholder="100.00"
             type="number" min="0" step="any"
             value={price}
@@ -593,7 +601,7 @@ function TickerCard({
         <div>
           <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">{commissionLabel}</label>
           <input
-            className="w-full px-2 py-1.5 text-xs rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+            className="w-full px-2 py-1.5 text-xs rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent"
             placeholder="0.00"
             type="number" min="0" step="any"
             value={commission}
@@ -664,9 +672,9 @@ export default function KakeboImport({ onClose, onDirtyChange }: Props) {
   } | null>(null);
   const [progress, setProgress] = useState('');
 
-  const formatImportError = (err: any) => {
-    const raw = String(err?.message || err || '').trim();
-    const details = String(err?.details || '').trim();
+  const formatImportError = (value: unknown) => {
+    const raw = errorInfo(value).message.trim();
+    const details = String(value && typeof value === 'object' && 'details' in value ? value.details ?? '' : '').trim();
 
     if (/not authenticated/i.test(raw)) {
       return 'Sessione scaduta. Ricarica la pagina ed effettua di nuovo l’accesso.';
@@ -703,21 +711,24 @@ export default function KakeboImport({ onClose, onDirtyChange }: Props) {
 
   const handleFile = async (file: File) => {
     setError(null);
+    let database: Database | undefined;
     try {
+      if (file.size > 20 * 1024 * 1024) throw new Error('File troppo grande (massimo 20 MB)');
       const initSqlJs = (await import('sql.js')).default;
       const SQL = await initSqlJs({ locateFile: () => '/sql-wasm.wasm' });
       const buf = await file.arrayBuffer();
       const db = new SQL.Database(new Uint8Array(buf));
+      database = db;
 
-      const conti = queryAll<any>(db, 'SELECT id, nome, tipo, variazioneSaldo1 FROM Conto').map(r => ({
+      const conti = queryAll<Record<string, unknown>>(db, 'SELECT id, nome, tipo, variazioneSaldo1 FROM Conto').map(r => ({
         id: r.id as number, nome: (r.nome as string) || '', tipo: r.tipo as number,
         variazioneSaldo1: (r.variazioneSaldo1 as number) || 0,
       }));
-      const categorie = queryAll<any>(db, 'SELECT id, padreId, tipoMovimento, nome FROM Categoria').map(r => ({
+      const categorie = queryAll<Record<string, unknown>>(db, 'SELECT id, padreId, tipoMovimento, nome FROM Categoria').map(r => ({
         id: r.id as number, padreId: r.padreId as number | null,
         tipoMovimento: r.tipoMovimento as number, nome: (r.nome as string) || '',
       }));
-      const movimenti = queryAll<any>(
+      const movimenti = queryAll<Record<string, unknown>>(
         db, 'SELECT id, contoId, categoriaId, sottocategoriaId, dataOperazione, note, tipo, contoPrelievoId, importo1, numeroRipetizioni, calendarField FROM Movimento'
       ).map(r => ({
         id: r.id as number, contoId: r.contoId as number,
@@ -729,14 +740,15 @@ export default function KakeboImport({ onClose, onDirtyChange }: Props) {
         calendarField: r.calendarField as number | null,
       }));
 
-      db.close();
+      if (conti.length === 0) throw new Error("Il file non contiene conti importabili");
       setParsed({ conti, categorie, movimenti });
       setInvContoIds(new Set(conti.filter(c => c.tipo === 1 || isInvestmentName(c.nome)).map(c => c.id)));
       setStep('options');
-    } catch (e: any) {
+    } catch (caught: unknown) {
+      const e = errorInfo(caught);
       if (/failed to (fetch|load|import)/i.test(e?.message || '')) { window.location.reload(); return; }
       setError(e.message || String(e));
-    }
+    } finally { database?.close(); }
   };
 
   const handleGoToRecurring = () => {
@@ -1427,7 +1439,8 @@ export default function KakeboImport({ onClose, onDirtyChange }: Props) {
       setStep('done');
       await refreshAll();
 
-    } catch (e: any) {
+    } catch (caught: unknown) {
+      const e = errorInfo(caught);
       setError(formatImportError(e));
       setStep(invDetails.length > 0 ? 'inv_details' : recurringDrafts.length > 0 ? 'recurring' : 'options');
     }
@@ -1728,7 +1741,7 @@ export default function KakeboImport({ onClose, onDirtyChange }: Props) {
                       type="checkbox"
                       checked={rule.enabled}
                       onChange={(e) => updateRecurringDraft(rule.movimentoId, { enabled: e.target.checked })}
-                      className="rounded border-gray-300 text-primary-500 focus:ring-primary-500"
+                      className="rounded-sm border-gray-300 text-primary-500 focus:ring-primary-500"
                     />
                     Importa
                   </label>

@@ -1,3 +1,4 @@
+import type { Subcategory } from '../types';
 import { useState, useMemo } from 'react';
 import { apiService } from '../services/api';
 import { supabase } from '../services/supabase';
@@ -388,7 +389,7 @@ export default function CategoriesPage() {
     if (duplicate) return;
     try {
       const updated = await apiService.updateSubcategory(subcategoryId, trimmed);
-      const updateSubs = (subs: any[]) => subs.map(s => s.id === subcategoryId ? { ...s, name: updated.name } : s);
+      const updateSubs = <T extends Subcategory>(subs: T[]) => subs.map(s => s.id === subcategoryId ? { ...s, name: updated.name } : s);
       const categoryFromCache = baseCategories.find(c => c.id === selectedCategory.id);
       if (categoryFromCache) updateCategoryCache({ ...categoryFromCache, subcategories: updateSubs(categoryFromCache.subcategories || []) });
       setSelectedCategory(prev => prev ? { ...prev, subcategories: updateSubs(prev.subcategories || []) } : prev);
@@ -527,7 +528,7 @@ export default function CategoriesPage() {
               setCategoryFormData({ name: '', icon: '📌', color: randomPresetColor(), category_type: filter });
               setIsCategoryModalOpen(true);
             }}
-            className="flex flex-col items-center justify-center p-3 rounded-lg border-2 border-dashed border-gray-200 dark:border-gray-700 outline-none focus:outline-none select-none min-h-[7.75rem]"
+            className="flex flex-col items-center justify-center p-3 rounded-lg border-2 border-dashed border-gray-200 dark:border-gray-700 outline-hidden focus:outline-hidden select-none min-h-[7.75rem]"
             style={{ WebkitTapHighlightColor: 'transparent' }}
           >
             <div className="w-10 h-10 rounded-full border-2 border-gray-300 dark:border-gray-600 flex items-center justify-center text-gray-400 dark:text-gray-500 font-bold text-2xl">+</div>
@@ -583,7 +584,7 @@ export default function CategoriesPage() {
                             {editingSubcategoryId === sub.id ? (
                               <input
                                 autoFocus
-                                className="flex-1 text-sm bg-transparent border-b border-primary-500 outline-none text-gray-900 dark:text-gray-100 mr-2"
+                                className="flex-1 text-sm bg-transparent border-b border-primary-500 outline-hidden text-gray-900 dark:text-gray-100 mr-2"
                                 value={editingSubcategoryName}
                                 onChange={e => setEditingSubcategoryName(e.target.value)}
                                 onBlur={() => setEditingSubcategoryId(null)}
@@ -614,7 +615,7 @@ export default function CategoriesPage() {
                               </button>
                             </div>
                           </div>
-                          <div className="relative w-full h-5 bg-gray-100 dark:bg-gray-700 rounded overflow-hidden">
+                          <div className="relative w-full h-5 bg-gray-100 dark:bg-gray-700 rounded-sm overflow-hidden">
                             <div
                               className="h-full transition-all duration-500"
                               style={{ width: `${pct}%`, backgroundColor: catColor, opacity: 0.75 }}
@@ -729,7 +730,7 @@ export default function CategoriesPage() {
                       key={c}
                       type="button"
                       onClick={() => setCategoryFormData(prev => ({ ...prev, color: c }))}
-                      className={`flex-shrink-0 w-7 h-7 rounded-full transition-transform ${categoryFormData.color === c ? 'scale-125 ring-2 ring-offset-1 ring-gray-400 dark:ring-gray-500' : 'hover:scale-110'}`}
+                      className={`shrink-0 w-7 h-7 rounded-full transition-transform ${categoryFormData.color === c ? 'scale-125 ring-2 ring-offset-1 ring-gray-400 dark:ring-gray-500' : 'hover:scale-110'}`}
                       style={{ backgroundColor: c }}
                     />
                   ))}

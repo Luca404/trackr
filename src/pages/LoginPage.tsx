@@ -1,3 +1,4 @@
+import { errorInfo } from '../utils/error';
 import { useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -46,7 +47,8 @@ export default function LoginPage() {
         setInfo(t('login.successRegistration'));
         setIsLogin(true);
       }
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = errorInfo(caught);
       setError(err.message ?? t('login.errorAuth'));
     } finally {
       setIsLoading(false);
@@ -71,7 +73,7 @@ export default function LoginPage() {
               onClick={() => { setIsLogin(true); setError(''); setInfo(''); }}
               className={`flex-1 py-2 px-4 rounded-md font-medium transition-colors ${
                 isLogin
-                  ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm'
+                  ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-xs'
                   : 'text-gray-600 dark:text-gray-400'
               }`}
             >
@@ -82,7 +84,7 @@ export default function LoginPage() {
               onClick={() => { setIsLogin(false); setError(''); setInfo(''); }}
               className={`flex-1 py-2 px-4 rounded-md font-medium transition-colors ${
                 !isLogin
-                  ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm'
+                  ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-xs'
                   : 'text-gray-600 dark:text-gray-400'
               }`}
             >

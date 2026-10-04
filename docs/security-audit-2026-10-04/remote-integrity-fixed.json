@@ -1,0 +1,16 @@
+{
+  "tables_without_rls": 0,
+  "cross_profile_orders": 0,
+  "profiles_without_owner": 0,
+  "cross_profile_recurring": 0,
+  "cross_profile_transfers": 0,
+  "inconsistent_meal_items": 0,
+  "invalid_owner_memberships": 0,
+  "cross_profile_transactions": 0,
+  "legacy_finance_all_policies": 0,
+  "transactions_without_profile": 0,
+  "anonymous_finance_rpc_execute": 0,
+  "anonymous_private_schema_usage": false,
+  "unvalidated_security_constraints": 0,
+  "duplicate_recurring_occurrence_groups": 0
+}

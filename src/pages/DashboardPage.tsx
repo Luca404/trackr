@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useData } from '../contexts/DataContext';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { localDateStr } from '../utils/date';
 import { apiService } from '../services/api';
 import Layout from '../components/layout/Layout';
@@ -20,11 +21,11 @@ export default function DashboardPage() {
   const { t } = useTranslation();
   const { formatCurrency } = useSettings();
 
-  useEffect(() => {
-    loadData();
-  }, [period]);
-
-  const loadData = async () => {
+  const { activeProfile, isInitialized } = useData();
+  const requestGeneration = useRef(0);
+  const loadData = useCallback(async () => {
+    if (!activeProfile || !isInitialized) return;
+    const generation = ++requestGeneration.current;
     setIsLoading(true);
     try {
       const endDate = new Date();
@@ -38,20 +39,28 @@ export default function DashboardPage() {
       }
 
       const [transactionsData, statsData] = await Promise.all([
-        apiService.getTransactions({}),
+        apiService.getTransactions({}, activeProfile.id),
         apiService.getTransactionStats({
           startDate: localDateStr(startDate),
           endDate: localDateStr(endDate),
-        }),
+        }, activeProfile.id),
       ]);
+      if (generation !== requestGeneration.current) return;
       setTransactions(transactionsData.slice(0, 5));
       setStats(statsData);
     } catch (error) {
       console.error('Errore caricamento dati:', error);
     } finally {
-      setIsLoading(false);
+      if (generation === requestGeneration.current) setIsLoading(false);
     }
-  };
+  }, [period, activeProfile, isInitialized]);
+  useEffect(() => {
+    setTransactions([]); setStats(null);
+    void loadData();
+    // Invalidate requests issued by this effect when the profile or period changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    return () => { requestGeneration.current++; };
+  }, [loadData]);
 
   const handleCreateTransaction = async (data: TransactionFormData) => {
     await apiService.createTransaction(data);
@@ -78,7 +87,7 @@ export default function DashboardPage() {
               onClick={() => setPeriod('month')}
               className={`px-4 py-2 rounded-md font-medium transition-colors ${
                 period === 'month'
-                  ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm'
+                  ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-xs'
                   : 'text-gray-600 dark:text-gray-400'
               }`}
             >
@@ -88,7 +97,7 @@ export default function DashboardPage() {
               onClick={() => setPeriod('year')}
               className={`px-4 py-2 rounded-md font-medium transition-colors ${
                 period === 'year'
-                  ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm'
+                  ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-xs'
                   : 'text-gray-600 dark:text-gray-400'
               }`}
             >
@@ -159,12 +168,12 @@ export default function DashboardPage() {
                       <div className="flex-1">
                         <div className="flex gap-1 h-6">
                           <div
-                            className="bg-red-500 dark:bg-red-400 rounded transition-all"
+                            className="bg-red-500 dark:bg-red-400 rounded-sm transition-all"
                             style={{ width: `${expenseWidth}%` }}
                             title={`${t('stats.expenses')}: ${formatCurrency(item.expenses)}`}
                           />
                           <div
-                            className="bg-green-500 dark:bg-green-400 rounded transition-all"
+                            className="bg-green-500 dark:bg-green-400 rounded-sm transition-all"
                             style={{ width: `${incomeWidth}%` }}
                             title={`${t('stats.income')}: ${formatCurrency(item.income)}`}
                           />
@@ -180,11 +189,11 @@ export default function DashboardPage() {
             </div>
             <div className="flex gap-4 mt-4 pt-4 border-t border-gray-200 dark:border-gray-700 text-xs">
               <div className="flex items-center gap-2">
-                <div className="w-3 h-3 bg-red-500 dark:bg-red-400 rounded"></div>
+                <div className="w-3 h-3 bg-red-500 dark:bg-red-400 rounded-sm"></div>
                 <span className="text-gray-600 dark:text-gray-400">{t('stats.expenses')}</span>
               </div>
               <div className="flex items-center gap-2">
-                <div className="w-3 h-3 bg-green-500 dark:bg-green-400 rounded"></div>
+                <div className="w-3 h-3 bg-green-500 dark:bg-green-400 rounded-sm"></div>
                 <span className="text-gray-600 dark:text-gray-400">{t('stats.income')}</span>
               </div>
             </div>
@@ -274,7 +283,7 @@ export default function DashboardPage() {
             ))}
             {/* Aggiungi nuova transazione */}
             <div
-              className="flex items-center justify-center p-3 rounded-lg border-2 border-dashed border-gray-200 dark:border-gray-700 cursor-pointer outline-none select-none"
+              className="flex items-center justify-center p-3 rounded-lg border-2 border-dashed border-gray-200 dark:border-gray-700 cursor-pointer outline-hidden select-none"
               style={{ WebkitTapHighlightColor: 'transparent' }}
               onClick={() => setIsModalOpen(true)}
             >

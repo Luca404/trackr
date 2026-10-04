@@ -1,3 +1,4 @@
+import { clearPortfolioCache, RequestGate } from '../../services/sessionCache';
 import { type ReactNode, useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
@@ -28,7 +29,7 @@ export default function Layout({ children }: LayoutProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuth();
-  const { refreshAll, activeProfile, portfolios, pendingInvitations, acceptInvitation, rejectInvitation } = useData();
+  const { refreshAll, initializationError, activeProfile, portfolios, pendingInvitations, acceptInvitation, rejectInvitation } = useData();
   const [isRefreshing, setIsRefreshing] = useState(false);
   const { t } = useTranslation();
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
@@ -59,9 +60,13 @@ export default function Layout({ children }: LayoutProps) {
       .catch(() => {});
   }, [needRefresh]);
 
+  const notificationGeneration = useRef(new RequestGate());
   const loadInvestmentNotifications = async () => {
+    const generation = notificationGeneration.current.invalidate();
+    const profileId = apiService.getActiveProfileIdSafe();
     try {
       const due = await apiService.getDueInvestmentRecurringTransactions();
+      if (!notificationGeneration.current.accepts(generation) || profileId !== apiService.getActiveProfileIdSafe()) return;
       const today = localDateStr();
       const items = due.map((rule) => ({
         key: `${rule.id}:${rule.next_due_date}`,
@@ -75,8 +80,15 @@ export default function Layout({ children }: LayoutProps) {
   };
 
   useEffect(() => {
-    if (!activeProfile) return;
+    const requests = notificationGeneration.current;
+    setInvestmentNotifications([]);
+    setSelectedNotification(null);
+    setIsNotificationModalOpen(false);
+    if (!activeProfile || activeProfile.role === 'viewer') return;
     loadInvestmentNotifications();
+    return () => { requests.invalidate(); };
+    // Re-evaluate notifications only for the new active profile.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeProfile?.id]);
 
   useEffect(() => {
@@ -153,37 +165,10 @@ export default function Layout({ children }: LayoutProps) {
 
   const handleNotificationSubmit = async (data: TransactionFormData) => {
     if (!selectedNotification) return;
-    const newTransaction = await apiService.createTransaction({
-      ...data,
-      recurring_id: selectedNotification.rule.id,
-      recurrence: undefined,
-    });
-
-    if (data.type === 'investment' && data.portfolio_id && data.ticker) {
-      const qty = data.quantity ?? 0;
-      const price = data.price ?? 0;
-      const grossAmount = Math.abs(data.amount);
-      const commission = grossAmount - qty * price;
-      await apiService.createOrder({
-        portfolio_id: data.portfolio_id,
-        symbol: data.ticker,
-        isin: data.isin,
-        name: data.instrument_name,
-        exchange: data.exchange,
-        instrument_type: data.instrument_type,
-        ter: data.ter,
-        currency: 'EUR',
-        quantity: qty,
-        price,
-        commission: commission > 0 ? commission : 0,
-        order_type: data.order_type || 'buy',
-        date: data.date,
-        transaction_id: newTransaction.id,
-      });
-      localStorage.removeItem('pf_summaries_cache');
-    }
-
-    await apiService.advanceRecurringTransactionOccurrence(selectedNotification.rule.id, selectedNotification.rule.next_due_date);
+    await apiService.createTransaction({
+      ...data, recurring_id: selectedNotification.rule.id, recurrence: undefined,
+    }, selectedNotification.rule.next_due_date);
+    clearPortfolioCache();
     await refreshAll();
     await loadInvestmentNotifications();
     window.dispatchEvent(new CustomEvent('trackr:refresh'));
@@ -236,8 +221,14 @@ export default function Layout({ children }: LayoutProps) {
         height: '100dvh'
       }}
     >
+      {initializationError && (
+        <div role="alert" className="fixed top-16 inset-x-4 z-50 rounded-lg bg-red-100 text-red-900 p-3">
+          {initializationError}
+          <button className="ml-3 underline" onClick={() => { void refreshAll().catch(() => {}); }}>Aggiorna</button>
+        </div>
+      )}
       {/* Desktop Sidebar */}
-      <aside className="hidden md:flex flex-col w-56 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex-shrink-0">
+      <aside className="hidden md:flex flex-col w-56 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 shrink-0">
         <div className="px-4 h-14 flex items-center border-b border-gray-200 dark:border-gray-700">
           <button
             onClick={() => navigate('/transactions')}
@@ -275,7 +266,7 @@ export default function Layout({ children }: LayoutProps) {
                 : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-gray-200'
             }`}
           >
-            <svg className="w-5 h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg className="w-5 h-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
             </svg>
@@ -288,7 +279,7 @@ export default function Layout({ children }: LayoutProps) {
       <div className="flex flex-col flex-1 overflow-hidden">
 
       {/* Header */}
-      <header ref={headerRef} className="bg-white dark:bg-gray-800 shadow-sm md:shadow-none md:border-b md:border-gray-200 md:dark:border-gray-700 flex-shrink-0 z-10 md:h-14">
+      <header ref={headerRef} className="bg-white dark:bg-gray-800 shadow-xs md:shadow-none md:border-b md:border-gray-200 md:dark:border-gray-700 shrink-0 z-10 md:h-14">
         <div className="max-w-7xl mx-auto px-4 py-4 md:py-0 md:h-full flex items-center justify-between md:justify-end">
           <button
             onClick={() => navigate('/transactions')}
@@ -463,7 +454,7 @@ export default function Layout({ children }: LayoutProps) {
       {needRefresh && (
         <div className="fixed left-0 md:left-56 right-0 z-50 px-4" style={{ bottom: 'calc(4.5rem + env(safe-area-inset-bottom))' }}>
           <div className="bg-gray-900 dark:bg-gray-700 text-white rounded-xl shadow-lg px-4 py-3 flex items-center gap-3">
-            <span className="text-lg flex-shrink-0">🔄</span>
+            <span className="text-lg shrink-0">🔄</span>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium leading-tight">Nuova versione disponibile{newVersion ? ` (v${newVersion})` : ''}</p>
               {(newReleaseNotes || __RELEASE_NOTES__ || __LAST_COMMIT_MSG__) && (
@@ -472,7 +463,7 @@ export default function Layout({ children }: LayoutProps) {
             </div>
             <button
               onClick={() => updateServiceWorker(true)}
-              className="flex-shrink-0 bg-primary-500 hover:bg-primary-400 text-white text-sm font-medium px-3 py-1.5 rounded-lg transition-colors"
+              className="shrink-0 bg-primary-500 hover:bg-primary-400 text-white text-sm font-medium px-3 py-1.5 rounded-lg transition-colors"
             >
               Ricarica
             </button>

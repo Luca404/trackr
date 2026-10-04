@@ -5,8 +5,8 @@ import { execSync } from 'child_process'
 
 const APP_MAJOR = 1
 const APP_MINOR = 0
-const APP_PATCH = 40  // Incrementare manualmente ad ogni release pubblicata
-const APP_RELEASE_NOTES = 'Security update: refreshed dependencies and upgraded React Router'
+const APP_PATCH = 41  // Incrementare manualmente ad ogni release pubblicata
+const APP_RELEASE_NOTES = 'Security fixes: profile permissions, invitations, session isolation and atomic financial operations'
 
 function getCommitMsg() {
   try {
@@ -23,8 +23,8 @@ const versionPayload = JSON.stringify({ version: appVersion, commitMsg, releaseN
 function versionMetadataPlugin(): Plugin {
   return {
     name: 'trackr-version-metadata',
-    configureServer(server: any) {
-      server.middlewares.use('/version.json', (_req: any, res: any) => {
+    configureServer(server) {
+      server.middlewares.use('/version.json', (_req, res) => {
         res.setHeader('Content-Type', 'application/json')
         res.end(versionPayload)
       })

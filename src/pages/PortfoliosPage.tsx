@@ -1,4 +1,6 @@
-import { useState, useEffect, useRef } from 'react';
+import { useAuth } from '../contexts/AuthContext';
+import { clearPortfolioCache, portfolioCacheKey } from '../services/sessionCache';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiService } from '../services/api';
 import { supabase } from '../services/supabase';
@@ -32,7 +34,7 @@ export default function PortfoliosPage() {
   const navigate = useNavigate();
   const { t } = useTranslation();
   const { formatCurrency } = useSettings();
-  const { portfolios, isLoading, isInitialized, addPortfolio, updatePortfolio, deletePortfolio, updateTransaction: updateTransactionCache, deleteTransaction: deleteTransactionCache, refreshTransactions, activeProfile } = useData();
+  const { portfolios, isLoading, isInitialized, addPortfolio, updatePortfolio, deletePortfolio, deleteTransaction: deleteTransactionCache, refreshTransactions, activeProfile } = useData();
   const skeletonCount = useSkeletonCount('portfolios', portfolios.length, isLoading, 3);
   const { confirm: confirmDialog, dialog: confirmDialogEl } = useConfirm();
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -60,11 +62,19 @@ export default function PortfoliosPage() {
   };
   const mask = (formatted: string) => '•'.repeat(formatted.length);
 
-  const SUMMARIES_CACHE_KEY = 'pf_summaries_cache';
+  const { user } = useAuth();
+  const summaryRequest = useRef<AbortController | null>(null);
   const SUMMARIES_CACHE_TTL = 24 * 60 * 60 * 1000; // 24h
   const SUMMARIES_CACHE_TTL_EMPTY = 5 * 60 * 1000; // 5min se tutti i valori sono 0
 
-  const loadSummariesFromServer = async (forceRefresh = false) => {
+  const loadSummariesFromServer = useCallback(async (forceRefresh = false) => {
+    summaryRequest.current?.abort();
+    const controller = new AbortController();
+    summaryRequest.current = controller;
+    setSummaries({});
+    if (!user || !activeProfile) return;
+    const profileId = activeProfile.id;
+    const SUMMARIES_CACHE_KEY = portfolioCacheKey(user.id, profileId);
     if (!forceRefresh) {
       try {
         const raw = localStorage.getItem(SUMMARIES_CACHE_KEY);
@@ -76,24 +86,26 @@ export default function PortfoliosPage() {
             return;
           }
         }
-      } catch (_) {}
+      } catch { /* Optional cache may be unavailable or corrupt. */ }
     }
     setLoadingSummaries(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) return;
+      if (!session?.access_token || session.user.id !== user.id || controller.signal.aborted) return;
       const token = session.access_token;
-      const profileId = activeProfile?.id;
       const url = profileId
         ? `${PF_BACKEND_URL}/portfolios?profile_id=${profileId}`
         : `${PF_BACKEND_URL}/portfolios`;
       const res = await fetch(url, {
         headers: { Authorization: `Bearer ${token}` },
+        signal: controller.signal,
       });
       const json = res.ok ? await res.json() : null;
+      if (controller.signal.aborted) return;
       const map: Record<number, PortfolioSummary> = {};
       if (json?.portfolios) {
         for (const p of json.portfolios) {
+          if (!portfolios.some(visible => visible.id === p.id)) continue;
           map[p.id] = {
             total_value: p.total_value ?? 0,
             total_cost: p.total_cost ?? 0,
@@ -105,7 +117,6 @@ export default function PortfoliosPage() {
           };
         }
       }
-      console.log('[portfolios] GET /portfolios response:', json);
       setSummaries(map);
       try {
         // Se almeno un portafoglio ha total_cost > 0 ma total_value === 0, il fetch prezzi è fallito
@@ -116,24 +127,25 @@ export default function PortfoliosPage() {
           const ttl = allTrulyEmpty ? SUMMARIES_CACHE_TTL_EMPTY : SUMMARIES_CACHE_TTL;
           localStorage.setItem(SUMMARIES_CACHE_KEY, JSON.stringify({ time: Date.now(), ttl, data: map }));
         }
-      } catch (_) {}
+      } catch { /* Optional cache may be unavailable or corrupt. */ }
     } catch (e) {
-      console.error('Error fetching portfolio summaries:', e);
+      if (!controller.signal.aborted) console.error('Error fetching portfolio summaries:', e);
     } finally {
-      setLoadingSummaries(false);
+      if (!controller.signal.aborted) setLoadingSummaries(false);
     }
-  };
+  }, [user, activeProfile, portfolios, SUMMARIES_CACHE_TTL, SUMMARIES_CACHE_TTL_EMPTY]);
 
   useEffect(() => {
-    if (!isInitialized || portfolios.length === 0) return;
-    loadSummariesFromServer(false);
-  }, [isInitialized, portfolios.length]);
+    if (!isInitialized) return;
+    void loadSummariesFromServer(false);
+    return () => summaryRequest.current?.abort();
+  }, [isInitialized, loadSummariesFromServer]);
 
   useEffect(() => {
-    const onRefresh = () => loadSummariesFromServer(true);
+    const onRefresh = () => { void loadSummariesFromServer(true); };
     window.addEventListener('trackr:refresh', onRefresh);
     return () => window.removeEventListener('trackr:refresh', onRefresh);
-  }, [portfolios]);
+  }, [loadSummariesFromServer]);
 
   const handleCreatePortfolio = () => {
     setSelectedPortfolio(null);
@@ -193,7 +205,7 @@ export default function PortfoliosPage() {
             } as OrderFormData)
           )
         );
-        localStorage.removeItem(SUMMARIES_CACHE_KEY);
+        clearPortfolioCache();
       }
       addPortfolio(created);
       if (!initialPositions || initialPositions.length === 0) {
@@ -230,7 +242,7 @@ export default function PortfoliosPage() {
         delete next[id];
         return next;
       });
-      localStorage.removeItem(SUMMARIES_CACHE_KEY);
+      clearPortfolioCache();
       await refreshTransactions();
       setIsModalOpen(false);
     }
@@ -250,20 +262,9 @@ export default function PortfoliosPage() {
       date: data.date,
       instrument_type: data.instrumentType,
     });
-    if (updated.transaction_id) {
-      const grossAmount = updated.quantity * updated.price + updated.commission;
-      const amount = updated.order_type === 'sell' ? -grossAmount : grossAmount;
-      const updatedTransaction = await apiService.updateTransaction(updated.transaction_id, {
-        amount,
-        date: updated.date,
-        ticker: updated.symbol,
-        quantity: updated.quantity,
-        price: updated.price,
-      });
-      updateTransactionCache(updatedTransaction);
-    }
+    if (updated.transaction_id) await refreshTransactions();
     setPortfolioOrders(prev => prev.map(order => order.id === orderId ? updated : order));
-    localStorage.removeItem(SUMMARIES_CACHE_KEY);
+    clearPortfolioCache();
     loadSummariesFromServer(true).catch(console.error);
   };
 
@@ -277,11 +278,10 @@ export default function PortfoliosPage() {
 
     await apiService.deleteOrder(order.id);
     if (order.transaction_id) {
-      await apiService.deleteTransaction(order.transaction_id);
       deleteTransactionCache(order.transaction_id);
     }
     setPortfolioOrders(prev => prev.filter(existing => existing.id !== order.id));
-    localStorage.removeItem(SUMMARIES_CACHE_KEY);
+    clearPortfolioCache();
     loadSummariesFromServer(true).catch(console.error);
   };
 
@@ -310,7 +310,7 @@ export default function PortfoliosPage() {
                       <div className="flex-1" />
                       <div className="text-4xl font-bold">
                         {loadingSummaries && !hasSummaries
-                          ? <span className="inline-block h-10 w-40 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
+                          ? <span className="inline-block h-10 w-40 bg-gray-200 dark:bg-gray-700 rounded-sm animate-pulse" />
                           : <span className={totalPL >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>
                               {hideBalances ? mask(formatCurrency(totalInvestments)) : formatCurrency(totalInvestments)}
                             </span>
@@ -319,7 +319,7 @@ export default function PortfoliosPage() {
                       <div className="flex-1 flex justify-end pr-2">
                         <button
                           onClick={toggleHideBalances}
-                          className="text-gray-400 dark:text-gray-500 text-xl outline-none focus:outline-none select-none"
+                          className="text-gray-400 dark:text-gray-500 text-xl outline-hidden focus:outline-hidden select-none"
                           style={{ WebkitTapHighlightColor: 'transparent' }}
                         >
                           {hideBalances ? '🙈' : '👁️'}
@@ -338,7 +338,7 @@ export default function PortfoliosPage() {
                       </div>
                     )}
                   </div>
-                  <div className="absolute left-0 right-0 h-6 bg-gradient-to-b from-gray-50 dark:from-gray-900 to-transparent pointer-events-none" style={{ top: '100%' }} />
+                  <div className="absolute left-0 right-0 h-6 bg-linear-to-b from-gray-50 dark:from-gray-900 to-transparent pointer-events-none" style={{ top: '100%' }} />
                 </div>
               )}
 
@@ -366,7 +366,7 @@ export default function PortfoliosPage() {
                   <div className="flex items-start justify-between mb-1">
                     <div className="flex-1 min-w-0 flex items-center gap-2">
                       <span
-                        className="text-2xl w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+                        className="text-2xl w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
                         style={{ backgroundColor: (portfolio.color ?? '#0ea5e9') + '22' }}
                       >{portfolio.icon ?? '📈'}</span>
                       <div className="font-medium text-gray-900 dark:text-gray-100">{portfolio.name}</div>
@@ -376,7 +376,7 @@ export default function PortfoliosPage() {
                       <button
                         type="button"
                         onClick={(e) => { e.stopPropagation(); handleEditPortfolio(portfolio); }}
-                        className="text-gray-400 dark:text-gray-500 hover:text-primary-600 dark:hover:text-primary-400 p-1 rounded border border-gray-200 dark:border-gray-700 hover:border-primary-300 dark:hover:border-primary-700 transition-colors"
+                        className="text-gray-400 dark:text-gray-500 hover:text-primary-600 dark:hover:text-primary-400 p-1 rounded-sm border border-gray-200 dark:border-gray-700 hover:border-primary-300 dark:hover:border-primary-700 transition-colors"
                         style={{ WebkitTapHighlightColor: 'transparent' }}
                         title={t('common.edit', 'Modifica')}
                       >
@@ -391,7 +391,7 @@ export default function PortfoliosPage() {
                     const sm = summaries[portfolio.id];
                     if (loadingSummaries && !sm) return (
                       <div className="pt-3 mt-2 border-t border-gray-200 dark:border-gray-700">
-                        <div className="h-6 w-32 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
+                        <div className="h-6 w-32 bg-gray-200 dark:bg-gray-700 rounded-sm animate-pulse" />
                       </div>
                     );
                     if (!sm || sm.positions_count === 0) return (
@@ -438,7 +438,7 @@ export default function PortfoliosPage() {
               {/* Add button — only when there are portfolios */}
               {portfolios.length > 0 && (
                 <div
-                  className="card flex items-center justify-center py-10 border-2 border-dashed border-gray-200 dark:border-gray-700 cursor-pointer outline-none select-none"
+                  className="card flex items-center justify-center py-10 border-2 border-dashed border-gray-200 dark:border-gray-700 cursor-pointer outline-hidden select-none"
                   style={{ WebkitTapHighlightColor: 'transparent' }}
                   onClick={handleCreatePortfolio}
                 >
@@ -555,7 +555,7 @@ function PortfolioForm({ onSubmit, onDelete, onCancel, onDirtyChange, existingPo
       >
         <div className="flex items-center gap-3 min-w-0">
           {params.orderType && (
-            <span className={`inline-flex items-center self-center text-xs font-medium px-1.5 py-0.5 rounded shrink-0 ${
+            <span className={`inline-flex items-center self-center text-xs font-medium px-1.5 py-0.5 rounded-sm shrink-0 ${
               params.orderType === 'buy'
                 ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
                 : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'
@@ -593,7 +593,7 @@ function PortfolioForm({ onSubmit, onDelete, onCancel, onDirtyChange, existingPo
         color,
         reference_currency: currency,
       }, initialPositions.length > 0 ? initialPositions : undefined);
-    } catch (err: any) {
+    } catch {
       setError('Errore durante il salvataggio');
       setIsLoading(false);
     }
@@ -621,7 +621,7 @@ function PortfolioForm({ onSubmit, onDelete, onCancel, onDirtyChange, existingPo
               key={ic}
               type="button"
               onClick={() => { setIcon(ic); markDirty(); }}
-              className={`flex-shrink-0 w-9 h-9 flex items-center justify-center text-xl rounded-lg border-2 transition-colors ${
+              className={`shrink-0 w-9 h-9 flex items-center justify-center text-xl rounded-lg border-2 transition-colors ${
                 icon === ic
                   ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20'
                   : 'border-transparent hover:border-gray-300 dark:hover:border-gray-600'
@@ -641,7 +641,7 @@ function PortfolioForm({ onSubmit, onDelete, onCancel, onDirtyChange, existingPo
               key={c}
               type="button"
               onClick={() => { setColor(c); markDirty(); }}
-              className={`flex-shrink-0 w-7 h-7 rounded-full transition-transform ${color === c ? 'scale-125 ring-2 ring-offset-1 ring-gray-400 dark:ring-gray-500' : 'hover:scale-110'}`}
+              className={`shrink-0 w-7 h-7 rounded-full transition-transform ${color === c ? 'scale-125 ring-2 ring-offset-1 ring-gray-400 dark:ring-gray-500' : 'hover:scale-110'}`}
               style={{ backgroundColor: c }}
             />
           ))}

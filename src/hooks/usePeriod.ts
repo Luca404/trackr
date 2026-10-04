@@ -21,7 +21,7 @@ const getInitialPeriod = (): PeriodState => {
         endDate: new Date(parsed.endDate),
         type: parsed.type
       };
-    } catch (e) {
+    } catch {
       // Se c'è un errore, usa il default
     }
   }

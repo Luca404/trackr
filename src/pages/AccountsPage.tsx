@@ -1,3 +1,4 @@
+import { errorInfo } from '../utils/error';
 import { useState } from 'react';
 import { apiService } from '../services/api';
 import { useData } from '../contexts/DataContext';
@@ -163,7 +164,8 @@ export default function AccountsPage() {
       deleteAccountCache(selectedAccount.id);
       setShowDeleteConfirm(false);
       handleCloseModal();
-    } catch (error: any) {
+    } catch (caught: unknown) {
+      const error = errorInfo(caught);
       console.error('Errore eliminazione conto:', error);
 
       // Controlla se è un errore 400 con transazioni associate
@@ -257,7 +259,7 @@ export default function AccountsPage() {
               <div className="flex-1 flex justify-end pr-2">
                 <button
                   onClick={toggleHideBalances}
-                  className="text-gray-400 dark:text-gray-500 text-xl outline-none focus:outline-none select-none"
+                  className="text-gray-400 dark:text-gray-500 text-xl outline-hidden focus:outline-hidden select-none"
                   style={{ WebkitTapHighlightColor: 'transparent' }}
                 >
                   {hideBalances ? '🙈' : '👁️'}
@@ -266,7 +268,7 @@ export default function AccountsPage() {
             </div>
           </div>
           {/* Gradient fade */}
-          <div className="absolute left-0 right-0 h-8 bg-gradient-to-b from-gray-50 dark:from-gray-900 to-transparent pointer-events-none" style={{ top: '100%' }} />
+          <div className="absolute left-0 right-0 h-8 bg-linear-to-b from-gray-50 dark:from-gray-900 to-transparent pointer-events-none" style={{ top: '100%' }} />
           </div>
         )}
 
@@ -314,7 +316,7 @@ export default function AccountsPage() {
           {/* Aggiungi nuovo conto */}
           {!isViewer && (
             <div
-              className="card flex items-center justify-center border-2 border-dashed border-gray-200 dark:border-gray-700 cursor-pointer outline-none select-none md:col-span-2"
+              className="card flex items-center justify-center border-2 border-dashed border-gray-200 dark:border-gray-700 cursor-pointer outline-hidden select-none md:col-span-2"
               style={{ WebkitTapHighlightColor: 'transparent' }}
               onClick={() => handleOpenModal()}
             >

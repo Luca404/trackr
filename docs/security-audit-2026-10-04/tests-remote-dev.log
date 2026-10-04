@@ -1,0 +1,13 @@
+
+> trackr-pwa@0.0.0 test
+> vitest run
+
+fatal: not a git repository (or any of the parent directories): .git
+
+ RUN  v4.1.11 /tmp/trackr-review-20261004/remote-dev
+
+
+ Test Files  2 passed (2)
+      Tests  23 passed (23)
+   Start at  18:55:25
+   Duration  326ms (transform 101ms, setup 0ms, import 137ms, tests 43ms, environment 0ms)

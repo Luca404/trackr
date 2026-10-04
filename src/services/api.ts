@@ -16,7 +16,6 @@ import type {
   PortfolioFormData,
   Order,
   OrderFormData,
-  User,
   RecurringTransaction,
   UserProfile,
   ProfileRole,
@@ -26,7 +25,6 @@ import type {
 import {
   buildRecurringInsertPayload,
   buildRecurringUpdatePayload,
-  getDueDatesUntil,
   getNextDueDate,
 } from './recurring';
 
@@ -38,21 +36,21 @@ async function getCurrentUserId(): Promise<string> {
 
 // ==================== MAPPERS ====================
 
-function mapAccount(row: any): Account {
+function mapAccount(row: Account): Account {
   return {
     id: row.id,
     user_id: row.user_id,
     name: row.name,
     icon: row.icon,
     initial_balance: row.initial_balance ?? 0,
-    current_balance: row.current_balance,
+    current_balance: row.current_balance ?? row.initial_balance ?? 0,
     is_favorite: row.is_favorite ?? false,
     created_at: row.created_at,
     updated_at: row.updated_at,
   };
 }
 
-function mapSubcategory(row: any): Subcategory {
+function mapSubcategory(row: Subcategory): Subcategory {
   return {
     id: row.id,
     category_id: row.category_id,
@@ -62,7 +60,7 @@ function mapSubcategory(row: any): Subcategory {
   };
 }
 
-function mapCategory(row: any): CategoryWithStats {
+function mapCategory(row: CategoryWithStats): CategoryWithStats {
   return {
     id: row.id,
     user_id: row.user_id,
@@ -72,13 +70,13 @@ function mapCategory(row: any): CategoryWithStats {
     category_type: row.category_type,
     created_at: row.created_at,
     updated_at: row.updated_at,
-    subcategories: (row.subcategories || []).map(mapSubcategory),
+    subcategories: (row.subcategories || []).map(s => ({ ...mapSubcategory(s), total_amount: 0, transaction_count: 0 })),
     total_amount: 0,
     transaction_count: 0,
   };
 }
 
-function mapTransaction(row: any): Transaction {
+function mapTransaction(row: Omit<Transaction, 'userId'> & { user_id: string }): Transaction {
   return {
     id: row.id,
     userId: row.user_id,
@@ -98,7 +96,7 @@ function mapTransaction(row: any): Transaction {
   };
 }
 
-function mapTransfer(row: any): Transfer {
+function mapTransfer(row: Transfer): Transfer {
   return {
     id: row.id,
     user_id: row.user_id,
@@ -112,7 +110,7 @@ function mapTransfer(row: any): Transfer {
   };
 }
 
-function mapRecurringTransaction(row: any): RecurringTransaction {
+function mapRecurringTransaction(row: RecurringTransaction): RecurringTransaction {
   return {
     id: row.id,
     user_id: row.user_id,
@@ -140,7 +138,7 @@ function mapRecurringTransaction(row: any): RecurringTransaction {
 }
 
 // Calcola la prossima data in base alla frequenza
-function mapPortfolio(row: any): Portfolio {
+function mapPortfolio(row: Portfolio): Portfolio {
   return {
     id: row.id,
     user_id: row.user_id,
@@ -228,6 +226,8 @@ class ApiService {
     localStorage.setItem('activeProfileId', profileId);
   }
 
+  getActiveProfileIdSafe(): string | null { return this._activeProfileId; }
+
   getActiveProfileId(): string {
     if (!this._activeProfileId) {
       this._activeProfileId = localStorage.getItem('activeProfileId');
@@ -248,21 +248,26 @@ class ApiService {
   private async assertUniqueProfileName(
     table: 'accounts' | 'categories' | 'portfolios',
     name: string,
-    excludeId?: number
+    excludeId?: number,
+    profileId = this.getActiveProfileId()
   ): Promise<void> {
-    const profileId = this.getActiveProfileId();
     const normalized = this.normalizeName(name);
     const { data, error } = await supabase.from(table).select('id, name').eq('profile_id', profileId);
     if (error) throw error;
-    const duplicate = (data || []).some((row: any) => row.id !== excludeId && this.normalizeName(row.name || '') === normalized);
+    const duplicate = (data || []).some((row: { id: number; name: string }) => row.id !== excludeId && this.normalizeName(row.name || '') === normalized);
     if (duplicate) throw new Error('duplicate-name');
+  }
+
+  private async assertParentProfile(table: 'categories' | 'portfolios', id: number, profileId: string): Promise<void> {
+    const { error } = await supabase.from(table).select('id').eq('id', id).eq('profile_id', profileId).single();
+    if (error) throw error;
   }
 
   private async assertUniqueSubcategoryName(categoryId: number, name: string, excludeId?: number): Promise<void> {
     const normalized = this.normalizeName(name);
     const { data, error } = await supabase.from('subcategories').select('id, name').eq('category_id', categoryId);
     if (error) throw error;
-    const duplicate = (data || []).some((row: any) => row.id !== excludeId && this.normalizeName(row.name || '') === normalized);
+    const duplicate = (data || []).some((row: { id: number; name: string }) => row.id !== excludeId && this.normalizeName(row.name || '') === normalized);
     if (duplicate) throw new Error('duplicate-name');
   }
 
@@ -271,7 +276,7 @@ class ApiService {
   async getProfiles(): Promise<UserProfile[]> {
     const { data, error } = await supabase.rpc('get_my_profiles');
     if (error) throw error;
-    return (data ?? []).map((row: any) => ({
+    return (data ?? []).map((row: { id: string; uid: string; name: string; role: ProfileRole; member_count?: number; created_at?: string }) => ({
       id: row.id,
       user_id: row.uid,
       name: row.name,
@@ -337,11 +342,7 @@ class ApiService {
   }
 
   async cancelInvitation(invitationId: string): Promise<void> {
-    const { error } = await supabase
-      .from('profile_share_invitations')
-      .update({ status: 'cancelled' })
-      .eq('id', invitationId)
-      .eq('status', 'pending');
+    const { error } = await supabase.rpc('cancel_profile_invitation', { p_invitation_id: invitationId });
     if (error) throw error;
   }
 
@@ -357,14 +358,16 @@ class ApiService {
   }
 
   async getPendingInvitations(): Promise<ProfileInvitation[]> {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user?.email) return [];
     const { data, error } = await supabase
       .from('profile_share_invitations')
       .select('*, profiles(name)')
-      .eq('status', 'pending')
+      .eq('invited_email', user.email.toLowerCase()).eq('status', 'pending')
       .gt('expires_at', new Date().toISOString())
       .order('created_at', { ascending: false });
     if (error) throw error;
-    return (data ?? []).map((row: any) => ({
+    return (data ?? []).map((row: ProfileInvitation & { profiles?: { name: string }; invited_by: string }) => ({
       id: row.id,
       profile_id: row.profile_id,
       profile_name: row.profiles?.name ?? '',
@@ -387,20 +390,11 @@ class ApiService {
   }
 
   async rejectInvitation(invitationId: string): Promise<void> {
-    const { error } = await supabase
-      .from('profile_share_invitations')
-      .update({ status: 'rejected' })
-      .eq('id', invitationId);
+    const { error } = await supabase.rpc('reject_profile_invitation', { p_invitation_id: invitationId });
     if (error) throw error;
   }
 
   // AUTH
-
-  getCurrentUser(): User | null {
-    const userStr = localStorage.getItem('user');
-    if (!userStr) return null;
-    try { return JSON.parse(userStr); } catch { return null; }
-  }
 
   async profileExists(): Promise<boolean> {
     const userId = await getCurrentUserId();
@@ -410,16 +404,14 @@ class ApiService {
 
   // ==================== ACCOUNTS ====================
 
-  async getAccounts(): Promise<Account[]> {
-    const profileId = this.getActiveProfileId();
+  async getAccounts(profileId = this.getActiveProfileId()): Promise<Account[]> {
     const { data, error } = await supabase.from('accounts').select('*').eq('profile_id', profileId).order('id');
     if (error) throw error;
     return (data || []).map(mapAccount);
   }
 
-  async createDefaultAccounts(lang: Lang = 'en'): Promise<Account[]> {
+  async createDefaultAccounts(lang: Lang = 'en', profileId = this.getActiveProfileId()): Promise<Account[]> {
     const userId = await getCurrentUserId();
-    const profileId = this.getActiveProfileId();
     const defaults = DEFAULT_ACCOUNTS[lang].map(a => ({ ...a, user_id: userId, profile_id: profileId }));
     const { data, error } = await supabase.from('accounts').insert(defaults).select();
     if (error) throw error;
@@ -427,10 +419,10 @@ class ApiService {
   }
 
   async createAccount(formData: AccountFormData): Promise<Account> {
-    const userId = await getCurrentUserId();
     const profileId = this.getActiveProfileId();
-    await this.assertUniqueProfileName('accounts', formData.name);
-    const { current_balance: _, ...dbData } = formData as any;
+    const userId = await getCurrentUserId();
+    await this.assertUniqueProfileName('accounts', formData.name, undefined, profileId);
+    const { current_balance: _currentBalance, ...dbData } = formData as AccountFormData & Partial<Pick<Account, 'current_balance'>>;
     const { data, error } = await supabase
       .from('accounts')
       .insert({ ...dbData, user_id: userId, profile_id: profileId })
@@ -441,14 +433,15 @@ class ApiService {
   }
 
   async updateAccount(id: number, formData: Partial<AccountFormData>): Promise<Account> {
+    const profileId = this.getActiveProfileId();
     if (typeof formData.name === 'string') {
-      await this.assertUniqueProfileName('accounts', formData.name, id);
+      await this.assertUniqueProfileName('accounts', formData.name, id, profileId);
     }
-    const { current_balance: _, ...dbData } = formData as any;
+    const { current_balance: _currentBalance, ...dbData } = formData as AccountFormData & Partial<Pick<Account, 'current_balance'>>;
     const { data, error } = await supabase
       .from('accounts')
       .update(dbData)
-      .eq('id', id)
+      .eq('id', id).eq('profile_id', profileId)
       .select()
       .single();
     if (error) throw error;
@@ -456,22 +449,21 @@ class ApiService {
   }
 
   async deleteAccount(id: number): Promise<void> {
-    const { error } = await supabase.from('accounts').delete().eq('id', id);
+    const profileId = this.getActiveProfileId();
+    const { error } = await supabase.from('accounts').delete().eq('id', id).eq('profile_id', profileId);
     if (error) throw error;
   }
 
   // ==================== CATEGORIES ====================
 
-  async getCategories(): Promise<CategoryWithStats[]> {
-    const profileId = this.getActiveProfileId();
+  async getCategories(profileId = this.getActiveProfileId()): Promise<CategoryWithStats[]> {
     const { data, error } = await supabase.from('categories').select('*, subcategories(*)').eq('profile_id', profileId).order('id');
     if (error) throw error;
     return (data || []).map(mapCategory);
   }
 
-  async createDefaultCategories(existing: CategoryWithStats[], lang: Lang = 'en'): Promise<CategoryWithStats[]> {
+  async createDefaultCategories(existing: CategoryWithStats[], lang: Lang = 'en', profileId = this.getActiveProfileId()): Promise<CategoryWithStats[]> {
     const userId = await getCurrentUserId();
-    const profileId = this.getActiveProfileId();
     const hasExpense = existing.some(c => c.category_type === 'expense' || c.category_type == null);
     const hasIncome = existing.some(c => c.category_type === 'income');
 
@@ -489,9 +481,9 @@ class ApiService {
   }
 
   async createCategory(formData: CategoryFormData): Promise<Category> {
-    const userId = await getCurrentUserId();
     const profileId = this.getActiveProfileId();
-    await this.assertUniqueProfileName('categories', formData.name);
+    const userId = await getCurrentUserId();
+    await this.assertUniqueProfileName('categories', formData.name, undefined, profileId);
     const { data, error } = await supabase
       .from('categories')
       .insert({ ...formData, user_id: userId, profile_id: profileId })
@@ -502,13 +494,14 @@ class ApiService {
   }
 
   async updateCategory(id: number, formData: Partial<CategoryFormData>): Promise<Category> {
+    const profileId = this.getActiveProfileId();
     if (typeof formData.name === 'string') {
-      await this.assertUniqueProfileName('categories', formData.name, id);
+      await this.assertUniqueProfileName('categories', formData.name, id, profileId);
     }
     const { data, error } = await supabase
       .from('categories')
       .update(formData)
-      .eq('id', id)
+      .eq('id', id).eq('profile_id', profileId)
       .select('*, subcategories(*)')
       .single();
     if (error) throw error;
@@ -516,13 +509,16 @@ class ApiService {
   }
 
   async deleteCategory(id: number): Promise<void> {
-    const { error } = await supabase.from('categories').delete().eq('id', id);
+    const profileId = this.getActiveProfileId();
+    const { error } = await supabase.from('categories').delete().eq('id', id).eq('profile_id', profileId);
     if (error) throw error;
   }
 
   // ==================== SUBCATEGORIES ====================
 
   async createSubcategory(categoryId: number, formData: SubcategoryFormData): Promise<Subcategory> {
+    const profileId = this.getActiveProfileId();
+    await this.assertParentProfile('categories', categoryId, profileId);
     await this.assertUniqueSubcategoryName(categoryId, formData.name);
     const { data, error } = await supabase
       .from('subcategories')
@@ -534,12 +530,14 @@ class ApiService {
   }
 
   async updateSubcategory(subcategoryId: number, name: string): Promise<Subcategory> {
+    const profileId = this.getActiveProfileId();
     const { data: current, error: currentError } = await supabase
       .from('subcategories')
       .select('category_id')
       .eq('id', subcategoryId)
       .single();
     if (currentError) throw currentError;
+    await this.assertParentProfile('categories', current.category_id, profileId);
     await this.assertUniqueSubcategoryName(current.category_id, name, subcategoryId);
     const { data, error } = await supabase
       .from('subcategories')
@@ -551,8 +549,10 @@ class ApiService {
     return mapSubcategory(data);
   }
 
-  async deleteSubcategory(_categoryId: number, subcategoryId: number): Promise<void> {
-    const { error } = await supabase.from('subcategories').delete().eq('id', subcategoryId);
+  async deleteSubcategory(categoryId: number, subcategoryId: number): Promise<void> {
+    const profileId = this.getActiveProfileId();
+    await this.assertParentProfile('categories', categoryId, profileId);
+    const { error } = await supabase.from('subcategories').delete().eq('id', subcategoryId).eq('category_id', categoryId);
     if (error) throw error;
   }
 
@@ -563,14 +563,14 @@ class ApiService {
     endDate?: string;
     category?: string;
     type?: string;
-  }): Promise<Transaction[]> {
+  }, profileId = this.getActiveProfileId()): Promise<Transaction[]> {
     let query = supabase
       .from('transactions')
       .select('*')
       .order('date', { ascending: false })
       .order('id', { ascending: false });
 
-    query = query.eq('profile_id', this.getActiveProfileId());
+    query = query.eq('profile_id', profileId);
     if (params?.startDate) query = query.gte('date', params.startDate);
     if (params?.endDate) query = query.lte('date', params.endDate);
     if (params?.category) query = query.eq('category', params.category);
@@ -581,26 +581,23 @@ class ApiService {
     return (data || []).map(mapTransaction);
   }
 
-  async createTransaction(formData: TransactionFormData): Promise<Transaction> {
-    const userId = await getCurrentUserId();
+  async createTransaction(formData: TransactionFormData, dueDate?: string): Promise<Transaction> {
     const profileId = this.getActiveProfileId();
-    const { recurrence: _, portfolio_id: _pid, isin: _isin, instrument_name: _iname, exchange: _exch, instrument_type: _itype, order_type: _otype, ter: _ter, ...dbData } = formData;
-    const { data, error } = await supabase
-      .from('transactions')
-      .insert({ ...dbData, user_id: userId, profile_id: profileId })
-      .select()
-      .single();
+    const { data, error } = await supabase.rpc('save_financial_transaction', {
+      p_profile_id: profileId, p_transaction_id: null,
+      p_payload: formData, p_due_date: dueDate ?? null,
+    });
     if (error) throw error;
     return mapTransaction(data);
   }
 
   // ==================== TRANSFERS ====================
 
-  async getTransfers(params?: { startDate?: string; endDate?: string }): Promise<Transfer[]> {
+  async getTransfers(params?: { startDate?: string; endDate?: string }, profileId = this.getActiveProfileId()): Promise<Transfer[]> {
     let query = supabase
       .from('transfers')
       .select('*')
-      .eq('profile_id', this.getActiveProfileId())
+      .eq('profile_id', profileId)
       .order('date', { ascending: false })
       .order('id', { ascending: false });
     if (params?.startDate) query = query.gte('date', params.startDate);
@@ -611,8 +608,8 @@ class ApiService {
   }
 
   async createTransfer(formData: TransactionFormData): Promise<Transfer> {
-    const userId = await getCurrentUserId();
     const profileId = this.getActiveProfileId();
+    const userId = await getCurrentUserId();
     if (!formData.to_account_id) throw new Error('Conto di destinazione mancante');
     const { data, error } = await supabase
       .from('transfers')
@@ -632,6 +629,7 @@ class ApiService {
   }
 
   async updateTransfer(id: number, formData: TransactionFormData): Promise<Transfer> {
+    const profileId = this.getActiveProfileId();
     const { data, error } = await supabase
       .from('transfers')
       .update({
@@ -641,7 +639,7 @@ class ApiService {
         description: formData.description || null,
         date: formData.date,
       })
-      .eq('id', id)
+      .eq('id', id).eq('profile_id', profileId)
       .select()
       .single();
     if (error) throw error;
@@ -649,32 +647,31 @@ class ApiService {
   }
 
   async deleteTransfer(id: number): Promise<void> {
-    const { error } = await supabase.from('transfers').delete().eq('id', id);
+    const profileId = this.getActiveProfileId();
+    const { error } = await supabase.from('transfers').delete().eq('id', id).eq('profile_id', profileId);
     if (error) throw error;
   }
 
-  async updateTransaction(id: number, formData: Partial<TransactionFormData>): Promise<Transaction> {
-    const { recurrence: _, portfolio_id: _pid, isin: _isin, instrument_name: _iname, exchange: _exch, instrument_type: _itype, order_type: _otype, ter: _ter, ...dbData } = formData as TransactionFormData;
-    const { data, error } = await supabase
-      .from('transactions')
-      .update(dbData)
-      .eq('id', id)
-      .select()
-      .single();
+  async updateTransaction(id: number, formData: Partial<TransactionFormData>, dueDate?: string): Promise<Transaction> {
+    const profileId = this.getActiveProfileId();
+    const { data, error } = await supabase.rpc('save_financial_transaction', {
+      p_profile_id: profileId, p_transaction_id: id,
+      p_payload: formData, p_due_date: dueDate ?? null,
+    });
     if (error) throw error;
     return mapTransaction(data);
   }
 
   async deleteTransaction(id: number): Promise<void> {
-    const { error } = await supabase.from('transactions').delete().eq('id', id);
+    const { error } = await supabase.rpc('delete_financial_transaction', { p_profile_id: this.getActiveProfileId(), p_transaction_id: id });
     if (error) throw error;
   }
 
   async getTransactionStats(params?: {
     startDate?: string;
     endDate?: string;
-  }): Promise<TransactionStats> {
-    const transactions = await this.getTransactions(params);
+  }, profileId = this.getActiveProfileId()): Promise<TransactionStats> {
+    const transactions = await this.getTransactions(params, profileId);
 
     const stats: TransactionStats = {
       totalExpenses: 0,
@@ -718,8 +715,8 @@ class ApiService {
   async createRecurringTransaction(
     formData: Omit<RecurringTransaction, 'id' | 'user_id' | 'created_at' | 'next_due_date'>
   ): Promise<RecurringTransaction> {
-    const userId = await getCurrentUserId();
     const profileId = this.getActiveProfileId();
+    const userId = await getCurrentUserId();
     const payload = buildRecurringInsertPayload(formData, {
       user_id: userId,
       profile_id: profileId,
@@ -734,10 +731,11 @@ class ApiService {
   }
 
   async getRecurringTransaction(id: number): Promise<RecurringTransaction | null> {
+    const profileId = this.getActiveProfileId();
     const { data, error } = await supabase
       .from('recurring_transactions')
       .select('*')
-      .eq('id', id)
+      .eq('id', id).eq('profile_id', profileId)
       .maybeSingle();
     if (error) throw error;
     return data ? mapRecurringTransaction(data) : null;
@@ -762,6 +760,7 @@ class ApiService {
     id: number,
     formData: Partial<Omit<RecurringTransaction, 'id' | 'user_id' | 'created_at' | 'next_due_date'>>
   ): Promise<RecurringTransaction> {
+    const profileId = this.getActiveProfileId();
     const current = await this.getRecurringTransaction(id);
     if (!current) throw new Error('Recurring transaction not found');
 
@@ -769,7 +768,7 @@ class ApiService {
     const { data, error } = await supabase
       .from('recurring_transactions')
       .update(payload)
-      .eq('id', id)
+      .eq('id', id).eq('profile_id', profileId)
       .select()
       .single();
     if (error) throw error;
@@ -777,18 +776,20 @@ class ApiService {
   }
 
   async deleteRecurringTransaction(id: number): Promise<void> {
-    const { error } = await supabase.from('recurring_transactions').delete().eq('id', id);
+    const profileId = this.getActiveProfileId();
+    const { error } = await supabase.from('recurring_transactions').delete().eq('id', id).eq('profile_id', profileId);
     if (error) throw error;
   }
 
   async advanceRecurringTransactionOccurrence(id: number, dueDate: string): Promise<RecurringTransaction> {
+    const profileId = this.getActiveProfileId();
     const current = await this.getRecurringTransaction(id);
     if (!current) throw new Error('Recurring transaction not found');
-    const next_due_date = getNextDueDate(dueDate, current.frequency);
+    const next_due_date = getNextDueDate(dueDate, current.frequency, current.start_date);
     const { data, error } = await supabase
       .from('recurring_transactions')
       .update({ next_due_date })
-      .eq('id', id)
+      .eq('id', id).eq('profile_id', profileId)
       .select()
       .single();
     if (error) throw error;
@@ -796,6 +797,7 @@ class ApiService {
   }
 
   async rewindRecurringTransactionOccurrence(id: number, dueDate: string): Promise<RecurringTransaction> {
+    const profileId = this.getActiveProfileId();
     const current = await this.getRecurringTransaction(id);
     if (!current) throw new Error('Recurring transaction not found');
 
@@ -803,7 +805,7 @@ class ApiService {
     const { data, error } = await supabase
       .from('recurring_transactions')
       .update({ next_due_date })
-      .eq('id', id)
+      .eq('id', id).eq('profile_id', profileId)
       .select()
       .single();
     if (error) throw error;
@@ -812,85 +814,12 @@ class ApiService {
 
   // Controlla tutte le regole con next_due_date <= oggi e crea le transazioni mancanti.
   // Chiamato all'avvio dell'app in DataContext.
-  async processRecurringTransactions(): Promise<Transaction[]> {
-    const today = localDateStr();
-    const userId = await getCurrentUserId();
-
-    const { data: due, error } = await supabase
-      .from('recurring_transactions')
-      .select('*')
-      .eq('user_id', userId)
-      .neq('type', 'investment')
-      .lte('next_due_date', today);
-
+  async processRecurringTransactions(profileId = this.getActiveProfileId()): Promise<Transaction[]> {
+    const { data, error } = await supabase.rpc('process_recurring_transactions', {
+      p_profile_id: profileId, p_today: localDateStr(),
+    });
     if (error) throw error;
-    if (!due || due.length === 0) return [];
-
-    const created: Transaction[] = [];
-
-    for (const rule of due) {
-      const { dueDates, nextDueDate } = getDueDatesUntil(rule.next_due_date, rule.frequency, today);
-
-      for (const nextDate of dueDates) {
-        const { data: tx, error: txErr } = await supabase
-          .from('transactions')
-          .insert({
-            user_id: userId,
-            profile_id: rule.profile_id,
-            account_id: rule.account_id,
-            type: rule.type,
-            category: rule.category,
-            subcategory: rule.subcategory,
-            amount: rule.amount,
-            description: rule.description,
-            date: nextDate,
-            recurring_id: rule.id,
-            ticker: rule.ticker,
-            quantity: rule.quantity,
-            price: rule.price,
-          })
-          .select()
-          .single();
-
-        if (txErr || !tx) {
-          console.error('Recurring transaction creation failed:', { ruleId: rule.id, nextDate, error: txErr });
-          throw txErr || new Error(`Failed to create recurring transaction for rule ${rule.id}`);
-        }
-
-        created.push(mapTransaction(tx));
-        if (rule.type === 'investment' && rule.portfolio_id && rule.ticker) {
-          const { error: orderErr } = await supabase
-            .from('orders')
-            .insert({
-              user_id: userId,
-              portfolio_id: rule.portfolio_id,
-              symbol: rule.ticker,
-              isin: rule.isin,
-              name: rule.instrument_name,
-              exchange: rule.exchange,
-              currency: rule.currency || 'EUR',
-              quantity: rule.quantity ?? 0,
-              price: rule.price ?? 0,
-              commission: Math.max(0, Math.abs(rule.amount) - ((rule.quantity ?? 0) * (rule.price ?? 0))),
-              instrument_type: rule.instrument_type,
-              order_type: rule.order_type || 'buy',
-              date: nextDate,
-              transaction_id: tx.id,
-            });
-          if (orderErr) {
-            console.error('Recurring investment order creation failed:', { ruleId: rule.id, nextDate, error: orderErr });
-            throw orderErr;
-          }
-        }
-      }
-
-      await supabase
-        .from('recurring_transactions')
-        .update({ next_due_date: nextDueDate })
-        .eq('id', rule.id);
-    }
-
-    return created;
+    return (data ?? []).map(mapTransaction);
   }
 
   // ==================== ORDERS ====================
@@ -898,11 +827,11 @@ class ApiService {
   async getOrders(portfolioId: number): Promise<Order[]> {
     const { data, error } = await supabase
       .from('orders')
-      .select('*')
-      .eq('portfolio_id', portfolioId)
+      .select('*, portfolios!inner(profile_id)')
+      .eq('portfolio_id', portfolioId).eq('portfolios.profile_id', this.getActiveProfileId())
       .order('date', { ascending: false });
     if (error) throw error;
-    return (data || []).map((row: any): Order => ({
+    return (data || []).map((row: Order): Order => ({
       id: row.id,
       user_id: row.user_id,
       portfolio_id: row.portfolio_id,
@@ -924,6 +853,8 @@ class ApiService {
   }
 
   async createOrder(formData: OrderFormData): Promise<Order> {
+    const profileId = this.getActiveProfileId();
+    await this.assertParentProfile('portfolios', formData.portfolio_id, profileId);
     const userId = await getCurrentUserId();
     const { data, error } = await supabase
       .from('orders')
@@ -954,17 +885,15 @@ class ApiService {
   }
 
   async updateOrderByTransactionId(transactionId: number, fields: Partial<OrderFormData>): Promise<void> {
-    const { error } = await supabase.from('orders').update(fields).eq('transaction_id', transactionId);
-    if (error) throw error;
+    const order = await this.getOrderByTransactionId(transactionId);
+    if (!order) throw new Error('Order not found in active profile');
+    await this.updateOrder(order.id, fields);
   }
 
   async updateOrder(id: number, fields: Partial<OrderFormData>): Promise<Order> {
-    const { data, error } = await supabase
-      .from('orders')
-      .update(fields)
-      .eq('id', id)
-      .select()
-      .single();
+    const { data, error } = await supabase.rpc('save_financial_order', {
+      p_profile_id: this.getActiveProfileId(), p_order_id: id, p_payload: fields,
+    });
     if (error) throw error;
     return {
       id: data.id,
@@ -989,21 +918,20 @@ class ApiService {
   }
 
   async deleteOrder(id: number): Promise<void> {
-    const { error } = await supabase.from('orders').delete().eq('id', id);
+    const { error } = await supabase.rpc('delete_financial_order', { p_profile_id: this.getActiveProfileId(), p_order_id: id });
     if (error) throw error;
   }
 
   // Ordini senza transaction_id (quote gratuite, saveback, bonus broker)
-  async getFreeOrders(): Promise<Order[]> {
-    const userId = await getCurrentUserId();
+  async getFreeOrders(profileId = this.getActiveProfileId()): Promise<Order[]> {
     const { data, error } = await supabase
       .from('orders')
-      .select('*')
-      .eq('user_id', userId)
+      .select('*, portfolios!inner(profile_id)')
+      .eq('portfolios.profile_id', profileId)
       .is('transaction_id', null)
       .order('date', { ascending: false });
     if (error) throw error;
-    return (data || []).map((row: any): Order => ({
+    return (data || []).map((row: Order): Order => ({
       id: row.id,
       user_id: row.user_id,
       portfolio_id: row.portfolio_id,
@@ -1028,8 +956,8 @@ class ApiService {
   async getOrderByTransactionId(transactionId: number): Promise<Order | null> {
     const { data, error } = await supabase
       .from('orders')
-      .select('*')
-      .eq('transaction_id', transactionId)
+      .select('*, portfolios!inner(profile_id)')
+      .eq('transaction_id', transactionId).eq('portfolios.profile_id', this.getActiveProfileId())
       .maybeSingle();
     if (error) throw error;
     if (!data) return null;
@@ -1055,23 +983,20 @@ class ApiService {
   }
 
   async deleteOrderByTransactionId(transactionId: number): Promise<void> {
-    const { error } = await supabase.from('orders').delete().eq('transaction_id', transactionId);
-    if (error) throw error;
+    const order = await this.getOrderByTransactionId(transactionId);
+    if (order) await this.deleteOrder(order.id);
   }
 
-  // ==================== PORTFOLIOS ====================
-
-  async getPortfolios(): Promise<Portfolio[]> {
-    const profileId = this.getActiveProfileId();
+  async getPortfolios(profileId = this.getActiveProfileId()): Promise<Portfolio[]> {
     const { data, error } = await supabase.from('portfolios').select('*').eq('profile_id', profileId).order('id');
     if (error) throw error;
     return (data || []).map(mapPortfolio);
   }
 
   async createPortfolio(formData: PortfolioFormData): Promise<Portfolio> {
-    const userId = await getCurrentUserId();
     const profileId = this.getActiveProfileId();
-    await this.assertUniqueProfileName('portfolios', formData.name);
+    const userId = await getCurrentUserId();
+    await this.assertUniqueProfileName('portfolios', formData.name, undefined, profileId);
     const { data, error } = await supabase
       .from('portfolios')
       .insert({
@@ -1092,12 +1017,12 @@ class ApiService {
   async updatePortfolio(id: number, formData: Partial<PortfolioFormData>, previousName?: string): Promise<Portfolio> {
     const profileId = this.getActiveProfileId();
     if (typeof formData.name === 'string') {
-      await this.assertUniqueProfileName('portfolios', formData.name, id);
+      await this.assertUniqueProfileName('portfolios', formData.name, id, profileId);
     }
     const { data, error } = await supabase
       .from('portfolios')
       .update(formData)
-      .eq('id', id)
+      .eq('id', id).eq('profile_id', profileId)
       .select()
       .single();
     if (error) throw error;
@@ -1122,46 +1047,16 @@ class ApiService {
   }
 
   async deletePortfolio(id: number): Promise<void> {
-    const profileId = this.getActiveProfileId();
-    const { data: orderRows, error: orderError } = await supabase
-      .from('orders')
-      .select('transaction_id')
-      .eq('portfolio_id', id);
-    if (orderError) throw orderError;
-
-    const transactionIds = Array.from(
-      new Set((orderRows || []).map((row: any) => row.transaction_id).filter(Boolean))
-    ) as number[];
-
-    const [{ error: recurringError }, { error: transactionsError }, { error: ordersDeleteError }] = await Promise.all([
-      supabase.from('recurring_transactions').delete().eq('profile_id', profileId).eq('portfolio_id', id),
-      transactionIds.length > 0
-        ? supabase.from('transactions').delete().in('id', transactionIds)
-        : Promise.resolve({ error: null } as any),
-      supabase.from('orders').delete().eq('portfolio_id', id),
-    ]);
-    if (recurringError) throw recurringError;
-    if (transactionsError) throw transactionsError;
-    if (ordersDeleteError) throw ordersDeleteError;
-
-    const { error } = await supabase.from('portfolios').delete().eq('id', id);
+    const { error } = await supabase.rpc('delete_financial_portfolio', { p_profile_id: this.getActiveProfileId(), p_portfolio_id: id });
     if (error) throw error;
   }
 
   // ==================== EXPORT ====================
 
   async exportData(): Promise<void> {
-    const [transactions, categories, accounts, portfolios] = await Promise.all([
-      this.getTransactions(),
-      this.getCategories(),
-      this.getAccounts(),
-      this.getPortfolios(),
-    ]);
-    const exportObj = {
-      version: 1,
-      exportDate: new Date().toISOString(),
-      data: { transactions, categories, accounts, portfolios },
-    };
+    const { data: exportObj, error } = await supabase.rpc('export_financial_profile', { p_profile_id: this.getActiveProfileId() });
+    if (error) throw error;
+    if (!exportObj) throw new Error('Profilo non accessibile');
     const blob = new Blob([JSON.stringify(exportObj, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');

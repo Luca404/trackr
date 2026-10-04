@@ -1,25 +1,26 @@
 # Trackr PWA — CLAUDE.md
 
-Personal finance PWA. React 18 + TypeScript + Vite + Supabase (direct, no own backend). Part of the Trackr ecosystem — see root `CLAUDE.md` and `../docs/supabase-schema.md`.
+Personal finance PWA. React 18 + TypeScript + Vite + Supabase (direct, no own backend). Shares the hosted Supabase database with `../fitness-tracker/`. The migration workflow is documented in `supabase/README.md`.
 
 ## Stack
 
-React 18 TS, Vite + vite-plugin-pwa, Tailwind CSS (mobile-first, dark mode), Supabase (`@supabase/supabase-js`), React Router, react-i18next. Requires Node 20+.
+React 18 TS, Vite + vite-plugin-pwa, Tailwind CSS (mobile-first, dark mode), Supabase (`@supabase/supabase-js`), React Router, react-i18next. Requires Node >=22.13. Use `nvm use` before installing/testing.
 
 ## Commands
 
 ```bash
 npm run dev       # → http://localhost:5174
-npm run build     # requires Node 20+
+npm run build     # requires Node >=22.13
 npm run preview
 npm run lint
+npm test
 ```
 
 ## Env vars (`.env.local`)
 
 ```env
 VITE_SUPABASE_URL=https://...
-VITE_SUPABASE_ANON_KEY=...       # anon/publishable key
+VITE_SUPABASE_PUBLISHABLE_KEY=...       # anon/publishable key
 VITE_PF_BACKEND_URL=https://...  # portfolio-tracker backend on Render
 ```
 
@@ -32,10 +33,11 @@ Component / Page
   → portfolio-tracker backend (Railway)   ← portfolio data only (PortfoliosPage, TransactionForm, KakeboImport)
 ```
 
-- **Online-first**: DataContext loads all data from Supabase at startup, keeps in-memory React state. No IndexedDB/localStorage cache for data.
+- **Online-first**: DataContext loads all data from Supabase at startup, keeps in-memory React state. Financial lists stay in React state; portfolio summaries use a cache scoped to user/profile.
 - **No Redux/Zustand**: all global state in React Contexts (AuthContext, DataContext, SettingsContext).
 - **`current_balance`** on accounts is NOT a DB column — DataContext calculates it from `initial_balance` + transactions + transfers on every update.
-- **Optimistic writes**: pages call `apiService.create/update/delete*()` then update DataContext optimistically.
+- **Writes**: transaction/order/recurrence changes use atomic PostgreSQL RPCs.
+- **Optimistic UI**: pages call `apiService.create/update/delete*()` then update DataContext optimistically.
 
 ## Profile system
 
@@ -43,8 +45,8 @@ Component / Page
 - `profile_members` is the **source of truth for permissions** (owner/editor/viewer). All RLS uses `is_profile_member()`.
 - Active profile stored in `localStorage['activeProfileId']` and `apiService._activeProfileId`. Call `apiService.setActiveProfile(id)` before any query — `DataContext.fetchAllData` does this automatically.
 - Main profile (`id = user_id`) is not deletable.
-- **TODO**: update `on_auth_user_created` Supabase trigger to also insert into `profile_members` — currently `get_my_profiles()` repairs this on every startup.
-- On profile switch: remove `pf_summaries_cache` from localStorage to force portfolio reload.
+- Profile INSERT creates owner membership through `trackr_private.create_owner_membership`; `get_my_profiles()` remains a repair safety net.
+- Portfolio summary keys include user ID and profile ID. Use `clearPortfolioCache()` for invalidation, and `clearSessionData()` on logout.
 
 ## UI conventions
 
@@ -87,4 +89,4 @@ See `docs/known-issues.md`. Change log: `docs/code-changes.md`. Improvements bac
 
 ## Supabase
 
-CLI project at root `../supabase/`. Run all `supabase` CLI commands from `Python/`. Migrations: `../supabase/migrations/`. Schemas: `../supabase/schemas/`.
+The CLI project is `supabase/` in this checkout. The hosted project and migration history are shared with fitTrackr; synchronize the applied history before a push and inspect `supabase db push --dry-run`. Never run `supabase db reset --linked`. Security tests use a separate local database, not the application database.

@@ -1,0 +1,51 @@
+name: Quality and security
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm audit --audit-level=low
+      - run: npm run lint -- --max-warnings=0
+      - run: npm test
+      - run: npm run build
+        env:
+          VITE_SUPABASE_URL: http://127.0.0.1:54321
+          VITE_SUPABASE_PUBLISHABLE_KEY: test-publishable-key
+  database:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Start isolated PostgreSQL
+        run: >-
+          docker run -d --name supabase_db_trackr
+          -e POSTGRES_PASSWORD=test-only-password
+          public.ecr.aws/supabase/postgres:17.6.1.084
+      - name: Wait for PostgreSQL
+        run: |
+          for i in {1..30}; do
+            docker exec supabase_db_trackr pg_isready -U postgres && exit 0
+            sleep 2
+          done
+          exit 1
+      - name: Create Supabase test roles
+        run: |
+          docker exec -i supabase_db_trackr psql -v ON_ERROR_STOP=1 -U postgres -d postgres <<'SQL'
+          DO $$ BEGIN
+            IF NOT EXISTS(SELECT 1 FROM pg_roles WHERE rolname='anon') THEN CREATE ROLE anon NOLOGIN; END IF;
+            IF NOT EXISTS(SELECT 1 FROM pg_roles WHERE rolname='authenticated') THEN CREATE ROLE authenticated NOLOGIN; END IF;
+            IF NOT EXISTS(SELECT 1 FROM pg_roles WHERE rolname='service_role') THEN CREATE ROLE service_role NOLOGIN BYPASSRLS; END IF;
+          END $$;
+          SQL
+      - run: scripts/test-db-security.sh bootstrap
+      - run: scripts/test-db-concurrency.sh

@@ -156,8 +156,9 @@ export default function StatsPage() {
   // Andamento saldo del periodo: parte da 0 e accumula entrate/uscite giorno per giorno
   const balanceTrendData = useMemo(() => {
     let runningBalance = 0;
+    const samePeriod = (a: Date, b: Date) => isSamePeriod(a,b);
     return periods.map(period => {
-      const periodTransactions = transactions.filter(t => isSamePeriod(new Date(t.date), period.date));
+      const periodTransactions = transactions.filter(t => samePeriod(new Date(t.date), period.date));
       let dayNet = 0;
       periodTransactions.forEach(t => {
         if (t.type === 'income') { runningBalance += t.amount; dayNet += t.amount; }
@@ -165,7 +166,9 @@ export default function StatsPage() {
       });
       return { label: period.label, balance: runningBalance, dayNet, hasTransactions: periodTransactions.length > 0, date: period.date };
     });
-  }, [transactions, periods.length, periodType]);
+  }, // Dates and bucketing are recomputed from the period controls on every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  [transactions, startDate, endDate, periodType]);
 
   // Punti da disegnare nel grafico saldo: solo fino ad oggi
   const today = useMemo(() => { const d = new Date(); d.setHours(23, 59, 59, 999); return d; }, []);
@@ -359,7 +362,7 @@ export default function StatsPage() {
                     return (
                       <div
                         key={index}
-                        className={`absolute w-3 h-3 rounded-full border-2 shadow-sm z-20 cursor-pointer ${point.dayNet >= 0 ? 'bg-green-400 border-green-600' : 'bg-red-400 border-red-600'}`}
+                        className={`absolute w-3 h-3 rounded-full border-2 shadow-xs z-20 cursor-pointer ${point.dayNet >= 0 ? 'bg-green-400 border-green-600' : 'bg-red-400 border-red-600'}`}
                         style={{ left: `calc(${x}% - 6px)`, top: `calc(${y}% - 6px)` }}
                         onMouseEnter={() => setActiveDotIndex(index)}
                         onMouseLeave={() => setActiveDotIndex(null)}
@@ -476,7 +479,7 @@ export default function StatsPage() {
                           })}
                         </div>
                       ) : (
-                        <div className="w-full h-0.5 bg-gray-200 dark:bg-gray-700 rounded" />
+                        <div className="w-full h-0.5 bg-gray-200 dark:bg-gray-700 rounded-sm" />
                       )}
                     </div>
                     <div className="relative mt-1 h-4 w-full">
@@ -510,7 +513,7 @@ export default function StatsPage() {
                       <span className="font-medium text-gray-900 dark:text-gray-100">{stat.name}</span>
                       {hasSubcategories && (
                         <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor"
-                          className="text-gray-400 dark:text-gray-500 flex-shrink-0"
+                          className="text-gray-400 dark:text-gray-500 shrink-0"
                           style={{ transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>
                           <path d="M4 2 L9 6 L4 10 Z" />
                         </svg>
@@ -541,7 +544,7 @@ export default function StatsPage() {
                               <span className="text-xs text-gray-500 dark:text-gray-400 ml-2">({substat.count} {t('common.trans_abbr')})</span>
                             </div>
                           </div>
-                          <div className="relative w-full h-6 bg-gray-100 dark:bg-gray-800 rounded overflow-hidden">
+                          <div className="relative w-full h-6 bg-gray-100 dark:bg-gray-800 rounded-sm overflow-hidden">
                             <div
                               className="h-full transition-all duration-500"
                               style={{ width: `${substat.percentage}%`, backgroundColor: getCategoryColor(stat.name), opacity: 0.7 }}

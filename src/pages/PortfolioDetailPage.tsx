@@ -73,7 +73,7 @@ export default function PortfolioDetailPage() {
     };
     fetch();
     return () => { isMounted = false; };
-  }, [portfolioId, portfolio, isInitialized]);
+  }, [portfolioId, portfolio, isInitialized, navigate]);
 
   const sortedPositions = [...positions].sort((a, b) => b.market_value - a.market_value);
   const currency = summary?.reference_currency || portfolio?.reference_currency || 'EUR';
@@ -97,7 +97,7 @@ export default function PortfolioDetailPage() {
         </button>
         <div className="flex items-center gap-3">
           <span
-            className="text-3xl w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0"
+            className="text-3xl w-12 h-12 rounded-xl flex items-center justify-center shrink-0"
             style={{ backgroundColor: (portfolio?.color ?? '#0ea5e9') + '22' }}
           >
             {portfolio?.icon ?? '📈'}
@@ -114,7 +114,7 @@ export default function PortfolioDetailPage() {
         <div className="card">
           <div className="text-xs uppercase tracking-[0.12em] text-gray-400 dark:text-gray-500 mb-1.5">Valore</div>
           {loading ? (
-            <div className="h-7 w-28 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
+            <div className="h-7 w-28 bg-gray-200 dark:bg-gray-700 rounded-sm animate-pulse" />
           ) : (
             <div className="text-xl font-bold text-gray-900 dark:text-gray-100 leading-tight">
               {formatCurrency(summary?.total_value ?? 0, currency)}
@@ -125,7 +125,7 @@ export default function PortfolioDetailPage() {
         <div className="card">
           <div className="text-xs uppercase tracking-[0.12em] text-gray-400 dark:text-gray-500 mb-1.5">P&amp;L</div>
           {loading ? (
-            <div className="h-7 w-28 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
+            <div className="h-7 w-28 bg-gray-200 dark:bg-gray-700 rounded-sm animate-pulse" />
           ) : (
             <>
               <div className={`text-xl font-bold leading-tight ${pl >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
@@ -141,7 +141,7 @@ export default function PortfolioDetailPage() {
         <div className="card">
           <div className="text-xs uppercase tracking-[0.12em] text-gray-400 dark:text-gray-500 mb-1.5">XIRR</div>
           {loading ? (
-            <div className="h-7 w-20 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
+            <div className="h-7 w-20 bg-gray-200 dark:bg-gray-700 rounded-sm animate-pulse" />
           ) : (
             <div className={`text-xl font-bold leading-tight ${(xirr ?? 0) >= 0 ? 'text-purple-600 dark:text-purple-400' : 'text-orange-600 dark:text-orange-400'}`}>
               {xirr != null ? `${xirr >= 0 ? '+' : ''}${xirr.toFixed(2)}%` : '—'}
@@ -152,7 +152,7 @@ export default function PortfolioDetailPage() {
         <div className="card">
           <div className="text-xs uppercase tracking-[0.12em] text-gray-400 dark:text-gray-500 mb-1.5">Posizioni</div>
           {loading ? (
-            <div className="h-7 w-10 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
+            <div className="h-7 w-10 bg-gray-200 dark:bg-gray-700 rounded-sm animate-pulse" />
           ) : (
             <div className="text-xl font-bold text-gray-900 dark:text-gray-100 leading-tight">
               {positions.length || summary?.positions_count || '—'}

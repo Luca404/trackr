@@ -1,0 +1,30 @@
+
+> trackr-pwa@0.0.0 build
+> tsc -b && vite build
+
+fatal: not a git repository (or any of the parent directories): .git
+vite v7.3.6 building client environment for production...
+transforming...
+✓ 155 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/version.json                                  0.16 kB │ gzip:   0.15 kB
+dist/manifest.webmanifest                          0.52 kB
+dist/index.html                                    1.50 kB │ gzip:   0.67 kB
+dist/assets/index-9Kmj7OYd.css                    52.47 kB │ gzip:   8.71 kB
+dist/assets/workbox-window.prod.es5-BBnX5xw4.js    5.75 kB │ gzip:   2.36 kB
+dist/assets/sql-wasm-browser-BgtIK4kg.js          40.54 kB │ gzip:  14.59 kB
+dist/assets/index-tk9-wfiA.js                    784.94 kB │ gzip: 213.46 kB
+
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 6.11s
+
+PWA v1.3.0
+mode      generateSW
+precache  12 entries (1023.42 KiB)
+files generated
+  dist/sw.js
+  dist/workbox-2fbc6a65.js

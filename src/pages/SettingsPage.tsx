@@ -1,3 +1,4 @@
+import { errorInfo } from '../utils/error';
 import { useState, useEffect, useRef } from 'react';
 import type { ProfileMember } from '../types';
 import { useNavigate } from 'react-router-dom';
@@ -126,7 +127,8 @@ export default function SettingsPage() {
       setNewPassword('');
       setConfirmPassword('');
       setShowChangePassword(false);
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = errorInfo(caught);
       setPasswordMsg({ type: 'error', text: err.message || t('settings.errorPasswordChange') });
     } finally {
       setPasswordLoading(false);
@@ -206,7 +208,8 @@ export default function SettingsPage() {
       await apiService.inviteToProfile(profileId, inviteEmail.trim(), inviteRole);
       setInviteMsg(t('settings.inviteSent'));
       setInviteEmail('');
-    } catch (e: any) {
+    } catch (caught: unknown) {
+      const e = errorInfo(caught);
       if (e.message === 'already_member') setInviteMsg(t('settings.inviteErrorAlreadyMember'));
       else if (e.message === 'invite_pending') setInviteMsg(t('settings.inviteErrorPending'));
       else if (e.message === 'rate_limited') setInviteMsg(t('settings.inviteErrorRateLimit'));
@@ -326,8 +329,8 @@ export default function SettingsPage() {
 
                   {editingProfileId === profile.id ? (
                     <div className="flex gap-1">
-                      <button onClick={() => setEditingProfileId(null)} className="text-xs px-2 py-1 rounded bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200">{t('common.cancel')}</button>
-                      <button onClick={() => handleSaveProfileName(profile.id)} disabled={profileLoading} className="text-xs px-2 py-1 rounded bg-primary-500 text-white">{t('common.save')}</button>
+                      <button onClick={() => setEditingProfileId(null)} className="text-xs px-2 py-1 rounded-sm bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200">{t('common.cancel')}</button>
+                      <button onClick={() => handleSaveProfileName(profile.id)} disabled={profileLoading} className="text-xs px-2 py-1 rounded-sm bg-primary-500 text-white">{t('common.save')}</button>
                     </div>
                   ) : (
                     <div className="flex items-center gap-1">
@@ -367,7 +370,7 @@ export default function SettingsPage() {
                       {profile.role !== 'owner' && (
                         <button
                           onClick={() => handleLeaveProfile(profile.id)}
-                          className="text-xs px-2 py-1 rounded text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"
+                          className="text-xs px-2 py-1 rounded-sm text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"
                         >{t('settings.leaveProfile')}</button>
                       )}
                     </div>
@@ -438,7 +441,7 @@ export default function SettingsPage() {
             {showAddProfile ? (
               <div className="flex flex-col gap-2 mt-1">
                 <input
-                  className="w-full px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                  className="w-full px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                   placeholder={t('settings.profileNamePlaceholder')}
                   value={newProfileName}
                   onChange={e => setNewProfileName(e.target.value)}

@@ -20,8 +20,7 @@ export function useSwipeNavigation({
   const shouldAnimateRef = useRef(false);
   const routesRef = useRef(routes);
   const locationRef = useRef(location.pathname);
-  routesRef.current = routes;
-  locationRef.current = location.pathname;
+  useEffect(() => { routesRef.current = routes; locationRef.current = location.pathname; }, [routes, location.pathname]);
 
   const [swipeOffset, setSwipeOffset] = useState(0);
   const [isSwipingHorizontally, setIsSwipingHorizontally] = useState(false);

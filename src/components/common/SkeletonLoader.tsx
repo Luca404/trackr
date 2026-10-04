@@ -1,6 +1,6 @@
 // Barra grigia generica
 function Bone({ className, style }: { className?: string; style?: React.CSSProperties }) {
-  return <div className={`bg-gray-200 dark:bg-gray-700 rounded ${className}`} style={style} />;
+  return <div className={`bg-gray-200 dark:bg-gray-700 rounded-sm ${className}`} style={style} />;
 }
 
 import React from 'react';
@@ -15,7 +15,7 @@ export function SkeletonTransactionRow() {
   return (
     <div className="card flex items-center justify-between animate-pulse">
       <div className="flex items-center gap-3 flex-1">
-        <Bone className="w-8 h-8 rounded-full flex-shrink-0" />
+        <Bone className="w-8 h-8 rounded-full shrink-0" />
         <div className="flex-1 space-y-2">
           <Bone className="h-4 w-2/5" />
           <Bone className="h-3 w-3/5" />
@@ -36,7 +36,7 @@ export function SkeletonAccountCard() {
     <div className="card animate-pulse">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3 flex-1">
-          <Bone className="w-10 h-10 rounded-full flex-shrink-0" />
+          <Bone className="w-10 h-10 rounded-full shrink-0" />
           <div className="flex-1 space-y-2">
             <Bone className="h-4 w-1/2" />
           </div>

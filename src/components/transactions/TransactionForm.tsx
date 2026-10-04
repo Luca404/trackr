@@ -1,3 +1,4 @@
+import { errorInfo } from '../../utils/error';
 import { useState, useEffect, useMemo, useRef, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -112,6 +113,8 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
       const other = allAccounts.find(a => a.id !== selectedAccount?.id);
       if (other) setSelectedToAccount(other);
     }
+    // Reset selection only when the user changes transaction type.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentType]);
 
   // Pre-fill categoria in edit mode
@@ -189,7 +192,7 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
     return () => {
       cancelled = true;
     };
-  }, [currentType, selectedPortfolio?.id]);
+  }, [currentType, selectedPortfolio]);
 
   useEffect(() => {
     if (currentType !== 'investment') return;
@@ -280,7 +283,8 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
     setIsLoading(true);
     try {
       await onDelete();
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = errorInfo(caught);
       setError(err.response?.data?.message || t('transactions.errorDeleting'));
       setIsLoading(false);
     }
@@ -291,7 +295,7 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
     setIsLoading(true);
     try {
       await onDeleteRecurringRule();
-    } catch (err: any) {
+    } catch {
       setError(t('transactions.errorDeletingRule'));
       setIsLoading(false);
     }
@@ -323,7 +327,8 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
       try {
         await onSubmit(submitData);
         onCancel();
-      } catch (err: any) {
+      } catch (caught: unknown) {
+      const err = errorInfo(caught);
         setError(err.response?.data?.message || t('transactions.errorSaving'));
       } finally {
         setIsLoading(false);
@@ -378,7 +383,8 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
     try {
       await onSubmit(submitData);
       onCancel();
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = errorInfo(caught);
       setError(err.response?.data?.message || t('transactions.errorSaving'));
     } finally {
       setIsLoading(false);
@@ -692,7 +698,7 @@ export default function TransactionForm({ onSubmit, onCancel, initialData, isEdi
             <span>🎁</span>
             <span className="flex-1 text-left">{t('transactions.freeQuoteToggle', 'Quota gratuita (es. saveback, bonus broker)')}</span>
             <span className={`relative inline-flex h-5 w-9 shrink-0 rounded-full transition-colors ${isFreeQuote ? 'bg-emerald-400' : 'bg-gray-300 dark:bg-gray-600'}`}>
-              <span className={`inline-block h-5 w-5 rounded-full bg-white shadow transform transition-transform ${isFreeQuote ? 'translate-x-4' : 'translate-x-0'}`} />
+              <span className={`inline-block h-5 w-5 rounded-full bg-white shadow-sm transform transition-transform ${isFreeQuote ? 'translate-x-4' : 'translate-x-0'}`} />
             </span>
           </button>
         )}

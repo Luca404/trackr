@@ -1,6 +1,8 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import type { User } from '../types';
+import type { User as SupabaseUser } from '@supabase/supabase-js';
+import { clearSessionData } from '../services/sessionCache';
 import { supabase } from '../services/supabase';
 
 interface AuthContextType {
@@ -14,7 +16,7 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-function supabaseUserToLocal(supabaseUser: any): User {
+function supabaseUserToLocal(supabaseUser: SupabaseUser): User {
   return {
     id: supabaseUser.id,
     name: supabaseUser.email ?? supabaseUser.id,
@@ -27,35 +29,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Controlla la sessione attiva all'avvio
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) {
-        const localUser = supabaseUserToLocal(session.user);
-        setUser(localUser);
-        localStorage.setItem('access_token', session.access_token);
-        localStorage.setItem('authToken', session.access_token);
-        localStorage.setItem('user', JSON.stringify(localUser));
-      }
+    let mounted = true;
+    let revision = 0;
+    let identity: string | null = localStorage.getItem('trackr:session-owner');
+    // Supabase manages its own session. Remove the former token copies.
+    for (const key of ['access_token', 'authToken', 'user']) localStorage.removeItem(key);
+    const applySession = (next: SupabaseUser | null) => {
+      if (!mounted) return;
+      if (identity !== (next?.id ?? null)) clearSessionData();
+      identity = next?.id ?? null;
+      if (identity) localStorage.setItem('trackr:session-owner', identity);
+      else localStorage.removeItem('trackr:session-owner');
+      if (!next) clearSessionData();
+      setUser(next ? supabaseUserToLocal(next) : null);
       setIsLoading(false);
-    });
-
-    // Ascolta i cambiamenti di sessione (login, logout, refresh token)
+    };
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session?.user) {
-        const localUser = supabaseUserToLocal(session.user);
-        setUser(localUser);
-        localStorage.setItem('access_token', session.access_token);
-        localStorage.setItem('authToken', session.access_token);
-        localStorage.setItem('user', JSON.stringify(localUser));
-      } else {
-        setUser(null);
-        localStorage.removeItem('access_token');
-        localStorage.removeItem('authToken');
-        localStorage.removeItem('user');
-      }
+      revision++;
+      applySession(session?.user ?? null);
     });
-
-    return () => subscription.unsubscribe();
+    const requestedRevision = revision;
+    supabase.auth.getSession().then(({ data: { session }, error }) => {
+      if (revision === requestedRevision) applySession(error ? null : session?.user ?? null);
+    }).catch(() => { if (revision === requestedRevision) applySession(null); });
+    return () => { mounted = false; subscription.unsubscribe(); };
   }, []);
 
   const login = async (email: string, password: string) => {
@@ -69,7 +66,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = async () => {
-    await supabase.auth.signOut();
+    const { error } = await supabase.auth.signOut({ scope: 'local' });
+    if (error) throw error;
+    clearSessionData();
+    setUser(null);
     window.location.href = '/login';
   };
 

@@ -82,7 +82,7 @@ export function registerBackHandler(onBack: () => void): () => void {
 
 export default function Modal({ isOpen, onClose, onBackdropClick, title, children, noBottomOffset, disableHistoryIntercept = false }: ModalProps) {
   const onCloseRef = useRef(onClose);
-  onCloseRef.current = onClose;
+  useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
   const closedViaBackRef = useRef(false);
 
   useEffect(() => {
@@ -117,7 +117,7 @@ export default function Modal({ isOpen, onClose, onBackdropClick, title, childre
         window.history.back();
       }
     };
-  }, [isOpen]);
+  }, [isOpen, disableHistoryIntercept]);
 
   if (!isOpen) return null;
 

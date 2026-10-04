@@ -4,7 +4,7 @@ Personal finance PWA for tracking expenses, income, transfers, and investments. 
 
 Part of the **Trackrs ecosystem** — shares the same Supabase database with [pfTrackr](../portfolio-tracker) for investment portfolio analytics, and [fitTrackr](../fitness-tracker) for calorie and nutrition tracking.
 
-**Current version:** 1.0.32
+**Current version:** 1.0.41
 
 ## Features
 
@@ -14,7 +14,7 @@ Part of the **Trackrs ecosystem** — shares the same Supabase database with [pf
 - **Multi-profile** — separate data scopes (e.g. personal / freelance), switchable from Settings
 - **Categories** — with subcategories and per-period stats
 - **Accounts** — bank accounts and wallets with real-time balance calculation
-- **Portfolios** — live summaries fetched from the pfTrackr backend (Render)
+- **Portfolios** — live summaries fetched from the pfTrackr backend (Railway)
 - **Statistics** — charts and trends with a customizable date range
 - **Notification bell** — overdue recurring investment reminders with inline completion flow
 - **Kakebo import** — multi-step migration wizard with atomic server-side RPC and balance diagnostics
@@ -24,10 +24,10 @@ Part of the **Trackrs ecosystem** — shares the same Supabase database with [pf
 
 ## Stack
 
-- React 18 + TypeScript + Vite + vite-plugin-pwa (Workbox service worker) — requires Node 20+
-- Tailwind CSS (mobile-first, dark mode)
+- React 18 + TypeScript + Vite + vite-plugin-pwa (Workbox service worker) — requires Node >=22.13 (`nvm use`)
+- Tailwind CSS 4 (mobile-first, dark mode)
 - Supabase (PostgreSQL + Auth — email/password + RLS)
-- React Router 6
+- React Router 7
 - Context API — `AuthContext`, `DataContext`, `SettingsContext`
 - react-i18next (EN, IT, ES)
 
@@ -38,11 +38,12 @@ Create `.env.local`:
 ```env
 VITE_SUPABASE_URL=https://<project>.supabase.co
 VITE_SUPABASE_PUBLISHABLE_KEY=...
-VITE_PF_BACKEND_URL=https://<your-render-backend>.onrender.com
+VITE_PF_BACKEND_URL=https://portfolio-tracker-production-3bd4.up.railway.app
 ```
 
 ```bash
-npm install
+nvm use
+npm ci
 npm run dev     # → http://localhost:5174
 npm run build   # → dist/
 npm run preview
@@ -54,15 +55,15 @@ npm run preview
 # Requires Docker
 supabase start
 
-# Pull latest schema from remote
+# Inspect the shared migration ledger before any changes
 supabase link --project-ref <project-id>
-supabase db pull --schema public
-
-# Apply to local DB
-supabase db reset
+supabase migration list --linked
+supabase db push --linked --dry-run
 ```
 
 Local Supabase credentials are deterministic — reuse them in `.env.local` across machines.
+
+Trackr and FitTrackr share the hosted database. Follow [the migration workflow](supabase/README.md) for schema updates and isolated security tests. A local database reset deletes local data; it is not an update step for an existing installation. Never reset the linked hosted database.
 
 ## Project Structure
 
@@ -120,4 +121,4 @@ Account balances are computed in `DataContext` at runtime (`initial_balance` + t
 
 Deployed on **Vercel** — auto-deploys on push to `main`. Development happens on the `dev` branch.
 
-Set `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, and `VITE_PF_BACKEND_URL` as environment variables in Vercel. Update **Site URL** in Supabase Dashboard → Authentication → URL Configuration to match the production URL.
+Set `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, and `VITE_PF_BACKEND_URL` as environment variables in Vercel, and use Node 22 for builds. A different portfolio backend requires updating the CSP `connect-src` allowlist in `vercel.json`. Update **Site URL** in Supabase Dashboard → Authentication → URL Configuration to match the production URL.

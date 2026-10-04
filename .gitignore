@@ -93,3 +93,9 @@ Desktop.ini
 # Local
 # ========================
 database/
+
+# Supabase local state and data exports
+supabase/.temp/
+supabase/.branches/
+supabase/*-data.sql
+supabase/remote-public-schema.sql

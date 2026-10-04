@@ -93,13 +93,14 @@ function PeriodSelector({
         end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
         break;
 
-      case 'week':
+      case 'week': {
         const dayOfWeek = now.getDay();
         const diff = dayOfWeek === 0 ? 6 : dayOfWeek - 1; // Lunedì = inizio settimana
         start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - diff);
         end = new Date(start.getFullYear(), start.getMonth(), start.getDate() + 6, 23, 59, 59);
         break;
 
+      }
       case 'month':
         start = new Date(now.getFullYear(), now.getMonth(), 1);
         end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
