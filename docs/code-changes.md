@@ -1,6 +1,21 @@
 Implemented code changes
 ========================
 
+2026-10-04 — v1.0.41
+
+- Aligned the local checkout with main; left development/multicurrency separate.
+- Applied seven versioned migrations to local Trackr and the shared hosted Supabase; synchronized the FitTrackr migration ledger.
+- Enforced owner/editor/viewer boundaries, immutable financial identity/scope, consistent parent references, protected main profiles and authenticated invitation RPCs with rate limits.
+- Corrected FitTrackr meal-item RLS and added the entry/meal composite foreign key without deleting historical data.
+- Moved linked money/order/recurrence writes and deletions into atomic RPCs; added idempotent recurring occurrences and month-end date handling.
+- Removed redundant token storage, scoped portfolio caches to user/profile, discarded stale responses and prevented viewer initialization writes.
+- Added active-profile JSON export v2, SQLite/import limits, malformed/empty import rejection and finite financial-value checks.
+- Updated dependencies and Tailwind 4, required Node >=22.13, added Vercel security headers and external theme startup.
+- Added frontend, SQL and concurrency coverage plus CI; changed the CI database image to official PostgreSQL 17 after an ECR rate limit.
+- Published [Trackr 1.0.41](https://trackr-dusky.vercel.app); both CI jobs and production login/theme/header checks passed. See [the complete verification record](security-fixes-2026-10-04.md).
+
+Earlier entries below describe changes at their original dates, including pfTrackr work; they are not current backend audit results.
+
 2026-09-15
 
 1. Removed known frontend dependency vulnerabilities

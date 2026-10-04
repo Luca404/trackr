@@ -1,21 +1,19 @@
 Future improvements backlog
 ===========================
 
+Reviewed for main 1.0.41 on 2026-10-04. Trackr security, shared profiles and CI are implemented. Portfolio-backend items below are planning notes and require a separate pfTrackr review; that backend was not audited in this intervention. Multicurrency is explicitly deferred.
+
 Urgency order
 -------------
 
-Critical
-
 High
 - 6. Expand automated tests and runtime sanity checks for critical financial flows
-- 14. Add shared-profile support with invitations and membership-based access control
 - 3. Complete multi-profile support in portfolio-tracker
 - 4. Move portfolio summaries to a two-level caching model
 
 Medium
 - 5. Unify authentication and configuration so pfTrackr behaves like a natural extension of Trackr
 - 1. Introduce an integration layer between Trackr UI and portfolio-tracker backend
-- 8. Handle investment orders in currencies different from the linked cash account
 - 10. Use portfolio history_mode to gate analytics and incomplete-history UX
 - 11. Allow editing detected accounts, portfolios, categories, and subcategories before Kakebo import
 - 15. Generalize in-app notifications beyond recurring investment reminders
@@ -23,16 +21,19 @@ Medium
 Lower
 - 2. Clarify and clean up backend models/documentation in portfolio-tracker
 
+Deferred
+- 8. Handle investment orders in currencies different from the linked cash account (multicurrency)
+
 Priority rationale
-- `6` is next because financial regressions are currently mostly silent and not protected by tests.
-- `14` is high because shared-profile support changes data ownership and permission boundaries across the whole app.
+- `6` now means extending the existing frontend/SQL/concurrency suite and testing the external portfolio integration, rather than introducing the first tests.
+- `14` is completed on main; membership roles, invitation RPCs and security regression tests are already deployed.
 - `3` is high because profile-boundary mistakes affect data correctness, not just architecture.
 - `4` is high because portfolio summaries are core UX and current caching pushes too much correctness logic into the frontend.
 - `5` and `1` matter a lot for product cohesion and maintainability, but they are less urgent than data-safety and correctness.
-- `8` is medium because cross-currency investment cash flows can become financially wrong or confusing, but the app is still usable in same-currency scenarios.
+- `8` is deferred: multicurrency development is not part of main or the hosted security migrations.
 - `10` is medium because `history_mode` is already persisted, but analytics and UI can still work short-term before consuming it explicitly.
 - `11` is medium because the current auto-detection flow is usable, but pre-import editing would materially improve control and migration quality.
-- `15` is medium because the new notification surface now exists, but it still handles only one reminder type.
+- `15` is medium because the notification panel handles recurring investments and profile invitations; other notification types remain future work.
 - `2` is still worth doing, but it is mostly cleanup/clarification unless it uncovers hidden runtime bugs.
 
 
@@ -177,6 +178,7 @@ Current logic
 - Portfolio prices and summaries are expensive to compute because they may require ticker lookups, scraping, cached history reads, and portfolio aggregation.
 - Prices are typically daily, so a 24h cache window is a sensible optimization.
 - Local cache is also useful to avoid immediate backend refetches when switching pages and returning to the portfolio screen.
+- Since 1.0.41, summary keys include user/profile, identity changes clear caches, and stale requests are discarded. This fixes isolation; it does not introduce persisted backend summaries.
 
 Why this is a problem
 - Frontend local cache is device-specific and not shared.
@@ -347,21 +349,14 @@ Priority
 - High
 
 Status
-- Confirmed as a real problem
-- First milestone completed:
-  - backend portfolio logic tests added
-  - backend order validation tests added
-  - initial runtime sanity checks added for splits and suspicious summary states
-- Remaining work:
-  - integration tests for key endpoints
-  - multi-profile and multi-currency coverage
-  - Kakebo/import-related coverage
-  - CI automation for test execution
+- Trackr baseline completed in 1.0.41: eight frontend tests; 48 SQL assertions on the hosted schema fixture and 47 on the older local fixture; two concurrency checks; real local SDK/Auth and production browser smoke checks.
+- CI runs lint, tests, dependency audit, build and isolated PostgreSQL security/concurrency checks. See [release verification](security-fixes-2026-10-04.md).
+- Earlier backend portfolio/order tests remain historical milestones; their current coverage needs a separate pfTrackr review.
+- Remaining work: browser coverage for authenticated financial flows, external portfolio endpoints/math/pricing, broader Kakebo fixtures and multicurrency when resumed.
 
 Problem
-- There is currently little to no systematic testing around the most fragile financial logic in the ecosystem.
-- Many important flows were initially validated manually and are now mostly trusted without ongoing protection.
-- This creates a high risk of silent numerical regressions rather than obvious crashes.
+- SQL permissions, profile boundaries, invitation lifecycle, recurrence idempotency, linked-write rollback and export/import safeguards now have regression coverage.
+- The external portfolio calculations and end-to-end UI/backend integration still need separate verification; passing Trackr checks does not establish their correctness.
 
 Risk areas
 - Portfolio position aggregation from orders
@@ -405,48 +400,13 @@ Expected benefits
 - Safer refactors in pricing and portfolio logic
 - Reduced need to manually "trust" complex calculations
 
-14. Add shared-profile support with invitations and membership-based access control
-
-Priority
-- High
+14. Shared-profile support with invitations and membership-based access control
 
 Status
-- Confirmed as a meaningful next product step
-
-Problem
-- Profiles are currently owned by a single `profiles.user_id`, and all access patterns assume one owner and one active user.
-- Sharing a profile with another existing Trackr user would currently require ad-hoc duplication or unsafe permission changes.
-
-Why this matters
-- Users want to collaborate on the same household or shared finance profile.
-- The cleanest model is for multiple users to work on the same `profile_id`, not for duplicated copies to drift apart.
-- Current RLS and profile lookup logic are not ready for that.
-
-Intended direction
-- Keep one shared `profile_id`.
-- Introduce `profile_members` as the real access-control layer:
-  - `profile_id`
-  - `user_id`
-  - `role` such as `owner` / `editor`
-- Introduce `profile_share_invitations`:
-  - `profile_id`
-  - `invited_email`
-  - `invited_user_id`
-  - `invited_by`
-  - `status`
-  - timestamps
-- Backfill current owners into `profile_members`.
-- Update RLS and profile queries so access is granted through membership, not only through `profiles.user_id`.
-- Add UI in Settings > Profiles:
-  - share button
-  - invite by email
-  - accept / reject flow
-  - eventual response feedback to the inviter
-
-Expected benefits
-- Real collaborative profiles
-- Cleaner permission model
-- Better foundation for future roles and profile-level collaboration features
+- Completed on main; security hardening deployed in 1.0.41.
+- Settings manages profile invitations and owner/editor/viewer memberships; the notification panel supports accept/reject. Owners can cancel invitations and manage other members; non-owners can leave.
+- RLS enforces member reads and editor/actual-owner writes. Direct invitation writes and owner promotion are restricted; RPCs handle recipient identity, rate limits and acceptance locking.
+- Current implementation and tests: [security release record](security-fixes-2026-10-04.md). The April design/plan is historical and must not be replayed as current SQL.
 
 15. Generalize in-app notifications beyond recurring investment reminders
 
@@ -457,18 +417,18 @@ Status
 - Confirmed as a useful follow-up now that a notification surface exists
 
 Problem
-- The current top-bar notification panel is intentionally generic in layout, but today it only handles recurring investment reminders.
+- The current top-bar notification panel handles recurring investment reminders and incoming profile invitations.
 - Future reminder and collaboration flows will need the same surface.
 
 Why this matters
-- Profile-sharing invitations are a natural next consumer of notifications.
+- Profile-sharing invitations already use this notification surface.
 - Other future actions may also fit there:
   - import/share responses
   - pending confirmations
   - finance sanity warnings
 
 Intended direction
-- Evolve the current bell panel from a single-purpose investment reminder list into a generic in-app notification center.
+- Extend the current bell panel beyond its existing investment and invitation types.
 - Define notification types, payload shapes, and dismissal/completion semantics per type.
 - Keep recurring investment completion as one notification class among several.
 

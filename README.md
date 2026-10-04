@@ -2,7 +2,7 @@
 
 Personal finance PWA for tracking expenses, income, transfers, and investments. Data is stored in Supabase — sign in from any device.
 
-Part of the **Trackrs ecosystem** — shares the same Supabase database with [pfTrackr](../portfolio-tracker) for investment portfolio analytics, and [fitTrackr](../fitness-tracker) for calorie and nutrition tracking.
+Part of the **Trackrs ecosystem** — shares the same Supabase database with [pfTrackr](https://github.com/Luca404/portfolio-tracker) for investment portfolio analytics, and [fitTrackr](https://github.com/Luca404/fitness-tracker) for calorie and nutrition tracking.
 
 **Current version:** 1.0.41
 
@@ -12,13 +12,14 @@ Part of the **Trackrs ecosystem** — shares the same Supabase database with [pf
 - **Recurring transactions** — weekly, monthly, yearly — auto-generated with catchup on login; recurring investments require manual confirmation before execution
 - **Investment orders** — linked to pfTrackr portfolios with buy/sell validation; free quote support for gifted shares (saveback, broker bonuses)
 - **Multi-profile** — separate data scopes (e.g. personal / freelance), switchable from Settings
+- **Shared profiles** — owner/editor/viewer roles, email invitations, accept/reject/cancel and membership management; viewer access is read-only at database level
 - **Categories** — with subcategories and per-period stats
 - **Accounts** — bank accounts and wallets with real-time balance calculation
 - **Portfolios** — live summaries fetched from the pfTrackr backend (Railway)
 - **Statistics** — charts and trends with a customizable date range
 - **Notification bell** — overdue recurring investment reminders with inline completion flow
 - **Kakebo import** — multi-step migration wizard with atomic server-side RPC and balance diagnostics
-- **Backup** — export all data as JSON
+- **Backup** — JSON v2 export of the active financial profile, all eight financial entity sets and their IDs/relationships; excludes Auth, fitness and invitations; no JSON restore UI
 - **i18n** — English, Italian, Spanish
 - **Installable PWA** — works as a native app on Android, iOS, and desktop
 
@@ -61,7 +62,7 @@ supabase migration list --linked
 supabase db push --linked --dry-run
 ```
 
-Local Supabase credentials are deterministic — reuse them in `.env.local` across machines.
+For local development, use the URL and publishable key reported by `supabase status`; check them on each installation. `.env.example` uses the local API at `http://127.0.0.1:54321`, which is separate from the hosted database. Keep `.env.local` out of Git.
 
 Trackr and FitTrackr share the hosted database. Follow [the migration workflow](supabase/README.md) for schema updates and isolated security tests. A local database reset deletes local data; it is not an update step for an existing installation. Never reset the linked hosted database.
 
@@ -94,7 +95,8 @@ src/
 ├── services/
 │   ├── api.ts             # All Supabase CRUD + portfolio summary cache
 │   ├── supabase.ts        # Supabase client factory
-│   └── recurring.ts       # Shared recurring rule helpers (date math, payload builders)
+│   ├── recurring.ts       # Shared recurring rule helpers (date math, payload builders)
+│   └── sessionCache.ts    # User/profile cache keys, cleanup and stale-response guards
 ├── locales/               # en.json, it.json, es.json
 └── types/index.ts
 ```
@@ -105,6 +107,8 @@ All data is **profile-scoped**. Each user can have multiple profiles (e.g. perso
 
 Key tables: `profiles`, `accounts`, `categories`, `subcategories`, `transactions`, `transfers`, `recurring_transactions`, `portfolios`, `orders`.
 
+`profile_members` controls shared-profile access. Members can read; editors and the actual owner can write. Financial rows keep immutable identity/profile fields and validate parent references within the same profile. Invitation changes use authenticated RPCs. Supabase owns session persistence; application caches are scoped to user/profile and cleared when identity changes.
+
 Investment transactions link to `orders` in pfTrackr via `transaction_id`. **Free quotes** (saveback, broker bonuses) create an `orders` row only — no `transactions` row, no cash debit.
 
 Account balances are computed in `DataContext` at runtime (`initial_balance` + transactions + transfers) — not stored in the DB.
@@ -114,11 +118,15 @@ Account balances are computed in `DataContext` at runtime (`initial_balance` + t
 1. Select the **Investment** tab → choose a portfolio
 2. Fill in ticker/ISIN, quantity, price, commission, order type (buy/sell)
 3. Optionally toggle **Free quote** — hides the account selector; creates only a portfolio order
-4. On submit: creates a `transactions` row + a linked `orders` row (or orders-only for free quotes)
+4. On submit: an atomic RPC creates/updates the transaction, linked order and optional recurrence (free quotes remain orders-only); linked edits and deletions are atomic too
 5. Free quotes appear in the Transactions list with a 🎁 badge and are editable/deletable
 
 ## Deployment
 
-Deployed on **Vercel** — auto-deploys on push to `main`. Development happens on the `dev` branch.
+Deployed on **Vercel** at [trackr-dusky.vercel.app](https://trackr-dusky.vercel.app) — auto-deploys on push to `main`. Development happens on the `dev` branch. Multicurrency remains deferred and is not part of the `main` release or the shared security migrations.
 
 Set `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, and `VITE_PF_BACKEND_URL` as environment variables in Vercel, and use Node 22 for builds. A different portfolio backend requires updating the CSP `connect-src` allowlist in `vercel.json`. Update **Site URL** in Supabase Dashboard → Authentication → URL Configuration to match the production URL.
+
+## Checks and documentation
+
+Run `npm run lint -- --max-warnings=0`, `npm test`, `npm audit --audit-level=low` and `npm run build`. GitHub Actions runs these checks plus SQL permission/integrity/concurrency tests in isolated PostgreSQL 17, without connecting to production. See the [documentation index](docs/README.md) for the release record, known issues, backlog and shared-database workflow.

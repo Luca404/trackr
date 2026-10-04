@@ -1,5 +1,7 @@
 # Profili Condivisibili Implementation Plan
 
+> Documento storico del progetto iniziale. La condivisione è implementata e corretta su main 1.0.41; vedere [lo stato pubblicato](../../security-fixes-2026-10-04.md). Gli esempi SQL, le istruzioni e le checkbox qui sotto descrivono il piano originale e non vanno rieseguiti: usare le migrazioni versionate correnti.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Permettere agli utenti Trackr di condividere un profilo con altri utenti esistenti, assegnando ruolo `editor` (lettura+scrittura) o `viewer` (sola lettura), con inviti in-app via email e controllo accessi applicato a livello RLS su Supabase.

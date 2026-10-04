@@ -1,8 +1,10 @@
 # Profili Condivisibili — Design Spec
 
+> Documento storico del progetto iniziale. La condivisione è implementata e corretta su main 1.0.41; vedere [lo stato pubblicato](../../security-fixes-2026-10-04.md). Gli esempi SQL, le istruzioni e le checkbox qui sotto descrivono il piano originale e non vanno rieseguiti: usare le migrazioni versionate correnti.
+
 **Data**: 2026-04-14  
 **Progetto**: Trackr PWA  
-**Stato**: Approvato, pronto per implementazione
+**Stato storico**: design approvato; funzionalità implementata e successivamente corretta (vedere la nota sopra)
 
 ---
 

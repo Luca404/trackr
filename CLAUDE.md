@@ -21,7 +21,7 @@ npm test
 ```env
 VITE_SUPABASE_URL=https://...
 VITE_SUPABASE_PUBLISHABLE_KEY=...       # anon/publishable key
-VITE_PF_BACKEND_URL=https://...  # portfolio-tracker backend on Render
+VITE_PF_BACKEND_URL=https://portfolio-tracker-production-3bd4.up.railway.app
 ```
 
 ## Architecture
@@ -37,12 +37,12 @@ Component / Page
 - **No Redux/Zustand**: all global state in React Contexts (AuthContext, DataContext, SettingsContext).
 - **`current_balance`** on accounts is NOT a DB column — DataContext calculates it from `initial_balance` + transactions + transfers on every update.
 - **Writes**: transaction/order/recurrence changes use atomic PostgreSQL RPCs.
-- **Optimistic UI**: pages call `apiService.create/update/delete*()` then update DataContext optimistically.
+- **UI after writes**: pages await the API result, then update or refresh DataContext; stale callbacks cannot repopulate another user/profile view.
 
 ## Profile system
 
 - `get_my_profiles()` RPC is the **single entrypoint at startup** — repairs missing membership, creates profile if absent.
-- `profile_members` is the **source of truth for permissions** (owner/editor/viewer). All RLS uses `is_profile_member()`.
+- `profile_members` controls owner/editor/viewer access. Financial SELECT policies use `is_profile_member()`; writes use `trackr_private.can_write_profile()` and validate the real profile owner, immutable scope and parent references. Other tables have their own policies.
 - Active profile stored in `localStorage['activeProfileId']` and `apiService._activeProfileId`. Call `apiService.setActiveProfile(id)` before any query — `DataContext.fetchAllData` does this automatically.
 - Main profile (`id = user_id`) is not deletable.
 - Profile INSERT creates owner membership through `trackr_private.create_owner_membership`; `get_my_profiles()` remains a repair safety net.
@@ -64,28 +64,28 @@ Component / Page
 
 ## Version bump
 
-`APP_MAJOR`, `APP_MINOR`, `APP_PATCH` are hardcoded constants in `vite.config.ts`. **Increment `APP_PATCH` before every push to main.** Version shown in header. `version.json` generated at build time by a Vite plugin (not tracked in `public/`).
+`APP_MAJOR`, `APP_MINOR`, `APP_PATCH` are hardcoded constants in `vite.config.ts`; current release is 1.0.41. Increment `APP_PATCH` and update release notes for frontend releases. Documentation/CI-only commits do not require a new application version. Version shown in header. `version.json` generated at build time by a Vite plugin (not tracked in `public/`).
 
 ## Default data
 
-On first login (empty accounts or categories):
+On loading a writable owner/editor profile with empty accounts or categories (never for viewers):
 - Creates "Conto Corrente" + "Contanti" accounts.
 - Creates default expense + income categories (NOT investment).
 - Logic in `DataContext.fetchAllData` → `apiService.createDefaultAccounts()` / `createDefaultCategories(existing)`.
 
 ## Investment transactions
 
-- Delete order **before** linked transaction (`deleteOrderByTransactionId` then `deleteTransaction`). FK `orders.transaction_id → transactions.id` is `ON DELETE SET NULL` — deleting transaction first makes order unfindable.
+- Use `save_financial_transaction`, `save_financial_order` and `delete_financial_transaction/order/portfolio` RPCs for linked writes/deletes. Do not compose separate client writes for a financial operation. Recurrence processing uses a profile lock and unique occurrence identity for retries.
 - `category_type = 'investment'` does not exist. Investment transactions use a portfolio name as `category`.
-- Portfolio summaries cached in `localStorage['pf_summaries_cache']` with 24h TTL (5 min if all values = 0).
+- Portfolio summaries cached under `trackr:portfolio-summaries:<userId>:<profileId>` with 24h TTL (5 min if all values = 0). The old `pf_summaries_cache` key is removed during cleanup.
 
 ## Deployment
 
-Vercel, auto-deploy on `git push main`. Repo: `github.com/Luca404/trackr`.
+Vercel, auto-deploy on push to `main`; production: `https://trackr-dusky.vercel.app`. Repo: `github.com/Luca404/trackr`. Node 22, publishable-key env var and CSP backend allowlist must match production. Security migrations are already applied to the local and hosted DB; do not replay them.
 
 ## Known issues
 
-See `docs/known-issues.md`. Change log: `docs/code-changes.md`. Improvements backlog: `docs/future-improvements.md`.
+See `docs/README.md` for current docs and historical plans. Known issues: `docs/known-issues.md`; change log: `docs/code-changes.md`; improvements backlog: `docs/future-improvements.md`.
 
 ## Supabase
 
