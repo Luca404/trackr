@@ -30,7 +30,7 @@ jobs:
         run: >-
           docker run -d --name supabase_db_trackr
           -e POSTGRES_PASSWORD=test-only-password
-          public.ecr.aws/supabase/postgres:17.6.1.084
+          postgres:17
       - name: Wait for PostgreSQL
         run: |
           for i in {1..30}; do
