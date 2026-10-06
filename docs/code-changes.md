@@ -1,6 +1,14 @@
 Implemented code changes
 ========================
 
+2026-10-06 — v1.0.43 (prepared locally)
+
+- Wake Render at authenticated startup and prefetch active-profile investment summaries and portfolio details through a single queue. Prioritize the open portfolio and reuse in-flight requests.
+- Share validated summary/detail/history caches across pages and sessions, retain expired data during refresh, and cancel stale requests on invalidation/profile changes. Manual refresh reloads Supabase and visible investment data without waiting for every background detail.
+- Replace the portfolio detail with a mobile overview: value/gain hero, net capital, position count, XIRR, value/performance history, allocation by market value/type and expandable named positions. Desktop retains a table.
+- Normalize backend `portfolio_xirr` and day-month-year history dates; respect `positions_only`, price failures and currency boundaries. Invalidate after successful financial writes, including transaction deletion and portfolio edits.
+- Verification and remaining backend limits are documented in [the investment release notes](investments-1.0.43.md). No database/backend changes or deployment are included.
+
 2026-10-06 — CI security follow-up
 
 - Updated only the transitive `source-map-js` lockfile entry from 1.2.1 to 1.2.2 to address GHSA-68fv-2mgg-jv7q and restore the CI audit check.

@@ -253,8 +253,8 @@ export default function TransactionsPage() {
       return;
     }
     if (selectedTransaction) {
-      if (selectedTransaction.type === 'investment') clearPortfolioCache();
       await apiService.deleteTransaction(selectedTransaction.id);
+      if (selectedTransaction.type === 'investment') clearPortfolioCache();
       deleteTransactionCache(selectedTransaction.id);
       await refreshTransactions();
       if (selectedTransaction.type === 'investment') {

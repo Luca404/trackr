@@ -1,7 +1,7 @@
 Future improvements backlog
 ===========================
 
-Reviewed for main 1.0.41 on 2026-10-04. Trackr security, shared profiles and CI are implemented. Portfolio-backend items below are planning notes and require a separate pfTrackr review; that backend was not audited in this intervention. Multicurrency is explicitly deferred.
+Reviewed for main 1.0.41 on 2026-10-04; frontend progress updated for the local 1.0.43 investment changes on 2026-10-06. Trackr security, shared profiles and CI are implemented. Portfolio-backend items below are planning notes and require a separate pfTrackr review; that backend was not audited in this intervention. Multicurrency is explicitly deferred.
 
 Urgency order
 -------------
@@ -14,7 +14,7 @@ High
 Medium
 - 5. Unify authentication and configuration so pfTrackr behaves like a natural extension of Trackr
 - 1. Introduce an integration layer between Trackr UI and portfolio-tracker backend
-- 10. Use portfolio history_mode to gate analytics and incomplete-history UX
+- 10. Extend history_mode gating to pfTrackr analytics (Trackr overview completed)
 - 11. Allow editing detected accounts, portfolios, categories, and subcategories before Kakebo import
 - 15. Generalize in-app notifications beyond recurring investment reminders
 
@@ -31,7 +31,7 @@ Priority rationale
 - `4` is high because portfolio summaries are core UX and current caching pushes too much correctness logic into the frontend.
 - `5` and `1` matter a lot for product cohesion and maintainability, but they are less urgent than data-safety and correctness.
 - `8` is deferred: multicurrency development is not part of main or the hosted security migrations.
-- `10` is medium because `history_mode` is already persisted, but analytics and UI can still work short-term before consuming it explicitly.
+- `10`: Trackr now consumes `history_mode`; the remaining work concerns other/backend analytics.
 - `11` is medium because the current auto-detection flow is usable, but pre-import editing would materially improve control and migration quality.
 - `15` is medium because the notification panel handles recurring investments and profile invitations; other notification types remain future work.
 - `2` is still worth doing, but it is mostly cleanup/clarification unless it uncovers hidden runtime bugs.
@@ -52,7 +52,7 @@ Problem
 - This makes the boundary between `trackr` and `portfolio-tracker` blurry and spreads integration logic across the UI.
 
 Current examples
-- `src/pages/PortfoliosPage.tsx`
+- Portfolio summaries/details now use `portfolioApi` and `portfolioData` (1.0.43); remaining instrument lookup/import callers include:
 - `src/components/transactions/TransactionForm.tsx`
 - `src/components/KakeboImport.tsx`
 
@@ -182,8 +182,8 @@ Current logic
 
 Why this is a problem
 - Frontend local cache is device-specific and not shared.
-- The page owns too much summary lifecycle logic.
-- Cache invalidation is scattered and manually maintained.
+- Since 1.0.43, a shared frontend store owns summary/detail/history lifecycle, cancellation and refresh; centrally persisted backend summaries remain outstanding.
+- Financial writes call shared invalidation; backend/DB invalidation across devices remains outstanding.
 - The UI is compensating for backend cost/latency rather than consuming a stable summary layer.
 
 Intended direction
@@ -295,7 +295,7 @@ Current situation
 - Creation flows already set it to:
   - `full_orders`
   - `positions_only`
-- The portfolio UI and analytics logic do not yet consume it.
+- Since 1.0.43, the Trackr overview hides XIRR and performance for `positions_only` and explains incomplete history. Other/backend analytics still need equivalent handling.
 
 Why this matters
 - Users need a clear distinction between portfolios with full historical orders and portfolios that only represent current positions.

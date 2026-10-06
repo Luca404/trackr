@@ -4,7 +4,7 @@ Personal finance PWA for tracking expenses, income, transfers, and investments. 
 
 Part of the **Trackrs ecosystem** — shares the same Supabase database with [pfTrackr](https://github.com/Luca404/portfolio-tracker) for investment portfolio analytics, and [fitTrackr](https://github.com/Luca404/fitness-tracker) for calorie and nutrition tracking.
 
-**Current version:** 1.0.42
+**Current version:** 1.0.43
 
 ## Features
 
@@ -15,7 +15,7 @@ Part of the **Trackrs ecosystem** — shares the same Supabase database with [pf
 - **Shared profiles** — owner/editor/viewer roles, email invitations, accept/reject/cancel and membership management; viewer access is read-only at database level
 - **Categories** — with subcategories and per-period stats
 - **Accounts** — bank accounts and wallets with real-time balance calculation
-- **Portfolios** — live summaries fetched from the pfTrackr backend (Render)
+- **Portfolios** — Render startup warmup, background summary/detail loading, shared cache and manual refresh; mobile overview with history, allocation and expandable positions
 - **Statistics** — charts and trends with a customizable date range
 - **Notification bell** — overdue recurring investment reminders with inline completion flow
 - **Kakebo import** — multi-step migration wizard with atomic server-side RPC and balance diagnostics
@@ -93,7 +93,9 @@ src/
 │   ├── PortfoliosPage.tsx
 │   └── SettingsPage.tsx
 ├── services/
-│   ├── api.ts             # All Supabase CRUD + portfolio summary cache
+│   ├── api.ts             # Supabase CRUD and financial RPCs
+│   ├── portfolioApi.ts    # Authenticated investment requests and order metadata
+│   ├── portfolioData.ts   # Shared queue, summary/detail cache and invalidation
 │   ├── supabase.ts        # Supabase client factory
 │   ├── recurring.ts       # Shared recurring rule helpers (date math, payload builders)
 │   └── sessionCache.ts    # User/profile cache keys, cleanup and stale-response guards

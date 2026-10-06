@@ -2,9 +2,9 @@ import { createContext, useContext, useState, useEffect, useRef, type ReactNode 
 import i18n from '../i18n';
 import { apiService } from '../services/api';
 import { useAuth } from './AuthContext';
-import { RequestGate, portfolioCacheKey, clearPortfolioCache } from '../services/sessionCache';
+import { RequestGate, clearPortfolioCache } from '../services/sessionCache';
 import { supabase } from '../services/supabase';
-import { PF_BACKEND_URL } from '../config';
+import { portfolioData } from '../services/portfolioApi';
 import type { Account, Category, Transaction, Transfer, Portfolio, UserProfile, Order, ProfileInvitation } from '../types';
 
 interface DataContextType {
@@ -75,9 +75,6 @@ interface DataContextType {
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
-const SUMMARIES_CACHE_TTL = 24 * 60 * 60 * 1000;
-const SUMMARIES_CACHE_TTL_EMPTY = 5 * 60 * 1000;
-
 interface DataProviderProps {
   children: ReactNode;
 }
@@ -128,60 +125,6 @@ export function DataProvider({ children }: DataProviderProps) {
     });
   }, [transactions, transfers, isInitialized]);
 
-  // Prefetch portfolio summaries in background after init so PortfoliosPage finds warm cache
-  useEffect(() => {
-    if (!isInitialized || portfolios.length === 0 || !activeProfile || !user) return;
-    const generation = gate.current.current();
-    const controller = new AbortController();
-    const SUMMARIES_CACHE_KEY = portfolioCacheKey(user.id, activeProfile.id);
-    try {
-      const raw = localStorage.getItem(SUMMARIES_CACHE_KEY);
-      if (raw) {
-        const { time, ttl } = JSON.parse(raw);
-        if (Date.now() - time < (ttl ?? SUMMARIES_CACHE_TTL)) return;
-      }
-    } catch { /* Optional cache may be unavailable or corrupt. */ }
-    (async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session?.access_token || session.user.id !== user.id || !gate.current.accepts(generation)) return;
-        const res = await fetch(
-          `${PF_BACKEND_URL}/portfolios?profile_id=${activeProfile.id}`,
-          { headers: { Authorization: `Bearer ${session.access_token}` }, signal: controller.signal },
-        );
-        const json = res.ok ? await res.json() : null;
-        if (!json?.portfolios || !gate.current.accepts(generation)) return;
-        const map: Record<number, object> = {};
-        for (const p of json.portfolios) {
-          if (!portfolios.some(visible => visible.id === p.id)) continue;
-          map[p.id] = {
-            total_value: p.total_value ?? 0,
-            total_cost: p.total_cost ?? 0,
-            total_gain_loss: p.total_gain_loss ?? 0,
-            total_gain_loss_pct: p.total_gain_loss_pct ?? 0,
-            positions_count: p.positions_count ?? 0,
-            xirr: p.xirr ?? null,
-            reference_currency: p.reference_currency ?? 'EUR',
-          };
-        }
-        const priceFetchFailed = Object.values(map).some(
-          (s) => (s as { total_value: number; total_cost: number }).total_value === 0 &&
-                  (s as { total_value: number; total_cost: number }).total_cost > 0
-        );
-        if (!priceFetchFailed) {
-          const allTrulyEmpty = Object.values(map).length > 0 &&
-            Object.values(map).every((s) => (s as { total_value: number }).total_value === 0);
-          localStorage.setItem(SUMMARIES_CACHE_KEY, JSON.stringify({
-            time: Date.now(),
-            ttl: allTrulyEmpty ? SUMMARIES_CACHE_TTL_EMPTY : SUMMARIES_CACHE_TTL,
-            data: map,
-          }));
-        }
-      } catch { /* Optional cache may be unavailable or corrupt. */ }
-    })();
-    return () => controller.abort();
-  }, [isInitialized, portfolios, activeProfile, user]);
-
   const fetchAllData = (preferred?: UserProfile): Promise<void> => {
     if (!user) return Promise.resolve();
     const key = `${user.id}:${preferred?.id ?? apiService.getActiveProfileIdSafe() ?? ''}`;
@@ -203,6 +146,12 @@ export function DataProvider({ children }: DataProviderProps) {
         apiService.setActiveProfile(resolved.id);
         setActiveProfile(resolved);
         const profileId = resolved.id;
+        // Start investment loading as soon as the profile is known, without
+        // waiting for defaults, recurrences or the rest of the financial data.
+        const portfolioPromise = apiService.getPortfolios(profileId);
+        void portfolioPromise.then(rows => {
+          if (gate.current.accepts(generation)) portfolioData.setScope(user.id, profileId, rows.map(p => p.id));
+        }).catch(() => {});
         const [accountsData, categoriesData] = await Promise.all([apiService.getAccounts(profileId), apiService.getCategories(profileId)]);
         if (!gate.current.accepts(generation)) return;
         const language = i18n.language?.slice(0, 2);
@@ -216,15 +165,20 @@ export function DataProvider({ children }: DataProviderProps) {
         const finalCategories = writable && (!hasExpense || !hasIncome)
           ? await apiService.createDefaultCategories(categoriesData, lang, profileId) : categoriesData;
         if (!gate.current.accepts(generation)) return;
-        if (writable) await apiService.processRecurringTransactions(profileId);
+        if (writable) {
+          const generated = await apiService.processRecurringTransactions(profileId);
+          if (!gate.current.accepts(generation)) return;
+          if (generated.length) clearPortfolioCache(false);
+        }
         const [tx, tr, pf, orders] = await Promise.all([
           apiService.getTransactions(undefined, profileId), apiService.getTransfers(undefined, profileId),
-          apiService.getPortfolios(profileId), apiService.getFreeOrders(profileId),
+          portfolioPromise, apiService.getFreeOrders(profileId),
         ]);
         if (!gate.current.accepts(generation)) return;
         setAccounts(finalAccounts); setCategories(finalCategories);
         setTransactions(tx); setTransfers(tr); setPortfolios(pf); setFreeOrders(orders);
         setIsInitialized(true);
+        portfolioData.prefetch();
       } catch (error) {
         if (gate.current.accepts(generation)) {
           setIsInitialized(false);
@@ -270,12 +224,16 @@ export function DataProvider({ children }: DataProviderProps) {
     const data = await apiService.getFreeOrders();
     if (gate.current.accepts(generation)) setFreeOrders(data);
   };
-  const refreshAll = async () => { clearPortfolioCache(); await fetchAllData(); };
+  const refreshAll = async () => {
+    clearPortfolioCache(false);
+    await fetchAllData();
+    await portfolioData.settleVisible();
+  };
   const clearCache = () => {
     gate.current.invalidate(); fetchRef.current = null;
     setAccounts([]); setCategories([]); setTransactions([]); setTransfers([]);
     setFreeOrders([]); setPortfolios([]); setUserProfiles([]); setActiveProfile(null);
-    setPendingInvitations([]); apiService.clearActiveProfile(); clearPortfolioCache();
+    setPendingInvitations([]); apiService.clearActiveProfile(); portfolioData.reset();
     setIsInitialized(false);
   };
 
@@ -285,18 +243,26 @@ export function DataProvider({ children }: DataProviderProps) {
     const savedProfile = localStorage.getItem('activeProfileId');
     clearCache();
     if (user && savedProfile) localStorage.setItem('activeProfileId', savedProfile);
-    if (user) void fetchAllData().catch(() => {});
+    if (user) {
+      portfolioData.warm(user.id);
+      void fetchAllData().catch(() => {});
+    }
     else setIsLoading(false);
     return () => { requestGate.invalidate(); fetchRef.current = null; };
     // Authentication changes, rather than each state update, start a new data generation.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
 
+  useEffect(() => {
+    if (user && activeProfile && isInitialized) portfolioData.setScope(user.id, activeProfile.id, portfolios.map(p => p.id));
+  }, [user, activeProfile, isInitialized, portfolios]);
+
   // Profile operations
 
   const switchProfile = async (profile: UserProfile) => {
     if (!userProfiles.some(p => p.id === profile.id)) throw new Error('Profilo non accessibile');
     gate.current.invalidate(); fetchRef.current = null;
+    portfolioData.reset();
     apiService.setActiveProfile(profile.id); setActiveProfile(profile);
     setAccounts([]); setCategories([]); setTransactions([]); setTransfers([]);
     setFreeOrders([]); setPortfolios([]); setIsInitialized(false);

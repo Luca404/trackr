@@ -1,6 +1,8 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DataProvider, useData } from '../src/contexts/DataContext';
+import { portfolioData } from '../src/services/portfolioApi';
+import { PORTFOLIO_DATA_PREFIX } from '../src/services/portfolioData';
 import { clearSessionData, portfolioCacheKey } from '../src/services/sessionCache';
 
 const state = vi.hoisted(() => ({ user: { id: 'alice' } as { id: string } | null, profile: null as string | null }));
@@ -44,9 +46,26 @@ beforeEach(() => {
   api.getCategories.mockResolvedValue([{ id: 1, category_type: 'expense' }, { id: 2, category_type: 'income' }]);
   for (const method of [api.getTransactions, api.getTransfers, api.getPortfolios, api.getFreeOrders, api.processRecurringTransactions]) method.mockResolvedValue([]);
 });
-afterEach(cleanup);
+afterEach(() => { cleanup(); portfolioData.reset(); vi.restoreAllMocks(); });
 
 describe('profile and session boundaries', () => {
+  it('wakes Render before resolving the profile and starts portfolio prefetch before core data finishes', async () => {
+    const profileRequest = deferred<typeof profiles>();
+    const coreRequest = deferred<ReturnType<typeof account>[]>();
+    api.getProfiles.mockReturnValue(profileRequest.promise);
+    api.getAccounts.mockReturnValue(coreRequest.promise);
+    api.getPortfolios.mockResolvedValue([{ id: 7 }]);
+    const warm = vi.spyOn(portfolioData, 'warm').mockImplementation(() => {});
+    const scope = vi.spyOn(portfolioData, 'setScope').mockImplementation(() => {});
+    render(<DataProvider><Probe /></DataProvider>);
+    expect(warm).toHaveBeenCalledWith('alice');
+    expect(scope).not.toHaveBeenCalled();
+    await act(async () => { profileRequest.resolve(profiles); });
+    await waitFor(() => expect(scope).toHaveBeenCalledWith('alice', 'a', [7]));
+    expect(value().initialized).toBe(false);
+    await act(async () => { coreRequest.resolve([account(1)]); });
+    expect(value().initialized).toBe(true);
+  });
   it('discards data returned by a request after logout', async () => {
     const pending = deferred<ReturnType<typeof account>[]>();
     api.getAccounts.mockReturnValue(pending.promise);
@@ -84,10 +103,10 @@ describe('profile and session boundaries', () => {
   it('keeps portfolio caches distinct by user and profile and removes them at logout', () => {
     const alice = portfolioCacheKey('alice', 'a'), bob = portfolioCacheKey('bob', 'a'), other = portfolioCacheKey('alice', 'b');
     expect(new Set([alice, bob, other]).size).toBe(3);
-    for (const key of [alice, bob, other, 'pf_summaries_cache', 'access_token', 'authToken', 'user', 'activeProfileId']) localStorage.setItem(key, 'private');
+    for (const key of [alice, bob, other, `${PORTFOLIO_DATA_PREFIX}alice:a:1`, 'pf_summaries_cache', 'access_token', 'authToken', 'user', 'activeProfileId']) localStorage.setItem(key, 'private');
     localStorage.setItem('theme', 'dark'); sessionStorage.setItem('trackr_pending_investment_notification', 'private');
     clearSessionData();
-    for (const key of [alice, bob, other, 'access_token', 'authToken', 'user', 'activeProfileId']) expect(localStorage.getItem(key)).toBeNull();
+    for (const key of [alice, bob, other, `${PORTFOLIO_DATA_PREFIX}alice:a:1`, 'access_token', 'authToken', 'user', 'activeProfileId']) expect(localStorage.getItem(key)).toBeNull();
     expect(sessionStorage.getItem('trackr_pending_investment_notification')).toBeNull();
     expect(localStorage.getItem('theme')).toBe('dark');
   });

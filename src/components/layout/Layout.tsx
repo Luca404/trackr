@@ -1,4 +1,4 @@
-import { clearPortfolioCache, RequestGate } from '../../services/sessionCache';
+import { RequestGate } from '../../services/sessionCache';
 import { type ReactNode, useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
@@ -31,6 +31,8 @@ export default function Layout({ children }: LayoutProps) {
   const { user } = useAuth();
   const { refreshAll, initializationError, activeProfile, portfolios, pendingInvitations, acceptInvitation, rejectInvitation } = useData();
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [refreshError, setRefreshError] = useState(false);
+  const refreshInProgress = useRef(false);
   const { t } = useTranslation();
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [investmentNotifications, setInvestmentNotifications] = useState<InvestmentNotificationItem[]>([]);
@@ -138,12 +140,20 @@ export default function Layout({ children }: LayoutProps) {
   }, [location.pathname]);
 
   const handleRefresh = async () => {
+    if (refreshInProgress.current) return;
+    refreshInProgress.current = true;
     setIsRefreshing(true);
-    swRegistrationRef.current?.update();
-    await refreshAll();
-    await loadInvestmentNotifications();
-    window.dispatchEvent(new CustomEvent('trackr:refresh'));
-    setIsRefreshing(false);
+    setRefreshError(false);
+    void swRegistrationRef.current?.update().catch(() => {});
+    try {
+      await refreshAll();
+      window.dispatchEvent(new CustomEvent('trackr:refresh'));
+    } catch {
+      setRefreshError(true);
+    } finally {
+      refreshInProgress.current = false;
+      setIsRefreshing(false);
+    }
   };
 
   const handleNotificationClick = (item: InvestmentNotificationItem) => {
@@ -168,9 +178,7 @@ export default function Layout({ children }: LayoutProps) {
     await apiService.createTransaction({
       ...data, recurring_id: selectedNotification.rule.id, recurrence: undefined,
     }, selectedNotification.rule.next_due_date);
-    clearPortfolioCache();
     await refreshAll();
-    await loadInvestmentNotifications();
     window.dispatchEvent(new CustomEvent('trackr:refresh'));
     closeNotificationModal();
   };
@@ -404,8 +412,11 @@ export default function Layout({ children }: LayoutProps) {
             </div>
             <button
               onClick={handleRefresh}
+              disabled={isRefreshing}
+              aria-label={t('portfolioData.refresh')}
+              aria-busy={isRefreshing}
               className="inline-flex h-6 w-6 items-center justify-center text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 transition-colors"
-              title="Refresh"
+              title={t('portfolioData.refresh')}
             >
               <svg className={`w-6 h-6 ${isRefreshing ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -430,6 +441,11 @@ export default function Layout({ children }: LayoutProps) {
         className="flex-1 w-full overflow-y-auto overscroll-y-none"
       >
         <div className="max-w-7xl mx-auto px-4 py-3">
+          {refreshError && (
+            <div role="alert" className="mb-3 rounded-xl bg-amber-50 p-3 text-sm text-amber-800 dark:bg-amber-900/20 dark:text-amber-300">
+              {t('portfolioData.refreshError')}
+            </div>
+          )}
           {activeProfile?.role === 'viewer' && (
             <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg px-4 py-2 mb-3 text-xs text-amber-700 dark:text-amber-400 flex items-center gap-2">
               <span>👁️</span>

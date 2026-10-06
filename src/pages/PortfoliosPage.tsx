@@ -1,9 +1,7 @@
-import { useAuth } from '../contexts/AuthContext';
-import { clearPortfolioCache, portfolioCacheKey } from '../services/sessionCache';
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { clearPortfolioCache } from '../services/sessionCache';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiService } from '../services/api';
-import { supabase } from '../services/supabase';
 import { useData } from '../contexts/DataContext';
 import Layout from '../components/layout/Layout';
 import Modal from '../components/common/Modal';
@@ -14,27 +12,17 @@ import { useConfirm } from '../hooks/useConfirm';
 import type { Portfolio, PortfolioFormData, Order, OrderFormData } from '../types';
 import { useTranslation } from 'react-i18next';
 import { useSettings } from '../contexts/SettingsContext';
-import { PF_BACKEND_URL } from '../config';
+import { usePortfolioData } from '../hooks/usePortfolioData';
+import { portfolioData } from '../services/portfolioApi';
 
 type InitialPosition = InvestmentOrderInput;
 
-interface PortfolioSummary {
-  total_value: number;
-  total_cost: number;
-  total_gain_loss: number;
-  total_gain_loss_pct: number;
-  positions_count: number;
-  xirr: number | null;
-  reference_currency: string;
-}
-
-
 export default function PortfoliosPage() {
   const navigate = useNavigate();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { formatCurrency } = useSettings();
-  const { portfolios, isLoading, isInitialized, addPortfolio, updatePortfolio, deletePortfolio, deleteTransaction: deleteTransactionCache, refreshTransactions, activeProfile } = useData();
-  const skeletonCount = useSkeletonCount('portfolios', portfolios.length, isLoading, 3);
+  const { portfolios, isInitialized, addPortfolio, updatePortfolio, deletePortfolio, deleteTransaction: deleteTransactionCache, refreshTransactions } = useData();
+  const skeletonCount = useSkeletonCount('portfolios', portfolios.length, !isInitialized, 3);
   const { confirm: confirmDialog, dialog: confirmDialogEl } = useConfirm();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const portfolioDirtyRef = useRef(false);
@@ -51,100 +39,16 @@ export default function PortfoliosPage() {
   const [selectedPortfolio, setSelectedPortfolio] = useState<Portfolio | null>(null);
   const [portfolioOrders, setPortfolioOrders] = useState<Order[]>([]);
   const [isLoadingOrders, setIsLoadingOrders] = useState(false);
-  const [summaries, setSummaries] = useState<Record<number, PortfolioSummary>>({});
-  const [loadingSummaries, setLoadingSummaries] = useState(false);
-
+  const investmentData = usePortfolioData();
+  const summaries = investmentData.summaries.data ?? {};
+  const loadingSummaries = investmentData.summaries.loading;
+  const loadSummariesFromServer = () => portfolioData.ensureSummaries();
 
   const [hideBalances, setHideBalances] = useState(() => localStorage.getItem('hideBalances') === 'true');
   const toggleHideBalances = () => {
     setHideBalances(h => { const next = !h; localStorage.setItem('hideBalances', String(next)); return next; });
   };
   const mask = (formatted: string) => '•'.repeat(formatted.length);
-
-  const { user } = useAuth();
-  const summaryRequest = useRef<AbortController | null>(null);
-  const SUMMARIES_CACHE_TTL = 24 * 60 * 60 * 1000; // 24h
-  const SUMMARIES_CACHE_TTL_EMPTY = 5 * 60 * 1000; // 5min se tutti i valori sono 0
-
-  const loadSummariesFromServer = useCallback(async (forceRefresh = false) => {
-    summaryRequest.current?.abort();
-    const controller = new AbortController();
-    summaryRequest.current = controller;
-    setSummaries({});
-    if (!user || !activeProfile) return;
-    const profileId = activeProfile.id;
-    const SUMMARIES_CACHE_KEY = portfolioCacheKey(user.id, profileId);
-    if (!forceRefresh) {
-      try {
-        const raw = localStorage.getItem(SUMMARIES_CACHE_KEY);
-        if (raw) {
-          const { time, ttl, data } = JSON.parse(raw);
-          const effectiveTtl = ttl ?? SUMMARIES_CACHE_TTL;
-          if (Date.now() - time < effectiveTtl) {
-            setSummaries(data);
-            return;
-          }
-        }
-      } catch { /* Optional cache may be unavailable or corrupt. */ }
-    }
-    setLoadingSummaries(true);
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token || session.user.id !== user.id || controller.signal.aborted) return;
-      const token = session.access_token;
-      const url = profileId
-        ? `${PF_BACKEND_URL}/portfolios?profile_id=${profileId}`
-        : `${PF_BACKEND_URL}/portfolios`;
-      const res = await fetch(url, {
-        headers: { Authorization: `Bearer ${token}` },
-        signal: controller.signal,
-      });
-      const json = res.ok ? await res.json() : null;
-      if (controller.signal.aborted) return;
-      const map: Record<number, PortfolioSummary> = {};
-      if (json?.portfolios) {
-        for (const p of json.portfolios) {
-          if (!portfolios.some(visible => visible.id === p.id)) continue;
-          map[p.id] = {
-            total_value: p.total_value ?? 0,
-            total_cost: p.total_cost ?? 0,
-            total_gain_loss: p.total_gain_loss ?? 0,
-            total_gain_loss_pct: p.total_gain_loss_pct ?? 0,
-            positions_count: p.positions_count ?? 0,
-            xirr: p.xirr ?? null,
-            reference_currency: p.reference_currency ?? 'EUR',
-          };
-        }
-      }
-      setSummaries(map);
-      try {
-        // Se almeno un portafoglio ha total_cost > 0 ma total_value === 0, il fetch prezzi è fallito
-        // (es. Render cold start o JustETF/yfinance lento). Non cachare il risultato per riprovare subito.
-        const priceFetchFailed = Object.values(map).some(s => s.total_value === 0 && s.total_cost > 0);
-        if (!priceFetchFailed) {
-          const allTrulyEmpty = Object.values(map).length > 0 && Object.values(map).every(s => s.total_value === 0);
-          const ttl = allTrulyEmpty ? SUMMARIES_CACHE_TTL_EMPTY : SUMMARIES_CACHE_TTL;
-          localStorage.setItem(SUMMARIES_CACHE_KEY, JSON.stringify({ time: Date.now(), ttl, data: map }));
-        }
-      } catch { /* Optional cache may be unavailable or corrupt. */ }
-    } catch (e) {
-      if (!controller.signal.aborted) console.error('Error fetching portfolio summaries:', e);
-    } finally {
-      if (!controller.signal.aborted) setLoadingSummaries(false);
-    }
-  }, [user, activeProfile, portfolios, SUMMARIES_CACHE_TTL, SUMMARIES_CACHE_TTL_EMPTY]);
-
-  useEffect(() => {
-    if (!isInitialized) return;
-    void loadSummariesFromServer(false);
-    return () => summaryRequest.current?.abort();
-  }, [isInitialized, loadSummariesFromServer]);
-
-  useEffect(() => {
-    const onRefresh = () => { void loadSummariesFromServer(true); };
-    window.addEventListener('trackr:refresh', onRefresh);
-    return () => window.removeEventListener('trackr:refresh', onRefresh);
-  }, [loadSummariesFromServer]);
 
   const handleCreatePortfolio = () => {
     setSelectedPortfolio(null);
@@ -174,6 +78,7 @@ export default function PortfoliosPage() {
       const renamed = Boolean(data.name && data.name !== selectedPortfolio.name);
       const updated = await apiService.updatePortfolio(selectedPortfolio.id, data, selectedPortfolio.name);
       updatePortfolio(updated);
+      clearPortfolioCache();
       if (renamed) {
         await refreshTransactions();
       }
@@ -204,23 +109,9 @@ export default function PortfoliosPage() {
             } as OrderFormData)
           )
         );
-        clearPortfolioCache();
+        clearPortfolioCache(false);
       }
       addPortfolio(created);
-      if (!initialPositions || initialPositions.length === 0) {
-        setSummaries(prev => ({
-          ...prev,
-          [created.id]: {
-            total_value: 0,
-            total_cost: 0,
-            total_gain_loss: 0,
-            total_gain_loss_pct: 0,
-            positions_count: 0,
-            xirr: null,
-            reference_currency: data.reference_currency || 'EUR',
-          },
-        }));
-      }
     }
     setIsModalOpen(false);
   };
@@ -236,12 +127,7 @@ export default function PortfoliosPage() {
     if (ok) {
       await apiService.deletePortfolio(id);
       deletePortfolio(id);
-      setSummaries(prev => {
-        const next = { ...prev };
-        delete next[id];
-        return next;
-      });
-      clearPortfolioCache();
+      clearPortfolioCache(false);
       await refreshTransactions();
       setIsModalOpen(false);
     }
@@ -264,7 +150,7 @@ export default function PortfoliosPage() {
     if (updated.transaction_id) await refreshTransactions();
     setPortfolioOrders(prev => prev.map(order => order.id === orderId ? updated : order));
     clearPortfolioCache();
-    loadSummariesFromServer(true).catch(console.error);
+    loadSummariesFromServer().catch(console.error);
   };
 
   const handleDeleteOrder = async (order: Order) => {
@@ -281,17 +167,19 @@ export default function PortfoliosPage() {
     }
     setPortfolioOrders(prev => prev.filter(existing => existing.id !== order.id));
     clearPortfolioCache();
-    loadSummariesFromServer(true).catch(console.error);
+    loadSummariesFromServer().catch(console.error);
   };
 
-  const showSkeleton = isLoading || !isInitialized;
+  const showSkeleton = !isInitialized;
 
-  // Calcola totale investimenti sommando i summaries disponibili (per ora stesso reference_currency)
-  const totalInvestments = Object.values(summaries).reduce((acc, s) => acc + s.total_value, 0);
-  const totalPL = Object.values(summaries).reduce((acc, s) => acc + s.total_gain_loss, 0);
-  const totalCost = Object.values(summaries).reduce((acc, s) => acc + s.total_cost, 0);
-  const totalPLpct = totalCost > 0 ? (totalPL / totalCost) * 100 : 0;
-  const hasSummaries = Object.keys(summaries).length > 0;
+  const groups = [...new Set(portfolios.map(p => p.reference_currency || 'EUR'))].map(currency => {
+    const rows = portfolios.filter(p => (p.reference_currency || 'EUR') === currency);
+    const complete = rows.every(p => !!summaries[p.id]);
+    const value = rows.reduce((sum, p) => sum + (summaries[p.id]?.total_value ?? 0), 0);
+    const pl = rows.reduce((sum, p) => sum + (summaries[p.id]?.total_gain_loss ?? 0), 0);
+    const cost = rows.reduce((sum, p) => sum + (summaries[p.id]?.total_cost ?? 0), 0);
+    return { currency, complete, value, pl, pct: cost > 0 ? pl / cost * 100 : null };
+  });
 
   return (
     <Layout>
@@ -305,37 +193,34 @@ export default function PortfoliosPage() {
                 <div className="sticky -top-3 z-20 -mx-4 px-4 -mt-3 pt-4 pb-3 bg-gray-50 dark:bg-gray-900 relative">
                   <div className="card py-5">
                     <div className="text-sm text-gray-500 dark:text-gray-400 mb-1 text-center">{t('portfolios.totalInvestments')}</div>
-                    <div className="flex items-center justify-center">
-                      <div className="flex-1" />
-                      <div className="text-4xl font-bold">
-                        {loadingSummaries && !hasSummaries
-                          ? <span className="inline-block h-10 w-40 bg-gray-200 dark:bg-gray-700 rounded-sm animate-pulse" />
-                          : <span className={totalPL >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>
-                              {hideBalances ? mask(formatCurrency(totalInvestments)) : formatCurrency(totalInvestments)}
-                            </span>
-                        }
-                      </div>
-                      <div className="flex-1 flex justify-end pr-2">
-                        <button
-                          onClick={toggleHideBalances}
-                          className="text-gray-400 dark:text-gray-500 text-xl outline-hidden focus:outline-hidden select-none"
-                          style={{ WebkitTapHighlightColor: 'transparent' }}
-                        >
-                          {hideBalances ? '🙈' : '👁️'}
-                        </button>
-                      </div>
+                    <button onClick={toggleHideBalances} aria-label={t('portfolioData.toggleBalances')}
+                      className="absolute right-6 top-7 flex h-10 w-10 items-center justify-center text-xl text-gray-400">
+                      {hideBalances ? '🙈' : '👁️'}
+                    </button>
+                    <div className="space-y-3 text-center" aria-live="polite">
+                      {groups.map(group => (
+                        <div key={group.currency}>
+                          <div className="text-3xl font-bold tabular-nums text-gray-900 dark:text-gray-100">
+                            {group.complete
+                              ? (hideBalances ? mask(formatCurrency(group.value, group.currency)) : formatCurrency(group.value, group.currency))
+                              : '—'}
+                          </div>
+                          {group.complete && <div className={`mt-1 text-sm ${group.pl >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                            {hideBalances ? '•••' : `${group.pl >= 0 ? '+' : ''}${formatCurrency(group.pl, group.currency)}`}
+                            {!hideBalances && group.pct !== null && <span className="ml-1">({group.pct >= 0 ? '+' : ''}{group.pct.toFixed(1)}%)</span>}
+                          </div>}
+                        </div>
+                      ))}
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        {loadingSummaries ? t('portfolioData.loading') : investmentData.summaries.updatedAt
+                          ? t('portfolioData.loadedAt', { time: new Date(investmentData.summaries.updatedAt).toLocaleString(i18n.resolvedLanguage) })
+                          : t('portfolioData.waiting')}
+                      </p>
                     </div>
-                    {hasSummaries && (
-                      <div className={`text-sm text-center mt-1 ${totalPL >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
-                        {hideBalances
-                          ? mask((totalPL >= 0 ? '+' : '') + formatCurrency(totalPL))
-                          : (totalPL >= 0 ? '+' : '') + formatCurrency(totalPL)
-                        }
-                        {!hideBalances && totalPLpct !== 0 && (
-                          <span className="ml-1 opacity-75">({(totalPLpct >= 0 ? '+' : '') + totalPLpct.toFixed(1)}%)</span>
-                        )}
-                      </div>
-                    )}
+                    {investmentData.summaries.error && <div role="alert" className="mt-3 text-center text-sm text-amber-700 dark:text-amber-300">
+                      <p>{t(`portfolioData.errors.${investmentData.summaries.error}`)}</p>
+                      <button type="button" onClick={() => investmentData.retry()} className="mt-1 min-h-10 font-semibold underline">{t('portfolioData.retry')}</button>
+                    </div>}
                   </div>
                   <div className="absolute left-0 right-0 h-6 bg-linear-to-b from-gray-50 dark:from-gray-900 to-transparent pointer-events-none" style={{ top: '100%' }} />
                 </div>
@@ -393,7 +278,8 @@ export default function PortfoliosPage() {
                         <div className="h-6 w-32 bg-gray-200 dark:bg-gray-700 rounded-sm animate-pulse" />
                       </div>
                     );
-                    if (!sm || sm.positions_count === 0) return (
+                    if (!sm) return <p className="mt-3 text-sm text-gray-500 dark:text-gray-400">{t('portfolioData.unavailable')}</p>;
+                    if (sm.positions_count === 0) return (
                       <div className="pt-3 mt-2 border-t border-gray-200 dark:border-gray-700">
                         <div className="min-h-[72px] rounded-2xl bg-gray-50 dark:bg-gray-800/50 px-4 py-3 flex items-center">
                           <div className="text-xs uppercase tracking-[0.14em] text-gray-400 dark:text-gray-500">
@@ -409,7 +295,7 @@ export default function PortfoliosPage() {
                             <div className="text-xs uppercase tracking-[0.14em] text-gray-400 dark:text-gray-500 mb-1 leading-none">
                               {t('portfolios.currentValueLabel')}
                             </div>
-                            <div className="text-xl font-semibold text-gray-900 dark:text-gray-100 leading-tight">
+                            <div className="break-words text-lg sm:text-xl font-semibold text-gray-900 dark:text-gray-100 leading-tight">
                               {hideBalances ? mask(formatCurrency(sm.total_value, sm.reference_currency)) : formatCurrency(sm.total_value, sm.reference_currency)}
                             </div>
                           </div>
@@ -417,7 +303,7 @@ export default function PortfoliosPage() {
                             <div className="text-xs uppercase tracking-[0.14em] text-gray-400 dark:text-gray-500 mb-1 leading-none">
                               {t('portfolios.plLabel')}
                             </div>
-                            <div className={`text-xl font-semibold leading-tight ${sm.total_gain_loss >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                            <div className={`break-words text-lg sm:text-xl font-semibold leading-tight ${sm.total_gain_loss >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
                               {hideBalances
                                 ? mask(formatCurrency(sm.total_gain_loss, sm.reference_currency))
                                 : formatCurrency(sm.total_gain_loss, sm.reference_currency)
