@@ -1,17 +1,23 @@
 Future improvements backlog
 ===========================
 
-Reviewed for main 1.0.41 on 2026-10-04; frontend progress updated for the local 1.0.43 investment changes on 2026-10-06. Trackr security, shared profiles and CI are implemented. Portfolio-backend items below are planning notes and require a separate pfTrackr review; that backend was not audited in this intervention. Multicurrency is explicitly deferred.
+Updated on 2026-10-06 after publishing Trackr 1.0.43 and synchronizing the shared Supabase migration ledger. The user confirmed that the new investment view works, but reported long loading times. Trackr security, shared profiles and the investment frontend changes are implemented; backend performance work remains planned. Multicurrency is explicitly deferred.
 
 Urgency order
 -------------
 
+Next task — prioritized by the user; keepalive is not configured by this documentation update
+
+- 16. Keep the Render backend active with an external cron
+
 High
+
 - 6. Expand automated tests and runtime sanity checks for critical financial flows
 - 3. Complete multi-profile support in portfolio-tracker
 - 4. Move portfolio summaries to a two-level caching model
 
 Medium
+
 - 5. Unify authentication and configuration so pfTrackr behaves like a natural extension of Trackr
 - 1. Introduce an integration layer between Trackr UI and portfolio-tracker backend
 - 10. Extend history_mode gating to pfTrackr analytics (Trackr overview completed)
@@ -19,12 +25,16 @@ Medium
 - 15. Generalize in-app notifications beyond recurring investment reminders
 
 Lower
+
 - 2. Clarify and clean up backend models/documentation in portfolio-tracker
 
 Deferred
+
 - 8. Handle investment orders in currencies different from the linked cash account (multicurrency)
 
 Priority rationale
+
+- `16` is the next implementation task: reduce Render idle cold starts before measuring and optimizing recap computation. It does not replace durable market-data caching.
 - `6` now means extending the existing frontend/SQL/concurrency suite and testing the external portfolio integration, rather than introducing the first tests.
 - `14` is completed on main; membership roles, invitation RPCs and security regression tests are already deployed.
 - `3` is high because profile-boundary mistakes affect data correctness, not just architecture.
@@ -37,6 +47,39 @@ Priority rationale
 - `2` is still worth doing, but it is mostly cleanup/clarification unless it uncovers hidden runtime bugs.
 
 
+
+## 16. Keep the Render backend active with an external cron
+
+Priority: next implementation task, as requested on 2026-10-06.
+
+Status: roadmap only. No keepalive endpoint, scheduler or scheduled database job was created in this update.
+
+Goal
+
+Reduce the cold start when Trackr opens, using a lightweight request every 10 minutes. The scheduler must run independently of the PWA, browser and the user's computer.
+
+Planned implementation
+
+- Add a public `GET /health` to the Render backend that returns a small status response without querying Supabase, requesting market prices or computing portfolios. It needs no user token or service key.
+- Prefer Supabase Cron (`pg_cron`) plus `pg_net` for the periodic HTTP request. Verify extension availability and any existing equivalent job before choosing/enabling the scheduler.
+- Use a bounded HTTP timeout that allows for an initial cold start. Check actual HTTP responses as well as cron execution, since enqueueing a request does not prove the backend answered.
+- Document how to inspect, disable and remove the job. If a shared database migration is needed, review its linked dry-run and synchronize the Trackr/FitTrackr migration versions.
+- Measure health/startup, recap and detail response times separately to establish which delays remain after keepalive is active.
+
+Acceptance criteria
+
+- The independent scheduler calls the lightweight endpoint on the configured interval and recorded HTTP responses are successful.
+- Trackr remains usable with its existing cache/retry behavior when a ping fails or Render restarts.
+- No recurring job invokes portfolio calculations or stores user credentials.
+- Setup, observed timings and the disable/remove procedure are documented after implementation.
+
+Hosting constraints
+
+Render Free spins down after 15 idle minutes and grants 750 running-instance hours per workspace per calendar month. One service running continuously needs 720 hours in a 30-day month or 744 in a 31-day month; other Free services share the same allowance. Free services can still restart, and local filesystem changes are lost on spin-down/restart/redeploy. Keepalive therefore reduces cold starts but does not make the SQLite market cache durable. See [Render Free limits](https://render.com/docs/free) and [Supabase HTTP scheduling](https://supabase.com/docs/guides/database/extensions/pg_net).
+
+Follow-up after keepalive
+
+The frontend already requests the recap before background details. The backend recap currently calculates all portfolios before returning, and its pricing helpers can fetch historical prices even when the portfolio-history output is disabled. Under the default configuration, market caches are SQLite files on the backend. Item `4` remains the follow-up: persist market prices/portfolio summaries on Supabase, return the last available recap promptly and refresh expensive data separately. Runtime measurements must confirm the bottlenecks before changing calculations.
 
 1. Introduce an integration layer between Trackr UI and portfolio-tracker backend
 
@@ -178,7 +221,8 @@ Current logic
 - Portfolio prices and summaries are expensive to compute because they may require ticker lookups, scraping, cached history reads, and portfolio aggregation.
 - Prices are typically daily, so a 24h cache window is a sensible optimization.
 - Local cache is also useful to avoid immediate backend refetches when switching pages and returning to the portfolio screen.
-- Since 1.0.41, summary keys include user/profile, identity changes clear caches, and stale requests are discarded. This fixes isolation; it does not introduce persisted backend summaries.
+- Since 1.0.43, one frontend queue loads recap first and details afterward; caches include summary, positions and history, with user/profile isolation and late-response protection. This does not introduce persisted backend summaries.
+- The backend returns the recap only after all requested portfolios have been calculated. Pricing helpers may still fetch histories, and default SQLite caches can be lost on Render Free restart/spin-down. Keepalive (`16`) is next; durable caches and a fast recap remain this item’s scope.
 
 Why this is a problem
 - Frontend local cache is device-specific and not shared.
@@ -350,6 +394,7 @@ Priority
 
 Status
 - Trackr baseline completed in 1.0.41: eight frontend tests; 48 SQL assertions on the hosted schema fixture and 47 on the older local fixture; two concurrency checks; real local SDK/Auth and production browser smoke checks.
+- Trackr 1.0.43 expands the frontend suite to 30 passing tests, covering the investment queue, cache/expiry, refresh/retry, profile/session isolation, metadata and mobile overview behavior.
 - CI runs lint, tests, dependency audit, build and isolated PostgreSQL security/concurrency checks. See [release verification](security-fixes-2026-10-04.md).
 - Earlier backend portfolio/order tests remain historical milestones; their current coverage needs a separate pfTrackr review.
 - Remaining work: browser coverage for authenticated financial flows, external portfolio endpoints/math/pricing, broader Kakebo fixtures and multicurrency when resumed.

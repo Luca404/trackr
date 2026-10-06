@@ -1,10 +1,12 @@
 # Investment loading and portfolio overview — 1.0.43
 
-Prepared locally on 2026-10-06. These frontend changes do not modify Supabase or the Render backend and have not been deployed.
+Published to `main` on 2026-10-06 in [commit cc4abc0](https://github.com/Luca404/trackr/commit/cc4abc04629e1c37173055b0da0fa9c246657806), triggering the configured Vercel deployment. The user confirmed that the new view works, while reporting long loading times. The frontend release changes neither Supabase schema nor Render backend code.
+
+The separate [migration synchronization commit 909cd0a](https://github.com/Luca404/trackr/commit/909cd0a) tracks the FitTrackr prepared-weight correction already applied to the shared hosted database; it does not affect investment loading.
 
 ## Loading and cache
 
-After authentication, Trackr requests the lightweight `/portfolios/count` endpoint to wake Render. Once the active profile's portfolios are available from Supabase, it requests backend summaries and queues all portfolio details for that profile. Core financial initialization continues independently. The visible portfolio moves ahead of queued background details; already running requests are reused.
+After authentication, Trackr requests the lightweight `/portfolios/count` endpoint to wake Render. Once the active profile's portfolios are available from Supabase, it requests the recap first, then processes the queued portfolio details one at a time. The recap is published immediately when its response arrives; it does not wait for background details. Core financial initialization continues independently. The visible portfolio moves ahead of queued background details; already running requests are reused.
 
 `PortfolioDataStore` owns requests, validation, in-memory state and optional localStorage persistence. Entries are isolated by user/profile, expire after 24 hours (5 minutes for no open positions), and store summary, positions and history together. Valid expired data is immediately visible while being reloaded. Unavailable/full storage does not prevent loading. Authentication changes/logout remove private caches; ordinary startup preserves reusable entries.
 
@@ -26,10 +28,18 @@ The mobile view shows portfolio value and gain/loss, net capital, open positions
 
 Render startup can still delay data when Investments is opened immediately. Preloading moves that wait earlier; it does not keep Render permanently running. Backend market-data freshness, multicurrency conversions/history correctness, owner/member authorization and XIRR calculation validity remain backend responsibilities; this release does not change their calculations or authorization rules.
 
-## Local verification
+## Remaining latency and next task
 
-All 30 frontend tests pass; lint has no warnings, the production build succeeds and the dependency audit reports zero vulnerabilities. The existing large-main-chunk build warning remains.
+The initial loading order is already recap before details. The startup wake request is separate; the investment queue shares in-flight requests and only moves waiting details when a portfolio is opened.
+
+The local backend source explains possible additional delays: it loads ETF/stock/bond metadata from Supabase before accepting requests, calculates all requested portfolio recaps before returning the response, and uses pricing helpers that may retrieve histories even for recap-only output. Its default market cache is `sqlite:///./cache.db`; on Render Free, local filesystem changes are lost on spin-down/restart/redeploy. These are code/configuration findings, not measured production timings. See [Render filesystem behavior](https://render.com/docs/free#local-files-lost-on-redeploy).
+
+The next roadmap task is an independent cron calling a lightweight public `/health` endpoint every 10 minutes, preferably through Supabase Cron and `pg_net`. It is planned, not configured by this release. Afterward, measure startup, recap and detail timings and continue with durable backend price/summary caches and a faster recap. See [roadmap item 16](future-improvements.md).
+
+## Verification
+
+Release checks: all 30 frontend tests passed; lint passed without warnings, the production build succeeded and the dependency audit reported zero vulnerabilities. The existing large-main-chunk build warning remains.
 
 The frontend regression suite covers startup order, deduplication/queue priority, persistence/expiry, invalidation and late-response protection, user/profile boundaries, timeout/retry, missing prices (including gifted positions), missing portfolios, storage failure, order metadata, normalized dates/XIRR, allocation currency rules and performance rebasing. Component tests cover the overview, incomplete-history/privacy behavior and header refresh failure/recovery.
 
-The overview was inspected in a local Chromium browser with synthetic data at 320/390 pixels, light/dark themes and desktop width 1280. Quote failure, mixed currency and incomplete history were also exercised; all scenarios had no horizontal page overflow or uncaught browser errors. Chart controls and expandable positions were checked. This does not benchmark real Render cold-start latency or verify production data.
+The overview was inspected in a local Chromium browser with synthetic data at 320/390 pixels, light/dark themes and desktop width 1280. Quote failure, mixed currency and incomplete history were also exercised; all scenarios had no horizontal page overflow or uncaught browser errors. Chart controls and expandable positions were checked. The user subsequently confirmed the new investment view works. Production data/calculation correctness, exact cold-start timings and CI/deployment status were not independently verified by these local checks.

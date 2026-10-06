@@ -78,7 +78,7 @@ On loading a writable owner/editor profile with empty accounts or categories (ne
 
 - Use `save_financial_transaction`, `save_financial_order` and `delete_financial_transaction/order/portfolio` RPCs for linked writes/deletes. Do not compose separate client writes for a financial operation. Recurrence processing uses a profile lock and unique occurrence identity for retries.
 - `category_type = 'investment'` does not exist. Investment transactions use a portfolio name as `category`.
-- `portfolioData` is the shared investment store: warm Render immediately after authentication, load summaries/details once the profile is resolved, queue details one at a time and prioritize the open portfolio. Pages consume `usePortfolioData`; do not introduce page-owned backend caches.
+- `portfolioData` is the shared investment store: warm Render immediately after authentication, request summaries first once the profile is resolved, publish the recap as soon as it arrives, then process details one at a time and prioritize the open portfolio. Pages consume `usePortfolioData`; do not introduce page-owned backend caches.
 - Summary/detail/history entries use `trackr:portfolio-data:v1:<userId>:<profileId>:<summaries|portfolioId>`, with a 24h TTL (5 min for no open positions). Expired valid data stays visible during refresh. Incomplete prices are not persisted. Logout/identity changes remove private entries; ordinary startup keeps valid cache. Legacy summary keys are cleaned by invalidation/logout.
 - Manual refresh invalidates active-profile investment entries and old requests, reloads Supabase, then awaits summaries and the open portfolio; background details continue without holding the spinner. Preserve Auth, settings and PWA assets.
 - `positions_only` hides XIRR and the performance chart. Holdings allocation requires a single currency; portfolio history needs a single verified order currency. The loaded-at label records the frontend fetch time, not market quote freshness.
@@ -89,6 +89,8 @@ On loading a writable owner/editor profile with empty accounts or categories (ne
 Vercel, auto-deploy on push to `main`; production: `https://trackr-dusky.vercel.app`. Repo: `github.com/Luca404/trackr`. Node 22, publishable-key env var and CSP backend allowlist must match production. Security migrations are already applied to the local and hosted DB; do not replay them.
 
 ## Known issues
+
+Next roadmap task: Render keepalive through an independent cron every 10 minutes calling a lightweight `/health`, preferably Supabase Cron plus `pg_net`. This is planned work, not an installed job; implement it only when requested. Recap is already prioritized; backend computation and durable market-data caching remain separate follow-ups.
 
 See `docs/README.md` for current docs and historical plans. Known issues: `docs/known-issues.md`; change log: `docs/code-changes.md`; improvements backlog: `docs/future-improvements.md`.
 

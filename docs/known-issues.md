@@ -1,8 +1,10 @@
 # trackr — Known Issues & TODO
 
-Reviewed for main 1.0.41 on 2026-10-04. UI/device issues below are previously reported and have not all been reproduced in this review. Applied security fixes and verification evidence are in [the security release record](security-fixes-2026-10-04.md).
+Updated for main 1.0.43 on 2026-10-06, retaining earlier 1.0.41 findings. UI/device issues below are previously reported and have not all been reproduced in this review. Applied security fixes and verification evidence are in [the security release record](security-fixes-2026-10-04.md).
 
 ## Bugs
+
+- **Slow investment loading**: the user reports long waits after 1.0.43. The frontend already requests recap before details; remaining possible delays include Render cold start, recap-wide price fetching and rebuilding the default SQLite market cache. Keepalive via an independent cron is [the next roadmap task](future-improvements.md); production phase timings and durable backend caching remain follow-up work.
 
 - **Black screen on SW update**: clicking "Ricarica" in the update banner occasionally turns the screen black. Root cause unknown.
 - **P/L overflow in portfolio list**: if P/L % is very large, the "PL (%)" label wraps leaving only the `€` symbol on the line above.
@@ -10,7 +12,7 @@ Reviewed for main 1.0.41 on 2026-10-04. UI/device issues below are previously re
 - **`touchmove` warning**: `[Intervention] Ignored attempt to cancel a touchmove event with cancelable=false` logged during page swipes. Low priority.
 - **Chrome autofill bar**: Android Chrome shows a password/card autofill bar when the keyboard opens. Not fixable via HTML/CSS — it's native browser UI (`KeyboardAccessoryView`). Chrome ignores `autoComplete="off"` for this. User-side fix: disable autofill in Chrome settings.
 - **Auth user deletion while a page is open**: local JWT/session state can remain until server validation or refresh. Cache cleanup on logout/identity changes is implemented; immediate logout after an administrative user deletion remains unverified. Removing an Auth user can cascade into both finance and fitness data in the shared project.
-- **Production bundle size**: the main JS chunk is about 770 KB before compression; Vite warns above 500 KB. Consider route-level lazy loading. This is a performance issue, not a dependency advisory.
+- **Production bundle size**: the main JS chunk is about 796 KB before compression; Vite warns above 500 KB. Consider route-level lazy loading. This is a performance issue, not a dependency advisory.
 - **Historical fitness constraints**: some pre-existing fitness CHECK constraints remain `NOT VALID`. All seven new security constraints were validated; the older fitness checks need a separate integrity review.
 
 ## TODO
@@ -26,6 +28,8 @@ Reviewed for main 1.0.41 on 2026-10-04. UI/device issues below are previously re
 - **Multicurrency**: development remains separate from main and is deliberately deferred; do not apply its schema to the shared hosted DB as part of these security fixes.
 
 ## Resolved
+
+- Version 1.0.43 shares startup/page investment requests, preserves valid cached data across ordinary startup, invalidates active-profile summary/detail/history data on refresh, and releases the refresh spinner after failure. Recap loads first; details are queued afterward. Mobile portfolio overview, incomplete-history gating and price-error presentation are covered in [the release notes](investments-1.0.43.md).
 
 - Ticker search results are gated on input focus in the shared investment form; the earlier automatic-dropdown issue was addressed before this release.
 - Viewer writes/deletes, profile/parent boundary bypasses, invitation lifecycle/rate limits, duplicate recurrence generation, partial linked financial writes, session cache leakage and unsafe empty imports were addressed in 1.0.41.

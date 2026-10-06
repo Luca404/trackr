@@ -23,6 +23,8 @@ Part of the **Trackrs ecosystem** — shares the same Supabase database with [pf
 - **i18n** — English, Italian, Spanish
 - **Installable PWA** — works as a native app on Android, iOS, and desktop
 
+The investment loading order, cache/refresh behavior and published 1.0.43 checks are documented in [the investment release notes](docs/investments-1.0.43.md). The [next roadmap task](docs/future-improvements.md) is a lightweight external cron to keep the Render backend active; it has not been configured by this release.
+
 ## Stack
 
 - React 18 + TypeScript + Vite + vite-plugin-pwa (Workbox service worker) — requires Node >=22.13 (`nvm use`)

@@ -1,18 +1,23 @@
 Implemented code changes
 ========================
 
+2026-10-06 — Documentation and next roadmap task
+
+- Prioritized Render keepalive as the next task: a lightweight `/health` endpoint and an independent cron every 10 minutes, preferably Supabase Cron with `pg_net`. This entry records planned work; no cron job or backend change was enabled.
+- Updated the published 1.0.43 release status, recap-before-detail loading order, cache/refresh semantics, user-reported latency and remaining backend performance work. The frontend version stays 1.0.43.
+
 2026-10-06 — Shared migration ledger synchronization
 
 - Added Trackr's mirrored `20261006120000_correct_prepared_batch_weight` migration, identical to FitTrackr's committed source. It was already recorded in the shared hosted ledger.
 - Verified the remote RPC body, SECURITY INVOKER settings and authenticated-only execution grants in a read-only transaction. Linked dry-run and push report up to date; no application records were modified. Frontend version remains 1.0.43.
 
-2026-10-06 — v1.0.43 (prepared locally)
+2026-10-06 — v1.0.43 (published to main)
 
 - Wake Render at authenticated startup and prefetch active-profile investment summaries and portfolio details through a single queue. Prioritize the open portfolio and reuse in-flight requests.
 - Share validated summary/detail/history caches across pages and sessions, retain expired data during refresh, and cancel stale requests on invalidation/profile changes. Manual refresh reloads Supabase and visible investment data without waiting for every background detail.
 - Replace the portfolio detail with a mobile overview: value/gain hero, net capital, position count, XIRR, value/performance history, allocation by market value/type and expandable named positions. Desktop retains a table.
 - Normalize backend `portfolio_xirr` and day-month-year history dates; respect `positions_only`, price failures and currency boundaries. Invalidate after successful financial writes, including transaction deletion and portfolio edits.
-- Verification and remaining backend limits are documented in [the investment release notes](investments-1.0.43.md). No database/backend changes or deployment are included.
+- Published in [commit cc4abc0](https://github.com/Luca404/trackr/commit/cc4abc04629e1c37173055b0da0fa9c246657806), triggering the configured Vercel deployment; the user confirmed the new view works. The 30 tests, lint, audit and build passed locally. Remaining backend limits and verification boundaries are documented in [the investment release notes](investments-1.0.43.md); no investment database/backend changes were made.
 
 2026-10-06 — CI security follow-up
 
