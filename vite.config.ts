@@ -5,8 +5,8 @@ import { execSync } from 'child_process'
 
 const APP_MAJOR = 1
 const APP_MINOR = 0
-const APP_PATCH = 41  // Incrementare manualmente ad ogni release pubblicata
-const APP_RELEASE_NOTES = 'Security fixes: profile permissions, invitations, session isolation and atomic financial operations'
+const APP_PATCH = 42  // Incrementare manualmente ad ogni release pubblicata
+const APP_RELEASE_NOTES = 'Fixed portfolio backend connections to Render and centralized backend configuration'
 
 function getCommitMsg() {
   try {

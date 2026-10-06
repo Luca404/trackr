@@ -1,6 +1,6 @@
 # Trackr documentation
 
-Reviewed on 2026-10-04 for main release 1.0.41. Multicurrency remains deferred on the separate development branch.
+Updated on 2026-10-06 for version 1.0.42, which corrects the Render backend configuration and Vercel CSP. Multicurrency remains deferred on the separate development branch.
 
 | Document | Purpose |
 | --- | --- |
@@ -10,6 +10,6 @@ Reviewed on 2026-10-04 for main release 1.0.41. Multicurrency remains deferred o
 | [Security fixes and release verification](security-fixes-2026-10-04.md) | Published commits, applied SQL, CI and production checks |
 | [Known issues](known-issues.md) | Remaining issues and items requiring reproduction |
 | [Improvements backlog](future-improvements.md) | Remaining product/integration work and completed milestones |
-| [Change log](code-changes.md) | Changes by date, including the 1.0.41 security release |
+| [Change log](code-changes.md) | Changes by date, including the 1.0.42 Render correction and 1.0.41 security release |
 
 [The original security audit](security-audit-2026-10-04.md) records the state before the fixes. Files in `superpowers/specs/` and `superpowers/plans/` are historical proposals, not instructions to replay SQL or deploy missing multicurrency features. Current schema and permissions are defined by the versioned applied migrations.

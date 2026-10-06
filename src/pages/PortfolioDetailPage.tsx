@@ -4,8 +4,7 @@ import { supabase } from '../services/supabase';
 import { useData } from '../contexts/DataContext';
 import { useSettings } from '../contexts/SettingsContext';
 import Layout from '../components/layout/Layout';
-
-const PF_BACKEND_URL = import.meta.env.VITE_PF_BACKEND_URL || 'https://portfolio-tracker-production-3bd4.up.railway.app';
+import { PF_BACKEND_URL } from '../config';
 
 interface PortfolioPosition {
   symbol: string;

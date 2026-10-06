@@ -4,6 +4,7 @@ import { apiService } from '../services/api';
 import { useAuth } from './AuthContext';
 import { RequestGate, portfolioCacheKey, clearPortfolioCache } from '../services/sessionCache';
 import { supabase } from '../services/supabase';
+import { PF_BACKEND_URL } from '../config';
 import type { Account, Category, Transaction, Transfer, Portfolio, UserProfile, Order, ProfileInvitation } from '../types';
 
 interface DataContextType {
@@ -74,7 +75,6 @@ interface DataContextType {
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
-const PF_BACKEND_URL = import.meta.env.VITE_PF_BACKEND_URL || 'https://portfolio-tracker-production-3bd4.up.railway.app';
 const SUMMARIES_CACHE_TTL = 24 * 60 * 60 * 1000;
 const SUMMARIES_CACHE_TTL_EMPTY = 5 * 60 * 1000;
 

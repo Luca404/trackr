@@ -14,8 +14,7 @@ import { useConfirm } from '../hooks/useConfirm';
 import type { Portfolio, PortfolioFormData, Order, OrderFormData } from '../types';
 import { useTranslation } from 'react-i18next';
 import { useSettings } from '../contexts/SettingsContext';
-
-const PF_BACKEND_URL = import.meta.env.VITE_PF_BACKEND_URL || 'https://portfolio-tracker-production-3bd4.up.railway.app';
+import { PF_BACKEND_URL } from '../config';
 
 type InitialPosition = InvestmentOrderInput;
 
@@ -120,7 +119,7 @@ export default function PortfoliosPage() {
       setSummaries(map);
       try {
         // Se almeno un portafoglio ha total_cost > 0 ma total_value === 0, il fetch prezzi è fallito
-        // (es. Railway cold start o JustETF/yfinance lento). Non cachare il risultato per riprovare subito.
+        // (es. Render cold start o JustETF/yfinance lento). Non cachare il risultato per riprovare subito.
         const priceFetchFailed = Object.values(map).some(s => s.total_value === 0 && s.total_cost > 0);
         if (!priceFetchFailed) {
           const allTrulyEmpty = Object.values(map).length > 0 && Object.values(map).every(s => s.total_value === 0);

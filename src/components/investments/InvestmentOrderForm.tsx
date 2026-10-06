@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 import TransactionDateModal from '../common/TransactionDateModal';
 import type { RecurringFrequency } from '../../types';
 import { localDateStr } from '../../utils/date';
-const PF_BACKEND_URL = import.meta.env.VITE_PF_BACKEND_URL || 'https://portfolio-tracker-production-3bd4.up.railway.app';
+import { PF_BACKEND_URL } from '../../config';
 
 export interface InvestmentOrderInput {
   symbol: string;

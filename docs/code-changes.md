@@ -1,6 +1,13 @@
 Implemented code changes
 ========================
 
+2026-10-06 — v1.0.42
+
+- Corrected the Vercel CSP to authorize the active Render portfolio backend (`https://portfolio-tracker-p6ha.onrender.com`) instead of the retired Railway service.
+- Centralized the backend URL in `src/config.ts` for portfolio summaries, details, instrument lookup and Kakebo import, preserving `VITE_PF_BACKEND_URL` overrides for local development.
+- Updated the environment example and current setup documentation to Render.
+- Verified all eight frontend tests, lint without warnings, the production build and alignment between the default Render origin and CSP. Deployment is not included in these local checks.
+
 2026-10-04 — v1.0.41
 
 - Aligned the local checkout with main; left development/multicurrency separate.

@@ -4,7 +4,7 @@ Personal finance PWA for tracking expenses, income, transfers, and investments. 
 
 Part of the **Trackrs ecosystem** — shares the same Supabase database with [pfTrackr](https://github.com/Luca404/portfolio-tracker) for investment portfolio analytics, and [fitTrackr](https://github.com/Luca404/fitness-tracker) for calorie and nutrition tracking.
 
-**Current version:** 1.0.41
+**Current version:** 1.0.42
 
 ## Features
 
@@ -15,7 +15,7 @@ Part of the **Trackrs ecosystem** — shares the same Supabase database with [pf
 - **Shared profiles** — owner/editor/viewer roles, email invitations, accept/reject/cancel and membership management; viewer access is read-only at database level
 - **Categories** — with subcategories and per-period stats
 - **Accounts** — bank accounts and wallets with real-time balance calculation
-- **Portfolios** — live summaries fetched from the pfTrackr backend (Railway)
+- **Portfolios** — live summaries fetched from the pfTrackr backend (Render)
 - **Statistics** — charts and trends with a customizable date range
 - **Notification bell** — overdue recurring investment reminders with inline completion flow
 - **Kakebo import** — multi-step migration wizard with atomic server-side RPC and balance diagnostics
@@ -39,7 +39,7 @@ Create `.env.local`:
 ```env
 VITE_SUPABASE_URL=https://<project>.supabase.co
 VITE_SUPABASE_PUBLISHABLE_KEY=...
-VITE_PF_BACKEND_URL=https://portfolio-tracker-production-3bd4.up.railway.app
+VITE_PF_BACKEND_URL=https://portfolio-tracker-p6ha.onrender.com
 ```
 
 ```bash
@@ -125,7 +125,7 @@ Account balances are computed in `DataContext` at runtime (`initial_balance` + t
 
 Deployed on **Vercel** at [trackr-dusky.vercel.app](https://trackr-dusky.vercel.app) — auto-deploys on push to `main`. Development happens on the `dev` branch. Multicurrency remains deferred and is not part of the `main` release or the shared security migrations.
 
-Set `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, and `VITE_PF_BACKEND_URL` as environment variables in Vercel, and use Node 22 for builds. A different portfolio backend requires updating the CSP `connect-src` allowlist in `vercel.json`. Update **Site URL** in Supabase Dashboard → Authentication → URL Configuration to match the production URL.
+Set `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, and `VITE_PF_BACKEND_URL` as environment variables in Vercel, and use Node 22 for builds. The portfolio backend is hosted on Render at `https://portfolio-tracker-p6ha.onrender.com`; `src/config.ts` provides this default for every portfolio request. A different portfolio backend requires updating the CSP `connect-src` allowlist in `vercel.json`. Update **Site URL** in Supabase Dashboard → Authentication → URL Configuration to match the production URL.
 
 ## Checks and documentation
 

@@ -21,7 +21,7 @@ npm test
 ```env
 VITE_SUPABASE_URL=https://...
 VITE_SUPABASE_PUBLISHABLE_KEY=...       # anon/publishable key
-VITE_PF_BACKEND_URL=https://portfolio-tracker-production-3bd4.up.railway.app
+VITE_PF_BACKEND_URL=https://portfolio-tracker-p6ha.onrender.com
 ```
 
 ## Architecture
@@ -30,11 +30,12 @@ VITE_PF_BACKEND_URL=https://portfolio-tracker-production-3bd4.up.railway.app
 Component / Page
   → apiService (src/services/api.ts)      ← direct Supabase calls
     → supabase (src/services/supabase.ts) ← Supabase PostgreSQL + Auth
-  → portfolio-tracker backend (Railway)   ← portfolio data only (PortfoliosPage, TransactionForm, KakeboImport)
+  → portfolio-tracker backend (Render)    ← portfolio data only (PortfoliosPage, TransactionForm, KakeboImport)
 ```
 
 - **Online-first**: DataContext loads all data from Supabase at startup, keeps in-memory React state. Financial lists stay in React state; portfolio summaries use a cache scoped to user/profile.
 - **No Redux/Zustand**: all global state in React Contexts (AuthContext, DataContext, SettingsContext).
+- **Portfolio backend URL**: import `PF_BACKEND_URL` from `src/config.ts`; it uses `VITE_PF_BACKEND_URL` or the Render production URL. Keep the production origin aligned with CSP `connect-src` in `vercel.json`.
 - **`current_balance`** on accounts is NOT a DB column — DataContext calculates it from `initial_balance` + transactions + transfers on every update.
 - **Writes**: transaction/order/recurrence changes use atomic PostgreSQL RPCs.
 - **UI after writes**: pages await the API result, then update or refresh DataContext; stale callbacks cannot repopulate another user/profile view.
@@ -64,7 +65,7 @@ Component / Page
 
 ## Version bump
 
-`APP_MAJOR`, `APP_MINOR`, `APP_PATCH` are hardcoded constants in `vite.config.ts`; current release is 1.0.41. Increment `APP_PATCH` and update release notes for frontend releases. Documentation/CI-only commits do not require a new application version. Version shown in header. `version.json` generated at build time by a Vite plugin (not tracked in `public/`).
+`APP_MAJOR`, `APP_MINOR`, `APP_PATCH` are hardcoded constants in `vite.config.ts`; current release is 1.0.42. Increment `APP_PATCH` and update release notes for frontend releases. Documentation/CI-only commits do not require a new application version. Version shown in header. `version.json` generated at build time by a Vite plugin (not tracked in `public/`).
 
 ## Default data
 

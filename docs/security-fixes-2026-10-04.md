@@ -18,7 +18,7 @@ Le sette migrazioni sono state applicate sia al database locale configurato nell
 
 Il lint mantiene le regole dei React Hooks per React 18, senza attivare le diagnostiche opzionali del React Compiler. Restano tipi dinamici in alcune strutture legacy dell'import Kakebo, con eccezione ESLint limitata a quel file; il confine di scrittura è validato nel database. La CI usa le versioni correnti delle azioni [checkout](https://github.com/actions/checkout) e [setup-node](https://github.com/actions/setup-node).
 
-Sono aggiunti header CSP, anti-framing, nosniff e Referrer-Policy a Vercel. Il backend portfolio autorizzato è quello Railway già usato dall'app; un diverso `VITE_PF_BACKEND_URL` di produzione richiede aggiornare la allowlist `connect-src`. Lo script iniziale del tema è esterno e gli stili rispettano i layer di Tailwind 4.
+Sono aggiunti header CSP, anti-framing, nosniff e Referrer-Policy a Vercel. La CSP iniziale autorizzava erroneamente il vecchio backend Railway, mentre l'app pubblicata usava già Render. La correzione del 2026-10-06 (v1.0.42) autorizza `https://portfolio-tracker-p6ha.onrender.com`; un diverso `VITE_PF_BACKEND_URL` di produzione richiede aggiornare la allowlist `connect-src`. Lo script iniziale del tema è esterno e gli stili rispettano i layer di Tailwind 4.
 
 Verifiche completate:
 

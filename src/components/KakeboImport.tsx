@@ -10,7 +10,7 @@ import { getNextDueDate } from '../services/recurring';
 import { useData } from '../contexts/DataContext';
 import type { RecurringFrequency } from '../types';
 
-const PF_BACKEND_URL = import.meta.env.VITE_PF_BACKEND_URL || 'https://portfolio-tracker-production-3bd4.up.railway.app';
+import { PF_BACKEND_URL } from '../config';
 
 // ── Kakebo internal types ──────────────────────────────────────────────────────
 
