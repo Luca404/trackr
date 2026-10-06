@@ -1,6 +1,11 @@
 Implemented code changes
 ========================
 
+2026-10-06 — Shared migration ledger synchronization
+
+- Added Trackr's mirrored `20261006120000_correct_prepared_batch_weight` migration, identical to FitTrackr's committed source. It was already recorded in the shared hosted ledger.
+- Verified the remote RPC body, SECURITY INVOKER settings and authenticated-only execution grants in a read-only transaction. Linked dry-run and push report up to date; no application records were modified. Frontend version remains 1.0.43.
+
 2026-10-06 — v1.0.43 (prepared locally)
 
 - Wake Render at authenticated startup and prefetch active-profile investment summaries and portfolio details through a single queue. Prioritize the open portfolio and reuse in-flight requests.
