@@ -1,6 +1,11 @@
 Implemented code changes
 ========================
 
+2026-10-06 — CI security follow-up
+
+- Updated only the transitive `source-map-js` lockfile entry from 1.2.1 to 1.2.2 to address GHSA-68fv-2mgg-jv7q and restore the CI audit check.
+- `npm audit --audit-level=low` reports zero vulnerabilities; all eight frontend tests, lint without warnings and the production build pass. The application version remains 1.0.42 because this change affects development/build tooling only.
+
 2026-10-06 — v1.0.42
 
 - Corrected the Vercel CSP to authorize the active Render portfolio backend (`https://portfolio-tracker-p6ha.onrender.com`) instead of the retired Railway service.
