@@ -6,6 +6,7 @@ Implemented code changes
 - Added public async `/health` in portfolio-tracker: constant HTTP 200 response, no-store, no authentication, database queries or market calculations. Published backend commit `9ebadf3` on main.
 - Added shared migration `20261008120000_render_backend_keepalive`: Supabase Cron plus `pg_net`, named job every 10 minutes, 180s timeout and no credentials. Mirrored the migration in FitTrackr.
 - Added [an operational runbook](render-keepalive.md) and updated the roadmap to focus on measured recap latency/durable caching. Frontend stays 1.0.43; see the runbook for observed deployment and HTTP results.
+- Documentation follow-up marks item 16 completed and active, records the successful automatic HTTP 200 check, and removes the remaining "keepalive is next" wording from the cache follow-up. Long-term uptime, restart recovery and investment calculation speed remain outside the completed verification.
 
 2026-10-06 — Documentation and next roadmap task
 

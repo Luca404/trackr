@@ -3,6 +3,11 @@
 Implemented on 2026-10-08 for `https://portfolio-tracker-p6ha.onrender.com`.
 This is infrastructure work; Trackr remains at frontend version 1.0.43.
 
+Operational status: **active and verified on 2026-10-08**. The backend route is
+deployed on Render and the shared Supabase migration is applied. One automatic
+HTTP request succeeded; the final schedule is every 10 minutes. No PWA session,
+open browser or running personal computer is required.
+
 ## Configuration
 
 - Public `GET /health`: HTTP 200, `{"status":"ok"}`, `Cache-Control: no-store`.
@@ -109,6 +114,12 @@ The frontend already loads recap before sequential details. Compare startup,
 recap and detail timings separately using normal authenticated app requests;
 this keepalive verification does not calculate or inspect user portfolios.
 Persisting market prices and serving cached recaps remain roadmap item 4.
+
+The next performance investigation is to record timings for startup, recap and
+one opened portfolio while the backend is warm, then compare requests with and
+without populated price caches. Use those observations to choose the first
+backend optimization. The 0.157s health observation above measures only the
+liveness endpoint and does not establish investment-loading speed.
 
 References: [Supabase HTTP requests](https://supabase.com/docs/guides/database/extensions/pg_net),
 [Cron administration](https://supabase.com/docs/guides/cron/quickstart),

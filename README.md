@@ -131,6 +131,8 @@ Deployed on **Vercel** at [trackr-dusky.vercel.app](https://trackr-dusky.vercel.
 
 Set `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, and `VITE_PF_BACKEND_URL` as environment variables in Vercel, and use Node 22 for builds. The portfolio backend is hosted on Render at `https://portfolio-tracker-p6ha.onrender.com`; `src/config.ts` provides this default for every portfolio request. A different portfolio backend requires updating the CSP `connect-src` allowlist in `vercel.json`. Update **Site URL** in Supabase Dashboard → Authentication → URL Configuration to match the production URL.
 
+Render keepalive is active on hosted Supabase: the `trackr-render-keepalive` job calls public `GET /health` every 10 minutes, independently of the app or the user's computer. An automatic request was verified as HTTP 200 on 2026-10-08. See [the runbook](docs/render-keepalive.md) to inspect, pause, resume or remove the job. Portfolio computation and durable price caching remain separate performance work.
+
 ## Checks and documentation
 
 Run `npm run lint -- --max-warnings=0`, `npm test`, `npm audit --audit-level=low` and `npm run build`. GitHub Actions runs these checks plus SQL permission/integrity/concurrency tests in isolated PostgreSQL 17, without connecting to production. See the [documentation index](docs/README.md) for the release record, known issues, backlog and shared-database workflow.

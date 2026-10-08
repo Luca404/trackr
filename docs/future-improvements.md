@@ -27,6 +27,10 @@ Lower
 
 - 2. Clarify and clean up backend models/documentation in portfolio-tracker
 
+Completed infrastructure
+
+- 16. Render keepalive — active on hosted Supabase; automatic HTTP 200 verified on 2026-10-08
+
 Deferred
 
 - 8. Handle investment orders in currencies different from the linked cash account (multicurrency)
@@ -51,7 +55,7 @@ Priority rationale
 
 Priority: requested on 2026-10-06; implementation authorized on 2026-10-08.
 
-Status: implemented through the public backend health route and shared Supabase cron migration. Operational verification, timings and pause/remove commands are in [the keepalive runbook](render-keepalive.md).
+Status: completed, deployed and active on 2026-10-08. Render serves the public health route; hosted Supabase has exactly one enabled `trackr-render-keepalive` job every 10 minutes. An automatic ping returned HTTP 200 without timeout/error. Operational verification, timings and pause/remove commands are in [the keepalive runbook](render-keepalive.md).
 
 Goal
 
@@ -65,12 +69,12 @@ Implementation
 - The runbook documents inspecting, disabling and removing the job. Migration `20261008120000` is mirrored in Trackr/FitTrackr; the linked dry-run showed only this new migration.
 - Measure health/startup, recap and detail response times separately to establish which delays remain after keepalive is active.
 
-Acceptance criteria
+Verified results and remaining limits
 
-- The independent scheduler calls the lightweight endpoint on the configured interval and recorded HTTP responses are successful.
-- Trackr remains usable with its existing cache/retry behavior when a ping fails or Render restarts.
-- No recurring job invokes portfolio calculations or stores user credentials.
-- Setup, observed timings and the disable/remove procedure are documented after implementation.
+- A real automatic run returned the expected HTTP 200 response. The final job configuration is active with the requested 10-minute interval; the smoke run temporarily used a one-minute interval.
+- The endpoint test passed without credentials and with outbound connections forbidden. The job invokes no portfolio calculations and stores no user credentials.
+- The runbook records setup, observations and the pause/remove procedure; the shared migration is applied and both application ledgers are synchronized.
+- Long-term uptime and app recovery after a future Render restart remain untested. Existing frontend cache/retry behavior is unchanged; recap/detail performance still needs separate measurement.
 
 Hosting constraints
 
@@ -221,7 +225,7 @@ Current logic
 - Prices are typically daily, so a 24h cache window is a sensible optimization.
 - Local cache is also useful to avoid immediate backend refetches when switching pages and returning to the portfolio screen.
 - Since 1.0.43, one frontend queue loads recap first and details afterward; caches include summary, positions and history, with user/profile isolation and late-response protection. This does not introduce persisted backend summaries.
-- The backend returns the recap only after all requested portfolios have been calculated. Pricing helpers may still fetch histories, and default SQLite caches can be lost on Render Free restart/spin-down. Keepalive (`16`) is next; durable caches and a fast recap remain this item’s scope.
+- The backend returns the recap only after all requested portfolios have been calculated. Pricing helpers may still fetch histories, and default SQLite caches can be lost on Render Free restart/spin-down. Keepalive (`16`) is now active and verified; durable caches and a fast recap remain this item’s scope.
 
 Why this is a problem
 - Frontend local cache is device-specific and not shared.
