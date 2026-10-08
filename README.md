@@ -23,7 +23,7 @@ Part of the **Trackrs ecosystem** — shares the same Supabase database with [pf
 - **i18n** — English, Italian, Spanish
 - **Installable PWA** — works as a native app on Android, iOS, and desktop
 
-The investment loading order, cache/refresh behavior and published 1.0.43 checks are documented in [the investment release notes](docs/investments-1.0.43.md). The [next roadmap task](docs/future-improvements.md) is a lightweight external cron to keep the Render backend active; it has not been configured by this release.
+The investment loading order, cache/refresh behavior and published 1.0.43 checks are documented in [the investment release notes](docs/investments-1.0.43.md). The [Render keepalive runbook](docs/render-keepalive.md) documents the independent Supabase cron added on 2026-10-08, its checks and pause/remove procedure. Durable backend price/summary caching remains in the [roadmap](docs/future-improvements.md).
 
 ## Stack
 

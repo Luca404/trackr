@@ -1,10 +1,10 @@
 # trackr — Known Issues & TODO
 
-Updated for main 1.0.43 on 2026-10-06, retaining earlier 1.0.41 findings. UI/device issues below are previously reported and have not all been reproduced in this review. Applied security fixes and verification evidence are in [the security release record](security-fixes-2026-10-04.md).
+Updated for main 1.0.43 on 2026-10-08, retaining earlier 1.0.41 findings. UI/device issues below are previously reported and have not all been reproduced in this review. Applied security fixes and verification evidence are in [the security release record](security-fixes-2026-10-04.md).
 
 ## Bugs
 
-- **Slow investment loading**: the user reports long waits after 1.0.43. The frontend already requests recap before details; remaining possible delays include Render cold start, recap-wide price fetching and rebuilding the default SQLite market cache. Keepalive via an independent cron is [the next roadmap task](future-improvements.md); production phase timings and durable backend caching remain follow-up work.
+- **Slow investment loading**: the user reports long waits after 1.0.43. The frontend already requests recap before details; remaining possible delays include Render cold start, recap-wide price fetching and rebuilding the default SQLite market cache. Independent Supabase [keepalive](render-keepalive.md) was implemented on 2026-10-08 to reduce idle cold starts; production phase timings and durable backend caching remain follow-up work.
 
 - **Black screen on SW update**: clicking "Ricarica" in the update banner occasionally turns the screen black. Root cause unknown.
 - **P/L overflow in portfolio list**: if P/L % is very large, the "PL (%)" label wraps leaving only the `€` symbol on the line above.

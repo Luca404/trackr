@@ -1,6 +1,12 @@
 Implemented code changes
 ========================
 
+2026-10-08 — Render backend keepalive
+
+- Added public async `/health` in portfolio-tracker: constant HTTP 200 response, no-store, no authentication, database queries or market calculations. Published backend commit `9ebadf3` on main.
+- Added shared migration `20261008120000_render_backend_keepalive`: Supabase Cron plus `pg_net`, named job every 10 minutes, 180s timeout and no credentials. Mirrored the migration in FitTrackr.
+- Added [an operational runbook](render-keepalive.md) and updated the roadmap to focus on measured recap latency/durable caching. Frontend stays 1.0.43; see the runbook for observed deployment and HTTP results.
+
 2026-10-06 — Documentation and next roadmap task
 
 - Prioritized Render keepalive as the next task: a lightweight `/health` endpoint and an independent cron every 10 minutes, preferably Supabase Cron with `pg_net`. This entry records planned work; no cron job or backend change was enabled.

@@ -90,7 +90,7 @@ Vercel, auto-deploy on push to `main`; production: `https://trackr-dusky.vercel.
 
 ## Known issues
 
-Next roadmap task: Render keepalive through an independent cron every 10 minutes calling a lightweight `/health`, preferably Supabase Cron plus `pg_net`. This is planned work, not an installed job; implement it only when requested. Recap is already prioritized; backend computation and durable market-data caching remain separate follow-ups.
+Render keepalive is implemented through Supabase Cron plus `pg_net`: `trackr-render-keepalive` every 10 minutes calls public `/health`, timeout 180s, no credentials or portfolio computation. See `docs/render-keepalive.md` for operational status, checks and pause/remove commands. Recap is already prioritized; measured backend computation and durable market-data caching are the next performance follow-ups.
 
 See `docs/README.md` for current docs and historical plans. Known issues: `docs/known-issues.md`; change log: `docs/code-changes.md`; improvements backlog: `docs/future-improvements.md`.
 

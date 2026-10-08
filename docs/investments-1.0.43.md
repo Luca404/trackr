@@ -28,13 +28,13 @@ The mobile view shows portfolio value and gain/loss, net capital, open positions
 
 Render startup can still delay data when Investments is opened immediately. Preloading moves that wait earlier; it does not keep Render permanently running. Backend market-data freshness, multicurrency conversions/history correctness, owner/member authorization and XIRR calculation validity remain backend responsibilities; this release does not change their calculations or authorization rules.
 
-## Remaining latency and next task
+## Remaining latency and keepalive follow-up
 
 The initial loading order is already recap before details. The startup wake request is separate; the investment queue shares in-flight requests and only moves waiting details when a portfolio is opened.
 
 The local backend source explains possible additional delays: it loads ETF/stock/bond metadata from Supabase before accepting requests, calculates all requested portfolio recaps before returning the response, and uses pricing helpers that may retrieve histories even for recap-only output. Its default market cache is `sqlite:///./cache.db`; on Render Free, local filesystem changes are lost on spin-down/restart/redeploy. These are code/configuration findings, not measured production timings. See [Render filesystem behavior](https://render.com/docs/free#local-files-lost-on-redeploy).
 
-The next roadmap task is an independent cron calling a lightweight public `/health` endpoint every 10 minutes, preferably through Supabase Cron and `pg_net`. It is planned, not configured by this release. Afterward, measure startup, recap and detail timings and continue with durable backend price/summary caches and a faster recap. See [roadmap item 16](future-improvements.md).
+On 2026-10-08, a separate infrastructure change implemented an independent Supabase Cron/`pg_net` job calling public `/health` every 10 minutes. It does not change frontend version 1.0.43 or calculate user portfolios. See [the keepalive runbook](render-keepalive.md) for deployment/HTTP verification. Measure startup, recap and detail timings next and continue with durable backend price/summary caches and a faster recap; see [roadmap items 16 and 4](future-improvements.md).
 
 ## Verification
 

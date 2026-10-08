@@ -1,20 +1,19 @@
 Future improvements backlog
 ===========================
 
-Updated on 2026-10-06 after publishing Trackr 1.0.43 and synchronizing the shared Supabase migration ledger. The user confirmed that the new investment view works, but reported long loading times. Trackr security, shared profiles and the investment frontend changes are implemented; backend performance work remains planned. Multicurrency is explicitly deferred.
+Updated on 2026-10-08 after implementing Render keepalive, publishing Trackr 1.0.43 and synchronizing the shared Supabase migration ledger. The user confirmed that the new investment view works, but reported long loading times. Trackr security, shared profiles and the investment frontend changes are implemented; backend performance work remains planned. Multicurrency is explicitly deferred.
 
 Urgency order
 -------------
 
-Next task — prioritized by the user; keepalive is not configured by this documentation update
+Next backend performance task
 
-- 16. Keep the Render backend active with an external cron
+- 4. Measure recap/detail latency and move portfolio summaries to a two-level caching model
 
 High
 
 - 6. Expand automated tests and runtime sanity checks for critical financial flows
 - 3. Complete multi-profile support in portfolio-tracker
-- 4. Move portfolio summaries to a two-level caching model
 
 Medium
 
@@ -34,7 +33,7 @@ Deferred
 
 Priority rationale
 
-- `16` is the next implementation task: reduce Render idle cold starts before measuring and optimizing recap computation. It does not replace durable market-data caching.
+- `16` implements an independent Supabase keepalive; see the operational status and verification in [the runbook](render-keepalive.md). It does not replace durable market-data caching.
 - `6` now means extending the existing frontend/SQL/concurrency suite and testing the external portfolio integration, rather than introducing the first tests.
 - `14` is completed on main; membership roles, invitation RPCs and security regression tests are already deployed.
 - `3` is high because profile-boundary mistakes affect data correctness, not just architecture.
@@ -50,20 +49,20 @@ Priority rationale
 
 ## 16. Keep the Render backend active with an external cron
 
-Priority: next implementation task, as requested on 2026-10-06.
+Priority: requested on 2026-10-06; implementation authorized on 2026-10-08.
 
-Status: roadmap only. No keepalive endpoint, scheduler or scheduled database job was created in this update.
+Status: implemented through the public backend health route and shared Supabase cron migration. Operational verification, timings and pause/remove commands are in [the keepalive runbook](render-keepalive.md).
 
 Goal
 
 Reduce the cold start when Trackr opens, using a lightweight request every 10 minutes. The scheduler must run independently of the PWA, browser and the user's computer.
 
-Planned implementation
+Implementation
 
-- Add a public `GET /health` to the Render backend that returns a small status response without querying Supabase, requesting market prices or computing portfolios. It needs no user token or service key.
-- Prefer Supabase Cron (`pg_cron`) plus `pg_net` for the periodic HTTP request. Verify extension availability and any existing equivalent job before choosing/enabling the scheduler.
-- Use a bounded HTTP timeout that allows for an initial cold start. Check actual HTTP responses as well as cron execution, since enqueueing a request does not prove the backend answered.
-- Document how to inspect, disable and remove the job. If a shared database migration is needed, review its linked dry-run and synchronize the Trackr/FitTrackr migration versions.
+- Added a public `GET /health` to the Render backend that returns HTTP 200 with `{"status":"ok"}` and `Cache-Control: no-store` without querying Supabase, requesting market prices or computing portfolios. It needs no user token or service key.
+- Supabase Cron (`pg_cron`) plus `pg_net` schedules `trackr-render-keepalive` every 10 minutes. Extension availability and the absence of an equivalent job were checked first.
+- HTTP timeout is bounded at 180 seconds for cold starts. Verify actual HTTP responses as well as cron execution, since enqueueing a request does not prove the backend answered.
+- The runbook documents inspecting, disabling and removing the job. Migration `20261008120000` is mirrored in Trackr/FitTrackr; the linked dry-run showed only this new migration.
 - Measure health/startup, recap and detail response times separately to establish which delays remain after keepalive is active.
 
 Acceptance criteria
