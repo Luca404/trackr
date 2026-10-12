@@ -12,6 +12,7 @@ import i18n from '../src/i18n';
 import { backendDetail } from './fixtures/portfolio';
 
 const state = vi.hoisted(() => ({ portfolios: [] as Portfolio[], details: {} as Record<number, PortfolioResource<PortfolioDetail>>, retry: vi.fn() }));
+vi.mock('../src/services/supabase', () => ({ supabase: {} }));
 vi.mock('../src/contexts/DataContext', () => ({ useData: () => ({ portfolios: state.portfolios, isInitialized: true }) }));
 vi.mock('../src/components/layout/Layout', () => ({ default: ({ children }: { children: ReactNode }) => <main>{children}</main> }));
 vi.mock('../src/services/portfolioApi', () => ({ portfolioData: { ensureSummaries: vi.fn() } }));

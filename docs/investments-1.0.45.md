@@ -66,6 +66,15 @@ or financial write is needed.
 All 49 frontend tests passed, lint passed without warnings, the production build
 succeeded, and the dependency audit reported zero vulnerabilities.
 
+The initial [CI run](https://github.com/Luca404/trackr/actions/runs/38284209342)
+failed while collecting the total-page tests: their import of `apiService` also
+initialized the real Supabase client, which had no URL in CI. Local `.env` values
+had hidden this dependency. The page suite now mocks that client, and Vitest blanks
+Supabase URL/key values for every unit-test run so local credentials cannot mask
+missing mocks. The same failure was reproduced with blank values before the fix;
+the full suite is checked with blank values after the fix. This follow-up changes
+only test configuration/documentation and keeps app version 1.0.45.
+
 Regression coverage includes cross-broker merging and provenance, identity/type/
 currency boundaries, quote units, recap/loading/error behavior, profile-ID filtering,
 historical gaps/coverage/closed portfolios, capital-weighted return, cashflow XIRR,

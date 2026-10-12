@@ -9,5 +9,9 @@ export default defineConfig({
       'virtual:pwa-register/react': fileURLToPath(new URL('./tests/fixtures/service-worker.ts', import.meta.url)),
     },
   },
-  test: { environment: 'jsdom', include: ['tests/**/*.test.{ts,tsx}'], clearMocks: true },
+  test: {
+    environment: 'jsdom', include: ['tests/**/*.test.{ts,tsx}'], clearMocks: true,
+    // Unit tests must mock Supabase rather than silently using local .env values.
+    env: { VITE_SUPABASE_URL: '', VITE_SUPABASE_PUBLISHABLE_KEY: '' },
+  },
 });
