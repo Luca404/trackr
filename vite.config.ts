@@ -5,8 +5,8 @@ import { execSync } from 'child_process'
 
 const APP_MAJOR = 1
 const APP_MINOR = 0
-const APP_PATCH = 43  // Incrementare manualmente ad ogni release pubblicata
-const APP_RELEASE_NOTES = 'Investments preload at startup, shared cache and refresh, new mobile portfolio overview with history and allocation'
+const APP_PATCH = 44  // Incrementare manualmente ad ogni release pubblicata
+const APP_RELEASE_NOTES = 'Correct current investment prices and portfolio totals; refresh investment caches saved before the date-sorting fix'
 
 function getCommitMsg() {
   try {

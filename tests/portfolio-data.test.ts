@@ -12,6 +12,28 @@ const flush = async () => { for (let i = 0; i < 12; i++) await Promise.resolve()
 afterEach(() => { vi.useRealTimers(); localStorage.clear(); });
 
 describe('investment loading and caching', () => {
+  it('discards legacy quote caches and reloads totals without clearing auth or settings', async () => {
+    const pending = deferred<unknown>();
+    const now = 1000;
+    const oldSummary = backendSummaries([1], 8296).portfolios[0];
+    localStorage.setItem(`${PORTFOLIO_DATA_PREFIX}alice:a:summaries`, JSON.stringify({ updatedAt: now, data: { 1: oldSummary } }));
+    localStorage.setItem(`${PORTFOLIO_DATA_PREFIX}alice:a:1`, JSON.stringify({ updatedAt: now, data: normalizePortfolioDetail(backendDetail(8296)) }));
+    localStorage.setItem('theme', 'dark');
+    localStorage.setItem('sb-test-auth-token', 'test-session');
+    const request = vi.fn((path: string) => path.includes('?') ? pending.promise : Promise.resolve(backendDetail(9895)));
+    const store = new PortfolioDataStore({ request, storage: localStorage, now: () => now });
+    store.setScope('alice', 'a', [1]);
+    expect(store.getSnapshot().summaries.data).toBeNull();
+    expect(store.getSnapshot().details[1].data).toBeNull();
+    expect(localStorage.getItem(`${PORTFOLIO_DATA_PREFIX}alice:a:1`)).toBeNull();
+    expect(localStorage.getItem('theme')).toBe('dark');
+    expect(localStorage.getItem('sb-test-auth-token')).toBe('test-session');
+    pending.resolve(backendSummaries([1], 9895));
+    await store.ensureDetail(1);
+    expect(store.getSnapshot().summaries.data?.[1].total_value).toBe(9895);
+    expect(store.getSnapshot().details[1].data?.summary.total_gain_loss).toBe(8895);
+    store.reset();
+  });
   it('wakes the backend once per session before a profile is available', async () => {
     const request = vi.fn(async () => ({}));
     const store = new PortfolioDataStore({ request });

@@ -1,6 +1,8 @@
 import type { HistoryPoint, PortfolioDataError, PortfolioDetail, PortfolioPosition, PortfolioResource, PortfolioSnapshot, PortfolioSummary } from '../types/portfolioData';
 
 export const PORTFOLIO_DATA_PREFIX = 'trackr:portfolio-data:v1:';
+// Quotes saved before the backend's calendar-date sorting fix are untrustworthy.
+const CACHE_REVISION = 2;
 const TTL = 24 * 60 * 60 * 1000;
 const EMPTY_TTL = 5 * 60 * 1000;
 const TIMEOUT = 180_000;
@@ -113,6 +115,10 @@ export class PortfolioDataStore {
       const raw = this.options.storage?.getItem(this.key(id));
       if (raw) {
         const cached = record(JSON.parse(raw));
+        if (cached.revision !== CACHE_REVISION) {
+          this.options.storage?.removeItem(this.key(id));
+          return emptyResource();
+        }
         const updatedAt = numeric(cached.updatedAt);
         if (updatedAt > this.now()) throw new DataError('response');
         const resource = { data: normalize(cached.data), loading: false, stale: false, error: null, updatedAt };
@@ -122,7 +128,7 @@ export class PortfolioDataStore {
     return emptyResource();
   }
   private persist<T>(id: number | 'summaries', resource: PortfolioResource<T>) {
-    try { this.options.storage?.setItem(this.key(id), JSON.stringify({ data: resource.data, updatedAt: resource.updatedAt })); }
+    try { this.options.storage?.setItem(this.key(id), JSON.stringify({ revision: CACHE_REVISION, data: resource.data, updatedAt: resource.updatedAt })); }
     catch { /* The in-memory cache remains usable when storage is full. */ }
   }
   private cancel() {

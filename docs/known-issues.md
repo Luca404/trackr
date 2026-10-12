@@ -1,6 +1,6 @@
 # trackr — Known Issues & TODO
 
-Updated for main 1.0.43 on 2026-10-08, retaining earlier 1.0.41 findings. UI/device issues below are previously reported and have not all been reproduced in this review. Applied security fixes and verification evidence are in [the security release record](security-fixes-2026-10-04.md).
+Updated for main 1.0.44 on 2026-10-12, retaining earlier 1.0.41 findings. UI/device issues below are previously reported and have not all been reproduced in this review. Applied security fixes and verification evidence are in [the security release record](security-fixes-2026-10-04.md).
 
 ## Bugs
 
@@ -28,6 +28,8 @@ Updated for main 1.0.43 on 2026-10-08, retaining earlier 1.0.41 findings. UI/dev
 - **Multicurrency**: development remains separate from main and is deliberately deferred; do not apply its schema to the shared hosted DB as part of these security fixes.
 
 ## Resolved
+
+- Version 1.0.44 fixes backend history ordering by calendar dates and recovers cached ETF quotes selected from an old date. This could make overview totals/P&L disagree with the latest chart value. Old frontend investment cache entries are automatically refetched. See [the fix and verification](investments-1.0.44.md); actual provider quote freshness and remaining performance work are separate.
 
 - Version 1.0.43 shares startup/page investment requests, preserves valid cached data across ordinary startup, invalidates active-profile summary/detail/history data on refresh, and releases the refresh spinner after failure. Recap loads first; details are queued afterward. Mobile portfolio overview, incomplete-history gating and price-error presentation are covered in [the release notes](investments-1.0.43.md).
 

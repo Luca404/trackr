@@ -1,7 +1,7 @@
 Future improvements backlog
 ===========================
 
-Updated on 2026-10-08 after implementing Render keepalive, publishing Trackr 1.0.43 and synchronizing the shared Supabase migration ledger. The user confirmed that the new investment view works, but reported long loading times. Trackr security, shared profiles and the investment frontend changes are implemented; backend performance work remains planned. Multicurrency is explicitly deferred.
+Updated on 2026-10-12 after the 1.0.44 ETF price/total correction, Render keepalive and shared Supabase migration synchronization. The user confirmed that the new investment view works, but reported long loading times. Trackr security, shared profiles and the investment frontend changes are implemented; backend performance work remains planned. Multicurrency is explicitly deferred.
 
 Urgency order
 -------------
@@ -27,7 +27,9 @@ Lower
 
 - 2. Clarify and clean up backend models/documentation in portfolio-tracker
 
-Completed infrastructure
+Completed infrastructure and correctness
+
+- Current-price/calendar ordering fix — 1.0.44; see [verification](investments-1.0.44.md)
 
 - 16. Render keepalive — active on hosted Supabase; automatic HTTP 200 verified on 2026-10-08
 

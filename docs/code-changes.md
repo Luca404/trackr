@@ -1,6 +1,12 @@
 Implemented code changes
 ========================
 
+2026-10-12 — v1.0.44 investment price/total correction
+
+- Fixed backend merging of market histories: parsed calendar-date ordering and date deduplication replace DD-MM-YYYY string sorting; newest-date detection tolerates legacy ordering. ETF EOD cache reads repair an old incorrect `last_price` without changing freshness timestamps.
+- Frontend investment cache envelopes now require revision 2 and refetch legacy entries without clearing Auth or preferences. Release bumped to 1.0.44.
+- Added backend regression coverage for the old-price/chart mismatch and both providers; added frontend legacy-cache recovery coverage. 23 backend tests and 31 frontend tests passed; lint/build passed. See [the release record](investments-1.0.44.md) for deployment checks and verification limits.
+
 2026-10-08 — Render backend keepalive
 
 - Added public async `/health` in portfolio-tracker: constant HTTP 200 response, no-store, no authentication, database queries or market calculations. Published backend commit `9ebadf3` on main.

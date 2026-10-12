@@ -1,7 +1,7 @@
 # Render backend keepalive
 
 Implemented on 2026-10-08 for `https://portfolio-tracker-p6ha.onrender.com`.
-This is infrastructure work; Trackr remains at frontend version 1.0.43.
+This infrastructure change was introduced with frontend version 1.0.43 and did not require a frontend version bump. Subsequent investment price/cache corrections are recorded in [the 1.0.44 release](investments-1.0.44.md).
 
 Operational status: **active and verified on 2026-10-08**. The backend route is
 deployed on Render and the shared Supabase migration is applied. One automatic
@@ -10,7 +10,7 @@ open browser or running personal computer is required.
 
 ## Configuration
 
-- Public `GET /health`: HTTP 200, `{"status":"ok"}`, `Cache-Control: no-store`.
+- Public `GET /health`: HTTP 200, `{"status":"ok"}`, `Cache-Control: no-store`. From the 2026-10-12 backend fix, `X-Backend-Revision` identifies the deployment SHA when supplied by Render.
 - Async endpoint in the portfolio-tracker backend, without authentication,
   Supabase queries, market-price requests or portfolio calculations. This is
   process liveness after startup, not a dependency/readiness check.

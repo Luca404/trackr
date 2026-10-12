@@ -65,7 +65,7 @@ Component / Page
 
 ## Version bump
 
-`APP_MAJOR`, `APP_MINOR`, `APP_PATCH` are hardcoded constants in `vite.config.ts`; current application version is 1.0.43. Increment `APP_PATCH` and update release notes for frontend releases. Documentation/CI-only commits do not require a new application version. Version shown in header. `version.json` generated at build time by a Vite plugin (not tracked in `public/`).
+`APP_MAJOR`, `APP_MINOR`, `APP_PATCH` are hardcoded constants in `vite.config.ts`; current application version is 1.0.44. Increment `APP_PATCH` and update release notes for frontend releases. Documentation/CI-only commits do not require a new application version. Version shown in header. `version.json` generated at build time by a Vite plugin (not tracked in `public/`).
 
 ## Default data
 
@@ -79,6 +79,7 @@ On loading a writable owner/editor profile with empty accounts or categories (ne
 - Use `save_financial_transaction`, `save_financial_order` and `delete_financial_transaction/order/portfolio` RPCs for linked writes/deletes. Do not compose separate client writes for a financial operation. Recurrence processing uses a profile lock and unique occurrence identity for retries.
 - `category_type = 'investment'` does not exist. Investment transactions use a portfolio name as `category`.
 - `portfolioData` is the shared investment store: warm Render immediately after authentication, request summaries first once the profile is resolved, publish the recap as soon as it arrives, then process details one at a time and prioritize the open portfolio. Pages consume `usePortfolioData`; do not introduce page-owned backend caches.
+- Investment cache envelopes require revision 2 after the 1.0.44 price-ordering fix. Discard older entries on access and refetch; preserve Auth/settings/PWA assets. Backend histories must use parsed calendar-date ordering; see `docs/investments-1.0.44.md`.
 - Summary/detail/history entries use `trackr:portfolio-data:v1:<userId>:<profileId>:<summaries|portfolioId>`, with a 24h TTL (5 min for no open positions). Expired valid data stays visible during refresh. Incomplete prices are not persisted. Logout/identity changes remove private entries; ordinary startup keeps valid cache. Legacy summary keys are cleaned by invalidation/logout.
 - Manual refresh invalidates active-profile investment entries and old requests, reloads Supabase, then awaits summaries and the open portfolio; background details continue without holding the spinner. Preserve Auth, settings and PWA assets.
 - `positions_only` hides XIRR and the performance chart. Holdings allocation requires a single currency; portfolio history needs a single verified order currency. The loaded-at label records the frontend fetch time, not market quote freshness.

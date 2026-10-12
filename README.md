@@ -4,7 +4,7 @@ Personal finance PWA for tracking expenses, income, transfers, and investments. 
 
 Part of the **Trackrs ecosystem** — shares the same Supabase database with [pfTrackr](https://github.com/Luca404/portfolio-tracker) for investment portfolio analytics, and [fitTrackr](https://github.com/Luca404/fitness-tracker) for calorie and nutrition tracking.
 
-**Current version:** 1.0.43
+**Current version:** 1.0.44
 
 ## Features
 
@@ -23,7 +23,7 @@ Part of the **Trackrs ecosystem** — shares the same Supabase database with [pf
 - **i18n** — English, Italian, Spanish
 - **Installable PWA** — works as a native app on Android, iOS, and desktop
 
-The investment loading order, cache/refresh behavior and published 1.0.43 checks are documented in [the investment release notes](docs/investments-1.0.43.md). The [Render keepalive runbook](docs/render-keepalive.md) documents the independent Supabase cron added on 2026-10-08, its checks and pause/remove procedure. Durable backend price/summary caching remains in the [roadmap](docs/future-improvements.md).
+The [1.0.44 price/total fix](docs/investments-1.0.44.md) corrects selection of the latest ETF quote and renews old investment caches. The investment loading order, cache/refresh behavior and published 1.0.43 checks are documented in [the investment release notes](docs/investments-1.0.43.md). The [Render keepalive runbook](docs/render-keepalive.md) documents the independent Supabase cron added on 2026-10-08, its checks and pause/remove procedure. Durable backend price/summary caching remains in the [roadmap](docs/future-improvements.md).
 
 ## Stack
 

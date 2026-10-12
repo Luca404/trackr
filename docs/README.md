@@ -1,6 +1,6 @@
 # Trackr documentation
 
-Updated on 2026-10-08 for version 1.0.43, which adds early investment loading and a mobile portfolio overview. The release was pushed to main and the user confirmed the new view works. Render keepalive has been implemented through an independent Supabase cron; see its runbook for operational verification. Backend computation/caching remain follow-ups; multicurrency remains deferred on the separate development branch.
+Updated on 2026-10-12 for version 1.0.44, which fixes current ETF quote selection and invalidates older investment caches. Version 1.0.43 introduced early investment loading and a mobile portfolio overview. The 1.0.43 release was pushed to main and the user confirmed its new view works; the 1.0.44 price/cache fix is documented separately. Render keepalive has been implemented through an independent Supabase cron; see its runbook for operational verification. Backend computation/caching remain follow-ups; multicurrency remains deferred on the separate development branch.
 
 | Document | Purpose |
 | --- | --- |
@@ -8,6 +8,7 @@ Updated on 2026-10-08 for version 1.0.43, which adds early investment loading an
 | [Developer notes](../CLAUDE.md) | Current architecture, roles, session/cache behavior and financial RPC conventions |
 | [Shared database workflow](../supabase/README.md) | Applied migration history, local/remote distinction, isolated tests and future grants |
 | [Security fixes and release verification](security-fixes-2026-10-04.md) | Published commits, applied SQL, CI and production checks |
+| [Investment price and total correction](investments-1.0.44.md) | Calendar-date sorting fix, recovery of old quotes/cache and verification |
 | [Investment loading and portfolio overview](investments-1.0.43.md) | Published release, recap/detail loading order, cache/refresh behavior, checks and remaining latency |
 | [Render keepalive](render-keepalive.md) | Active cron, verified automatic HTTP 200, deployment record and pause/remove commands |
 | [Known issues](known-issues.md) | Remaining issues and items requiring reproduction |
