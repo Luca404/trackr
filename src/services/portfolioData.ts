@@ -2,7 +2,7 @@ import type { HistoryPoint, PortfolioDataError, PortfolioDetail, PortfolioPositi
 
 export const PORTFOLIO_DATA_PREFIX = 'trackr:portfolio-data:v1:';
 // Quotes saved before the backend's calendar-date sorting fix are untrustworthy.
-const CACHE_REVISION = 2;
+const CACHE_REVISION = 3;
 const TTL = 24 * 60 * 60 * 1000;
 const EMPTY_TTL = 5 * 60 * 1000;
 const TIMEOUT = 180_000;
@@ -68,10 +68,16 @@ export function normalizePortfolioDetail(value: unknown): PortfolioDetail {
   const complete = !positions.some(p => p.fetch_error)
     && !(totals.total_value === 0 && totals.total_cost > 0);
   const curves = row.history ? record(row.history) : {};
+  const cashflows = Array.isArray(row.cashflows) && row.cashflows.every(value => {
+    const flow = record(value);
+    return typeof flow.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(flow.date)
+      && Number.isFinite(Date.parse(flow.date)) && optionalNumber(flow.amount) !== null && typeof flow.currency === 'string';
+  }) ? row.cashflows as PortfolioDetail['cashflows'] : undefined;
   return {
     summary: totals, positions, complete,
     history: { portfolio: history(curves.portfolio), performance: history(curves.performance) },
     historyCurrency: typeof row.history_currency === 'string' ? row.history_currency : null,
+    cashflows,
   };
 }
 
@@ -92,7 +98,7 @@ export class PortfolioDataStore {
   private queue: Task[] = [];
   private tasks = new Map<string, Task>();
   private active: Task | null = null;
-  private visible: number | null = null;
+  private visible: number | 'all' | null = null;
   private warmUser: string | null = null;
   private warmController: AbortController | null = null;
   private now: () => number;
@@ -202,15 +208,20 @@ export class PortfolioDataStore {
     });
     if (prefetch) this.prefetch();
   }
-  setVisible(id: number | null) { this.visible = id; if (id !== null) void this.ensureDetail(id, true); }
+  setVisible(id: number | 'all' | null) {
+    this.visible = id;
+    if (id === 'all') this.ids.forEach(portfolioId => { void this.ensureDetail(portfolioId); });
+    else if (id !== null) void this.ensureDetail(id, true);
+  }
   prefetch() {
     void this.ensureSummaries();
-    if (this.visible !== null) void this.ensureDetail(this.visible, true);
+    if (typeof this.visible === 'number') void this.ensureDetail(this.visible, true);
     this.ids.forEach(id => { void this.ensureDetail(id); });
   }
   async settleVisible() {
     const work = [this.ensureSummaries()];
-    if (this.visible !== null) work.push(this.ensureDetail(this.visible, true));
+    if (this.visible === 'all') work.push(...this.ids.map(id => this.ensureDetail(id)));
+    else if (this.visible !== null) work.push(this.ensureDetail(this.visible, true));
     await Promise.all(work);
   }
   private enqueue(key: string, run: (signal: AbortSignal, generation: number) => Promise<void>, priority = false) {

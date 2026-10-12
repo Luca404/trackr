@@ -1,7 +1,7 @@
 Future improvements backlog
 ===========================
 
-Updated on 2026-10-12 after the 1.0.44 ETF price/total correction, Render keepalive and shared Supabase migration synchronization. The user confirmed that the new investment view works, but reported long loading times. Trackr security, shared profiles and the investment frontend changes are implemented; backend performance work remains planned. Multicurrency is explicitly deferred.
+Updated on 2026-10-12 after the 1.0.45 total-portfolio overview, the 1.0.44 ETF price/total correction, Render keepalive and shared Supabase migration synchronization. The user confirmed that the new investment view works, but reported long loading times. Trackr security, shared profiles and the investment frontend changes are implemented; backend performance work remains planned. Multicurrency is explicitly deferred.
 
 Urgency order
 -------------
@@ -28,6 +28,8 @@ Lower
 - 2. Clarify and clean up backend models/documentation in portfolio-tracker
 
 Completed infrastructure and correctness
+
+- Consolidated active-profile overview — 1.0.45; see [behavior and verification](investments-1.0.45.md)
 
 - Current-price/calendar ordering fix — 1.0.44; see [verification](investments-1.0.44.md)
 

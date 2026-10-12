@@ -385,6 +385,14 @@
       "stock": "Stocks",
       "bond": "Bonds",
       "other": "Other"
-    }
+    },
+    "totalTitle": "Total portfolio",
+    "openTotal": "Open total portfolio",
+    "totalScope_one": "All holdings in {{count}} portfolio in the active profile.",
+    "totalScope_other": "All holdings in {{count}} portfolios in the active profile.",
+    "sourcePortfolios": "Held in",
+    "totalCurrencyNote": "Totals are separated by reference currency. No amounts in different currencies are added together.",
+    "totalReturnNote": "Annual return uses the combined cashflows when complete and in the same currency. Position values combine the quotes loaded for each portfolio.",
+    "totalHistoryNote": "History combines portfolio values over their shared available period. Return is weighted by invested value, not an average of portfolio percentages."
   }
 }

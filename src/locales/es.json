@@ -360,6 +360,14 @@
       "stock": "Acciones",
       "bond": "Bonos",
       "other": "Otros"
-    }
+    },
+    "totalTitle": "Cartera total",
+    "openTotal": "Abrir cartera total",
+    "totalScope_one": "Todas las posiciones de {{count}} cartera del perfil activo.",
+    "totalScope_other": "Todas las posiciones de {{count}} carteras del perfil activo.",
+    "sourcePortfolios": "Carteras de origen",
+    "totalCurrencyNote": "Los totales están separados por divisa de referencia. No se suman importes en divisas diferentes.",
+    "totalReturnNote": "La rentabilidad anual usa los flujos conjuntos cuando están completos y en la misma divisa. Las posiciones combinan las cotizaciones cargadas para cada cartera.",
+    "totalHistoryNote": "El historial suma los valores de las carteras durante el período disponible en común. La rentabilidad se pondera por el valor invertido, no es un promedio de los porcentajes de las carteras."
   }
 }

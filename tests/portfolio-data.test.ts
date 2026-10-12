@@ -12,6 +12,21 @@ const flush = async () => { for (let i = 0; i < 12; i++) await Promise.resolve()
 afterEach(() => { vi.useRealTimers(); localStorage.clear(); });
 
 describe('investment loading and caching', () => {
+  it('waits for every visible portfolio during a total overview refresh and reuses the queue', async () => {
+    const first = deferred<unknown>(), second = deferred<unknown>();
+    const request = vi.fn((path: string) => path.includes('?') ? Promise.resolve(backendSummaries([1, 2])) : path.endsWith('/1') ? first.promise : second.promise);
+    const store = new PortfolioDataStore({ request });
+    store.setScope('alice', 'a', [1, 2]); store.setVisible('all');
+    let settled = false;
+    const refresh = store.settleVisible().then(() => { settled = true; });
+    await flush();
+    first.resolve(backendDetail()); await flush();
+    expect(settled).toBe(false);
+    second.resolve(backendDetail(1400)); await refresh;
+    expect(store.getSnapshot().details[2].data?.summary.total_value).toBe(1400);
+    expect(request.mock.calls.map(call => call[0])).toEqual(['/portfolios?profile_id=a', '/portfolios/1', '/portfolios/2']);
+    store.reset();
+  });
   it('discards legacy quote caches and reloads totals without clearing auth or settings', async () => {
     const pending = deferred<unknown>();
     const now = 1000;

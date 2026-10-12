@@ -1,6 +1,6 @@
 # trackr — Known Issues & TODO
 
-Updated for main 1.0.44 on 2026-10-12, retaining earlier 1.0.41 findings. UI/device issues below are previously reported and have not all been reproduced in this review. Applied security fixes and verification evidence are in [the security release record](security-fixes-2026-10-04.md).
+Updated for main 1.0.45 on 2026-10-12, retaining earlier 1.0.41 findings. UI/device issues below are previously reported and have not all been reproduced in this review. Applied security fixes and verification evidence are in [the security release record](security-fixes-2026-10-04.md).
 
 ## Bugs
 
@@ -12,7 +12,7 @@ Updated for main 1.0.44 on 2026-10-12, retaining earlier 1.0.41 findings. UI/dev
 - **`touchmove` warning**: `[Intervention] Ignored attempt to cancel a touchmove event with cancelable=false` logged during page swipes. Low priority.
 - **Chrome autofill bar**: Android Chrome shows a password/card autofill bar when the keyboard opens. Not fixable via HTML/CSS — it's native browser UI (`KeyboardAccessoryView`). Chrome ignores `autoComplete="off"` for this. User-side fix: disable autofill in Chrome settings.
 - **Auth user deletion while a page is open**: local JWT/session state can remain until server validation or refresh. Cache cleanup on logout/identity changes is implemented; immediate logout after an administrative user deletion remains unverified. Removing an Auth user can cascade into both finance and fitness data in the shared project.
-- **Production bundle size**: the main JS chunk is about 796 KB before compression; Vite warns above 500 KB. Consider route-level lazy loading. This is a performance issue, not a dependency advisory.
+- **Production bundle size**: the main JS chunk is about 807 KB before compression; Vite warns above 500 KB. Consider route-level lazy loading. This is a performance issue, not a dependency advisory.
 - **Historical fitness constraints**: some pre-existing fitness CHECK constraints remain `NOT VALID`. All seven new security constraints were validated; the older fitness checks need a separate integrity review.
 
 ## TODO
@@ -28,6 +28,8 @@ Updated for main 1.0.44 on 2026-10-12, retaining earlier 1.0.41 findings. UI/dev
 - **Multicurrency**: development remains separate from main and is deliberately deferred; do not apply its schema to the shared hosted DB as part of these security fixes.
 
 ## Resolved
+
+- Version 1.0.45 adds a consolidated view of all active-profile portfolios from the total-investments card. Identical instruments merge with source-portfolio breakdowns; currencies, incomplete data and return/history coverage remain explicit. See [the overview release record](investments-1.0.45.md).
 
 - Version 1.0.44 fixes backend history ordering by calendar dates and recovers cached ETF quotes selected from an old date. This could make overview totals/P&L disagree with the latest chart value. Old frontend investment cache entries are automatically refetched. See [the fix and verification](investments-1.0.44.md); actual provider quote freshness and remaining performance work are separate.
 

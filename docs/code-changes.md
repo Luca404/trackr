@@ -1,6 +1,12 @@
 Implemented code changes
 ========================
 
+2026-10-12 — v1.0.45 consolidated portfolio overview
+
+- Made the total-investments card open protected `/portfolios/total`, reusing the mobile/desktop overview with merged instruments and broker quantity/value breakdowns. Identity, currency, quote and incomplete-history boundaries are preserved.
+- Added derived recap/position/history aggregation, capital-weighted performance and cashflow-based XIRR. Extended the existing metadata read and cache envelopes to revision 3; total-page refresh awaits every relevant detail through the existing queue.
+- Added navigation/aggregation/financial/loading/privacy/refresh regressions, three-language UI copy and responsive browser verification with synthetic data. No backend or database writes/migrations. See [the release record](investments-1.0.45.md).
+
 2026-10-12 — v1.0.44 investment price/total correction
 
 - Fixed backend merging of market histories: parsed calendar-date ordering and date deduplication replace DD-MM-YYYY string sorting; newest-date detection tolerates legacy ordering. ETF EOD cache reads repair an old incorrect `last_price` without changing freshness timestamps.

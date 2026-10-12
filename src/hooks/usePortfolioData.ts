@@ -5,7 +5,7 @@ import { portfolioData } from '../services/portfolioApi';
 import { emptyResource } from '../services/portfolioData';
 import type { PortfolioDetail, PortfolioSummary } from '../types/portfolioData';
 
-export function usePortfolioData(portfolioId?: number) {
+export function usePortfolioData(portfolioId?: number | 'all') {
   const { user } = useAuth();
   const { activeProfile } = useData();
   const snapshot = useSyncExternalStore(portfolioData.subscribe, portfolioData.getSnapshot);
@@ -18,7 +18,8 @@ export function usePortfolioData(portfolioId?: number) {
   }, [portfolioId, visible, scope]);
   return {
     summaries: visible ? snapshot.summaries : emptyResource<Record<number, PortfolioSummary>>(),
-    detail: visible && portfolioId !== undefined ? snapshot.details[portfolioId] ?? emptyResource<PortfolioDetail>() : emptyResource<PortfolioDetail>(),
-    retry: () => portfolioId === undefined ? portfolioData.invalidate() : portfolioData.ensureDetail(portfolioId, true),
+    details: visible ? snapshot.details : {},
+    detail: visible && typeof portfolioId === 'number' ? snapshot.details[portfolioId] ?? emptyResource<PortfolioDetail>() : emptyResource<PortfolioDetail>(),
+    retry: () => typeof portfolioId === 'number' ? portfolioData.ensureDetail(portfolioId, true) : portfolioData.invalidate(),
   };
 }

@@ -9,6 +9,8 @@ export interface PortfolioSummary {
 }
 
 export interface PortfolioPosition {
+  key?: string;
+  sources?: { portfolioId: number; name: string; quantity: number; market_value: number; fetch_error?: string | null }[];
   symbol: string;
   name: string;
   isin: string | null;
@@ -26,6 +28,7 @@ export interface PortfolioPosition {
 }
 
 export interface HistoryPoint { date: string; value: number }
+export interface PortfolioCashflow { date: string; amount: number; currency: string }
 
 export interface PortfolioDetail {
   summary: PortfolioSummary;
@@ -33,6 +36,7 @@ export interface PortfolioDetail {
   history: { portfolio: HistoryPoint[]; performance: HistoryPoint[] };
   historyCurrency: string | null;
   complete: boolean;
+  cashflows?: PortfolioCashflow[];
 }
 
 export type PortfolioDataError = 'network' | 'quotes' | 'response' | 'missing';

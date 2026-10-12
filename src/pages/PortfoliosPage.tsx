@@ -1,6 +1,6 @@
 import { clearPortfolioCache } from '../services/sessionCache';
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { apiService } from '../services/api';
 import { useData } from '../contexts/DataContext';
 import Layout from '../components/layout/Layout';
@@ -14,6 +14,7 @@ import { useTranslation } from 'react-i18next';
 import { useSettings } from '../contexts/SettingsContext';
 import { usePortfolioData } from '../hooks/usePortfolioData';
 import { portfolioData } from '../services/portfolioApi';
+import { sumPortfolioSummaries } from '../utils/totalPortfolio';
 
 type InitialPosition = InvestmentOrderInput;
 
@@ -174,10 +175,11 @@ export default function PortfoliosPage() {
 
   const groups = [...new Set(portfolios.map(p => p.reference_currency || 'EUR'))].map(currency => {
     const rows = portfolios.filter(p => (p.reference_currency || 'EUR') === currency);
-    const complete = rows.every(p => !!summaries[p.id]);
-    const value = rows.reduce((sum, p) => sum + (summaries[p.id]?.total_value ?? 0), 0);
-    const pl = rows.reduce((sum, p) => sum + (summaries[p.id]?.total_gain_loss ?? 0), 0);
-    const cost = rows.reduce((sum, p) => sum + (summaries[p.id]?.total_cost ?? 0), 0);
+    const complete = rows.every(p => summaries[p.id]?.reference_currency === currency);
+    const totals = complete ? sumPortfolioSummaries(rows.map(p => summaries[p.id]), currency) : null;
+    const value = totals?.total_value ?? 0;
+    const pl = totals?.total_gain_loss ?? 0;
+    const cost = totals?.total_cost ?? 0;
     return { currency, complete, value, pl, pct: cost > 0 ? pl / cost * 100 : null };
   });
 
@@ -191,12 +193,9 @@ export default function PortfoliosPage() {
               {/* Banner Investimenti totali */}
               {portfolios.length > 0 && (
                 <div className="sticky -top-3 z-20 -mx-4 px-4 -mt-3 pt-4 pb-3 bg-gray-50 dark:bg-gray-900 relative">
-                  <div className="card py-5">
+                  <div className="card relative p-0">
+                    <Link to="/portfolios/total" className="block rounded-xl px-4 py-5 transition-colors hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-primary-500 dark:hover:bg-gray-700/30" aria-label={t('portfolioData.openTotal')}>
                     <div className="text-sm text-gray-500 dark:text-gray-400 mb-1 text-center">{t('portfolios.totalInvestments')}</div>
-                    <button onClick={toggleHideBalances} aria-label={t('portfolioData.toggleBalances')}
-                      className="absolute right-6 top-7 flex h-10 w-10 items-center justify-center text-xl text-gray-400">
-                      {hideBalances ? '🙈' : '👁️'}
-                    </button>
                     <div className="space-y-3 text-center" aria-live="polite">
                       {groups.map(group => (
                         <div key={group.currency}>
@@ -217,6 +216,12 @@ export default function PortfoliosPage() {
                           : t('portfolioData.waiting')}
                       </p>
                     </div>
+                    <div className="mt-3 text-center text-xs font-medium text-primary-600 dark:text-primary-400">{t('portfolioData.openTotal')} <span aria-hidden="true">→</span></div>
+                    </Link>
+                    <button onClick={toggleHideBalances} aria-label={t('portfolioData.toggleBalances')}
+                      className="absolute right-3 top-3 flex h-11 w-11 items-center justify-center rounded-full text-xl text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700">
+                      {hideBalances ? '🙈' : '👁️'}
+                    </button>
                     {investmentData.summaries.error && <div role="alert" className="mt-3 text-center text-sm text-amber-700 dark:text-amber-300">
                       <p>{t(`portfolioData.errors.${investmentData.summaries.error}`)}</p>
                       <button type="button" onClick={() => investmentData.retry()} className="mt-1 min-h-10 font-semibold underline">{t('portfolioData.retry')}</button>

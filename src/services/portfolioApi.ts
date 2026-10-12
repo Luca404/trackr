@@ -12,7 +12,7 @@ export const portfolioData = new PortfolioDataStore({
     if (!session || session.user.id !== userId || signal.aborted) throw new Error('Session changed');
     const detailId = path.match(/^\/portfolios\/(\d+)$/)?.[1];
     const metadata = detailId
-      ? Promise.resolve(supabase.from('orders').select('symbol,name,isin,currency').eq('portfolio_id', Number(detailId)).abortSignal(signal))
+      ? Promise.resolve(supabase.from('orders').select('symbol,name,isin,currency,date,quantity,price,commission,order_type').eq('portfolio_id', Number(detailId)).abortSignal(signal))
         .catch(() => ({ data: null, error: new Error('Metadata unavailable') }))
       : null;
     const response = await fetch(`${PF_BACKEND_URL}${path}`, {
@@ -25,6 +25,13 @@ export const portfolioData = new PortfolioDataStore({
       if (!error && orders) {
         const currencies = [...new Set(orders.map(order => order.currency).filter(Boolean))];
         body.history_currency = currencies.length === 1 ? currencies[0] : null;
+        if (orders.every(order => typeof order.date === 'string' && typeof order.quantity === 'number'
+          && typeof order.price === 'number' && (order.commission == null || typeof order.commission === 'number')
+          && (order.order_type === 'buy' || order.order_type === 'sell') && typeof order.currency === 'string')) {
+          body.cashflows = orders.map(order => ({ date: order.date, currency: order.currency,
+            amount: order.order_type === 'buy' ? -(order.quantity * order.price + (order.commission ?? 0))
+              : order.quantity * order.price - (order.commission ?? 0) }));
+        }
         if (Array.isArray(body.positions)) body.positions = body.positions.map((position: Record<string, unknown>) => {
           const order = orders.find(order => order.symbol.toUpperCase() === String(position.symbol).toUpperCase());
           return { ...position, name: order?.name || position.name, isin: order?.isin || position.isin };

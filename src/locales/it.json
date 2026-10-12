@@ -385,6 +385,14 @@
       "stock": "Azioni",
       "bond": "Obbligazioni",
       "other": "Altro"
-    }
+    },
+    "totalTitle": "Portafoglio totale",
+    "openTotal": "Apri il portafoglio totale",
+    "totalScope_one": "Tutte le posizioni di {{count}} portafoglio del profilo attivo.",
+    "totalScope_other": "Tutte le posizioni di {{count}} portafogli del profilo attivo.",
+    "sourcePortfolios": "Portafogli di provenienza",
+    "totalCurrencyNote": "I totali sono separati per valuta di riferimento. Gli importi in valute diverse non vengono sommati.",
+    "totalReturnNote": "Il rendimento annuo usa i flussi complessivi quando completi e nella stessa valuta. Le posizioni riuniscono le quotazioni caricate per ciascun portafoglio.",
+    "totalHistoryNote": "L’andamento somma i valori dei portafogli nel periodo disponibile in comune. Il rendimento è ponderato per il valore investito, non è una media delle percentuali dei portafogli."
   }
 }

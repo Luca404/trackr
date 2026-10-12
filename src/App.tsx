@@ -9,6 +9,7 @@ import TransactionsPage from './pages/TransactionsPage';
 import StatsPage from './pages/StatsPage';
 import PortfoliosPage from './pages/PortfoliosPage';
 import PortfolioDetailPage from './pages/PortfolioDetailPage';
+import TotalPortfolioPage from './pages/TotalPortfolioPage';
 import SettingsPage from './pages/SettingsPage';
 
 function App() {
@@ -57,6 +58,10 @@ function App() {
                 <PortfoliosPage />
               </ProtectedRoute>
             }
+          />
+          <Route
+            path="/portfolios/total"
+            element={<ProtectedRoute><TotalPortfolioPage /></ProtectedRoute>}
           />
           <Route
             path="/portfolios/:id"

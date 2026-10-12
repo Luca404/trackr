@@ -252,7 +252,7 @@ export default function Layout({ children }: LayoutProps) {
               key={item.path}
               onClick={() => navigate(item.path)}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                location.pathname === item.path
+                location.pathname === item.path || location.pathname.startsWith(`${item.path}/`)
                   ? 'bg-primary-50 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400'
                   : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-gray-200'
               }`}
@@ -495,7 +495,7 @@ export default function Layout({ children }: LayoutProps) {
               key={item.path}
               onClick={() => navigate(item.path)}
               className={`flex flex-col items-center justify-center flex-1 h-full transition-colors ${
-                location.pathname === item.path
+                location.pathname === item.path || location.pathname.startsWith(`${item.path}/`)
                   ? 'text-primary-600 dark:text-primary-400'
                   : 'text-gray-600 dark:text-gray-400'
               }`}
